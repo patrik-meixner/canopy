@@ -23,11 +23,6 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.*
 
-data class MessageEntry(
-    val text: String,
-    val searchKey: String
-)
-
 /**
  * Reads user messages from the session JSONL and displays them as a clickable list.
  * Clicking searches the terminal text buffer for the message and scrolls to it.
@@ -41,14 +36,15 @@ class MessageHistoryPanel(
 ) : JPanel(BorderLayout()), Disposable {
 
     private val log = Logger.getInstance(MessageHistoryPanel::class.java)
-    private val listModel = DefaultListModel<MessageEntry>()
+    private val listModel = DefaultListModel<SessionMessage>()
     private val list = JBList(listModel)
     private val gson = Gson()
     private val refreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
 
     // Transcripts reach tens of MB, so parse only what was appended since the last pass
     // rather than the whole file every 3s. [entries] accumulates across passes.
-    private val entries = mutableListOf<MessageEntry>()
+    private val entries = mutableListOf<SessionMessage>()
+    private val searchField = com.intellij.ui.SearchTextField(false)
     private val tail = com.canopy.util.JsonlTailReader()
     private var lastPath: java.nio.file.Path? = null
     @Volatile private var visible = false
@@ -57,8 +53,9 @@ class MessageHistoryPanel(
         border = JBUI.Borders.empty()
         preferredSize = java.awt.Dimension(JBUI.scale(220), 0)
 
-        list.cellRenderer = MessageEntryRenderer()
+        list.cellRenderer = MessageCardRenderer()
         list.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        list.fixedCellHeight = -1
 
         list.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
@@ -69,12 +66,24 @@ class MessageHistoryPanel(
             }
         })
 
+        searchField.textEditor.emptyText.text = "Filter messages"
+        searchField.addDocumentListener(object : com.intellij.ui.DocumentAdapter() {
+            override fun textChanged(event: javax.swing.event.DocumentEvent) = applyFilter()
+        })
+
         val header = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.empty(4, 8)
-            val label = JLabel("Messages")
-            label.font = label.font.deriveFont(java.awt.Font.BOLD)
-            add(label, BorderLayout.WEST)
+            border = JBUI.Borders.empty(2, 4)
+            add(searchField, BorderLayout.CENTER)
         }
+
+        // HTML wraps to a width baked in at render time, so a drag of the splitter has to redraw.
+        addComponentListener(object : java.awt.event.ComponentAdapter() {
+            override fun componentResized(event: java.awt.event.ComponentEvent) {
+                list.fixedCellHeight = -1
+                list.revalidate()
+                list.repaint()
+            }
+        })
 
         add(header, BorderLayout.NORTH)
         add(ScrollPaneFactory.createScrollPane(list), BorderLayout.CENTER)
@@ -143,50 +152,27 @@ class MessageHistoryPanel(
         }
         if (!changed) return
 
-        val snapshot = entries.toList()
-        ApplicationManager.getApplication().invokeLater {
-            listModel.clear()
-            snapshot.forEach { listModel.addElement(it) }
-        }
+        ApplicationManager.getApplication().invokeLater { applyFilter() }
     }
 
-    /** A user message from one transcript line, or null for any other record type. */
-    private fun parseUserMessage(line: String): MessageEntry? {
+    private fun parseUserMessage(line: String): SessionMessage? {
         if (line.isBlank()) return null
+
         return try {
-            val obj = gson.fromJson(line, JsonObject::class.java)
-            if (obj.get("type")?.asString != "user") return null
-            val text = extractText(obj) ?: return null
-            // Use the first line as the search key for terminal buffer matching
-            val firstLine = text.lineSequence().first().trim()
-            if (firstLine.isEmpty()) null else MessageEntry(text, firstLine)
+            humanMessageIn(gson.fromJson(line, JsonObject::class.java), entries.size + 1)
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun extractText(obj: JsonObject): String? {
-        val message = obj.getAsJsonObject("message") ?: return null
-        val content = message.get("content") ?: return null
-        return when {
-            content.isJsonPrimitive -> content.asString
-            content.isJsonArray -> {
-                content.asJsonArray
-                    .firstOrNull { it.isJsonObject && it.asJsonObject.get("type")?.asString == "text" }
-                    ?.asJsonObject?.get("text")?.asString
-            }
-            else -> null
-        }
-    }
-
     private fun scrollToMessage(listIndex: Int) {
         val entry = listModel.getElementAt(listIndex)
-        val searchKey = entry.searchKey.take(40)
+        val searchKey = entry.headline.take(40)
 
         // Count how many entries before this one share the same search key
         var targetOccurrence = 1
         for (i in 0 until listIndex) {
-            if (listModel.getElementAt(i).searchKey.take(40) == searchKey) {
+            if (listModel.getElementAt(i).headline.take(40) == searchKey) {
                 targetOccurrence++
             }
         }
@@ -222,6 +208,7 @@ class MessageHistoryPanel(
                         doScroll(targetRow, historyLines)
                     }
                 } else {
+                    notFound(searchKey)
                     // Dump some buffer lines for debugging
                     val sampleLines = mutableListOf<String>()
                     textBuffer.lock()
@@ -242,6 +229,21 @@ class MessageHistoryPanel(
             } catch (e: Exception) {
                 log.warn("Failed to search terminal buffer", e)
             }
+        }
+    }
+
+    /** Silence here reads as a broken click; the message is simply older than the scrollback. */
+    private fun notFound(searchKey: String) {
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+
+            com.intellij.notification.NotificationGroupManager.getInstance()
+                .getNotificationGroup("Canopy")
+                .createNotification(
+                    "That message has scrolled out of the terminal's history",
+                    com.intellij.notification.NotificationType.INFORMATION
+                )
+                .notify(project)
         }
     }
 
@@ -270,21 +272,14 @@ class MessageHistoryPanel(
         return null
     }
 
+    private fun applyFilter() {
+        val query = searchField.text.trim()
+        val shown = synchronized(this) { entries.toList() }.filter { it.text.contains(query, ignoreCase = true) }
+
+        listModel.clear()
+        shown.forEach { listModel.addElement(it) }
+    }
+
     override fun dispose() {}
 
-    private class MessageEntryRenderer : ColoredListCellRenderer<MessageEntry>() {
-        override fun customizeCellRenderer(
-            list: JList<out MessageEntry>,
-            value: MessageEntry,
-            index: Int,
-            selected: Boolean,
-            hasFocus: Boolean
-        ) {
-            icon = AllIcons.General.User
-            val preview = value.text.lineSequence().first().let {
-                if (it.length > 50) it.take(47) + "\u2026" else it
-            }
-            append(preview, SimpleTextAttributes.REGULAR_ATTRIBUTES)
-        }
-    }
 }

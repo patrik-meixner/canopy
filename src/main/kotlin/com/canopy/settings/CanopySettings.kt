@@ -47,6 +47,12 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         /** Raise a notification when an agent stops and waits for permission or for a reply. */
         @JvmField var notifyWhenBlocked: Boolean = true
 
+        /**
+         * Notify when a session merely finishes a turn. Off by default: an agent pauses between
+         * every batch of tool calls, so this fires while it is plainly still working.
+         */
+        @JvmField var notifyWhenWaiting: Boolean = false
+
         /** Days of history the session list shows before folding the rest behind a toggle. */
         @JvmField var recentSessionDays: Int = 14
 

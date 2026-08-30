@@ -2,6 +2,7 @@ package com.canopy.services
 
 import com.canopy.editor.ClaudeSessionVirtualFile
 import com.canopy.editor.SessionInput
+import com.canopy.model.SessionAttention
 import com.canopy.model.sessionAttentionOf
 import com.canopy.settings.CanopySettings
 import com.intellij.notification.NotificationGroupManager
@@ -23,13 +24,26 @@ object SessionAttentionNotifier {
     private const val GROUP = "Canopy Session Attention"
 
     fun onNotifyStateChanged(project: Project, sessionId: String, notifyState: String?) {
-        if (!CanopySettings.getInstance().state.notifyWhenBlocked) return
-        if (!sessionAttentionOf(notifyState).isBlocking) return
+        if (!wanted(sessionAttentionOf(notifyState))) return
 
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed || isOnScreen(project, sessionId)) return@invokeLater
 
             notify(project, sessionId, notifyState)
+        }
+    }
+
+    /**
+     * A permission prompt genuinely blocks the agent. Finishing a turn does not: it happens between
+     * every batch of tool calls, so notifying on it means a balloon every few seconds.
+     */
+    private fun wanted(attention: SessionAttention): Boolean {
+        val settings = CanopySettings.getInstance().state
+
+        return when (attention) {
+            SessionAttention.NeedsPermission -> settings.notifyWhenBlocked
+            SessionAttention.WaitingForInput -> settings.notifyWhenWaiting
+            else -> false
         }
     }
 

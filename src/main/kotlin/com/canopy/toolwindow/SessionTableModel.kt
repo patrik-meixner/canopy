@@ -91,7 +91,33 @@ private class NameColumnInfo(
 }
 
 private fun buildNameTooltip(item: SessionDisplay?): String? =
-    item?.firstPrompt?.takeIf { it.isNotBlank() }
+    item?.firstPrompt?.let(::tooltipFor)?.takeIf { it.isNotBlank() }
+
+private const val TOOLTIP_LINES = 6
+private const val TOOLTIP_LINE_LENGTH = 90
+
+/**
+ * A first prompt is often a pasted terminal banner thousands of characters wide, and Swing draws a
+ * tooltip as one line unless it is told otherwise: unwrapped, that covered the window.
+ */
+internal fun tooltipFor(prompt: String): String {
+    val lines = prompt.trim().lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .flatMap { it.chunked(TOOLTIP_LINE_LENGTH).asSequence() }
+        .take(TOOLTIP_LINES)
+        .toList()
+    if (lines.isEmpty()) return ""
+
+    val truncated = prompt.trim().length > lines.sumOf { it.length }
+
+    val body = lines.joinToString("<br>") { escapeHtml(it) } + if (truncated) "<br>\u2026" else ""
+
+    return "<html>$body</html>"
+}
+
+private fun escapeHtml(text: String): String =
+    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 private class WorktreeColumnInfo : ColumnInfo<SessionDisplay, String>("Worktree") {
     override fun valueOf(item: SessionDisplay): String = item.worktreeName ?: ""

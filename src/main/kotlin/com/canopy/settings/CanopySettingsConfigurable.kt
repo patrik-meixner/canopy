@@ -21,8 +21,12 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
     override fun createPanel(): DialogPanel = panel {
         group("Session list") {
             row {
-                checkBox("Notify me when an agent is blocked").bindSelected(state::notifyWhenBlocked)
-            }.rowComment("A balloon when a session stops for permission or for your reply. Never for the session already on screen.")
+                checkBox("Notify me when an agent needs permission").bindSelected(state::notifyWhenBlocked)
+            }.rowComment("A balloon when a session stops at a permission prompt. Never for the session already on screen.")
+
+            row {
+                checkBox("Notify me when an agent finishes a turn").bindSelected(state::notifyWhenWaiting)
+            }.rowComment("Off by default: an agent pauses between every batch of tool calls, so this fires while it is plainly still working.")
 
             row {
                 checkBox("Show blocked agents first").bindSelected(state::sortAttentionFirst)
