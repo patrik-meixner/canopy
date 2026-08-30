@@ -1,0 +1,101 @@
+package com.canopy.services
+
+import com.canopy.model.SessionDisplay
+import com.intellij.openapi.components.PersistentStateComponent
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.State
+import com.intellij.openapi.components.Storage
+import com.intellij.openapi.project.Project
+import java.time.Instant
+
+/**
+ * Remembers what each transcript parsed to, keyed on its size and modification time.
+ *
+ * Transcripts only ever grow, and they grow large: a single project directory here holds well over
+ * a gigabyte. Without this every IDE start re-folds all of it to rebuild a list of names and dates.
+ */
+@State(name = "CanopySessionDigests", storages = [Storage("canopy-sessions.xml")])
+@Service(Service.Level.PROJECT)
+class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
+
+    class Entry {
+        @JvmField var path: String = ""
+        @JvmField var size: Long = 0
+        @JvmField var modifiedAtMillis: Long = 0
+        /** The transcript's own last timestamp, which is what the list sorts on — not the file's. */
+        @JvmField var sessionModifiedMillis: Long = 0
+
+        @JvmField var sessionId: String = ""
+        @JvmField var name: String? = null
+        @JvmField var firstPrompt: String = ""
+        @JvmField var messageCount: Int = 0
+        @JvmField var gitBranch: String? = null
+        @JvmField var worktreeName: String? = null
+        @JvmField var startedAtMillis: Long = 0
+        @JvmField var touchedRoots: MutableMap<String, Int> = mutableMapOf()
+        @JvmField var lastEntryRole: String? = null
+    }
+
+    class State {
+        @JvmField var entries: MutableList<Entry> = mutableListOf()
+    }
+
+    private var state = State()
+    private val byPath = HashMap<String, Entry>()
+
+    override fun getState(): State = state
+
+    override fun loadState(loaded: State) {
+        state = loaded
+        byPath.clear()
+        loaded.entries.forEach { byPath[it.path] = it }
+    }
+
+    fun get(path: String, size: Long, modifiedAtMillis: Long, projectPath: String): SessionDisplay? {
+        val entry = byPath[path] ?: return null
+        if (entry.size != size || entry.modifiedAtMillis != modifiedAtMillis) return null
+
+        return SessionDisplay(
+            sessionId = entry.sessionId,
+            name = entry.name,
+            firstPrompt = entry.firstPrompt,
+            messageCount = entry.messageCount,
+            modified = Instant.ofEpochMilli(entry.sessionModifiedMillis),
+            gitBranch = entry.gitBranch,
+            projectPath = projectPath,
+            worktreeName = entry.worktreeName,
+            touchedRoots = entry.touchedRoots,
+            startedAt = entry.startedAtMillis.takeIf { it > 0 }?.let(Instant::ofEpochMilli),
+            lastEntryRole = entry.lastEntryRole
+        )
+    }
+
+    fun put(path: String, size: Long, modifiedAtMillis: Long, session: SessionDisplay) {
+        val entry = byPath.getOrPut(path) { Entry().also { state.entries.add(it) } }
+
+        entry.path = path
+        entry.size = size
+        entry.modifiedAtMillis = modifiedAtMillis
+        entry.sessionModifiedMillis = session.modified.toEpochMilli()
+        entry.sessionId = session.sessionId
+        entry.name = session.name
+        entry.firstPrompt = session.firstPrompt
+        entry.messageCount = session.messageCount
+        entry.gitBranch = session.gitBranch
+        entry.worktreeName = session.worktreeName
+        entry.startedAtMillis = session.startedAt?.toEpochMilli() ?: 0
+        entry.touchedRoots = LinkedHashMap(session.touchedRoots)
+        entry.lastEntryRole = session.lastEntryRole
+    }
+
+    /** Drops entries for transcripts that no longer exist, so the file cannot grow without bound. */
+    fun retainOnly(paths: Set<String>) {
+        state.entries.removeIf { it.path !in paths }
+        byPath.keys.retainAll(paths)
+    }
+
+    companion object {
+        fun getInstance(project: Project): SessionDigestCache =
+            project.getService(SessionDigestCache::class.java)
+    }
+}

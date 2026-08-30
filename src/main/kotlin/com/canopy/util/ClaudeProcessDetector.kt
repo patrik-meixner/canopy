@@ -1,0 +1,100 @@
+package com.canopy.util
+
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import java.nio.file.Files
+import java.nio.file.Path
+
+object ClaudeProcessDetector {
+
+    private val gson = Gson()
+    /**
+     * Detects externally running claude sessions (not launched by Canopy).
+     *
+     * Reads ~/.claude/sessions/{PID}.json to get session IDs directly.
+     * If a session file has a "name" field, also resolves it against known sessions
+     * (since --resume {name} may create a new session ID for the same named session).
+     * Excludes Canopy processes (identified by "canopy-settings" in args).
+     */
+    fun detectExternalSessions(projectPath: String?, sessions: List<com.canopy.model.SessionDisplay> = emptyList()): Set<String> {
+        if (projectPath == null) return emptySet()
+        return try {
+            val excludedPids = getSelfExcludedPids()
+            val sessionsDir = Path.of(System.getProperty("user.home"), ".claude", "sessions")
+            if (!Files.isDirectory(sessionsDir)) return emptySet()
+
+            val result = mutableSetOf<String>()
+            Files.list(sessionsDir).use { stream ->
+                stream.filter { it.toString().endsWith(".json") }
+                    .forEach { path ->
+                        try {
+                            val obj = gson.fromJson(Files.readString(path), JsonObject::class.java)
+                            val pid = obj.get("pid")?.asInt ?: return@forEach
+                            val sessionId = obj.get("sessionId")?.asString ?: return@forEach
+                            val cwd = obj.get("cwd")?.asString ?: return@forEach
+
+                            // Claude Code's daemon/background architecture writes session
+                            // files for its own spare processes (kind="bg"). Those are never
+                            // a user's external terminal, so don't count them.
+                            if (obj.get("kind")?.asString == "bg") return@forEach
+
+                            if (cwd != projectPath || pid in excludedPids || !isProcessAlive(pid)) return@forEach
+
+                            result.add(sessionId)
+
+                            // If the session file has a name, also mark all matching
+                            // sessions from our list (--resume {name} gets a new ID,
+                            // and multiple sessions can share a name)
+                            val name = obj.get("name")?.asString
+                            if (name != null) {
+                                sessions.filter { it.name == name || it.tabTitle == name }
+                                    .forEach { result.add(it.sessionId) }
+                            }
+                        } catch (_: Exception) {}
+                    }
+            }
+            result
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    /**
+     * PIDs that must never be treated as an "external" claude session, gathered from a
+     * single `ps` pass:
+     *  - Canopy-owned processes, identified by our injected `--settings canopy-settings-*`.
+     *  - Claude Code's own daemon/background pool (`daemon`, `bg-pty-host`, `bg-spare`),
+     *    which shares the project cwd but isn't a user's external terminal.
+     */
+    private fun getSelfExcludedPids(): Set<Int> {
+        return try {
+            val res = ProcessHelper.execWithTimeout(
+                command = arrayOf("ps", "-A", "-o", "pid,args", "-ww"),
+                timeoutMs = 10_000
+            )
+            res.output.lines()
+                .map { it.trim() }
+                .filter { line ->
+                    line.contains("canopy-settings") ||
+                        line.contains(Regex("""\bclaude\b.*\b(daemon|bg-pty-host|bg-spare)\b"""))
+                }
+                .mapNotNull { it.split(Regex("\\s+"), limit = 2).firstOrNull()?.toIntOrNull() }
+                .toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    /**
+     * In-JVM liveness check. This used to spawn `kill -0` per candidate session file, i.e. a
+     * process per session on every detection sweep (and the sweep runs on a timer); ProcessHandle
+     * answers the same question from the JVM with no child process at all.
+     */
+    private fun isProcessAlive(pid: Int): Boolean {
+        return try {
+            ProcessHandle.of(pid.toLong()).map { it.isAlive }.orElse(false)
+        } catch (_: Exception) {
+            false
+        }
+    }
+}

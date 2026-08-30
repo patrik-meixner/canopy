@@ -1,0 +1,67 @@
+plugins {
+    id("java")
+    alias(libs.plugins.kotlin)
+    alias(libs.plugins.intellijPlatform)
+}
+
+group = providers.gradleProperty("pluginGroup").get()
+version = providers.gradleProperty("pluginVersion").get()
+
+kotlin {
+    jvmToolchain(21)
+}
+
+repositories {
+    mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
+}
+
+dependencies {
+    intellijPlatform {
+        val type = providers.gradleProperty("platformType")
+        val version = providers.gradleProperty("platformVersion")
+        create(type, version)
+
+        bundledPlugin("org.jetbrains.plugins.terminal")
+
+        pluginVerifier()
+    }
+
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.tables)
+
+    testImplementation(kotlin("test"))
+}
+
+intellijPlatform {
+    pluginConfiguration {
+        id = providers.gradleProperty("pluginGroup")
+        name = providers.gradleProperty("pluginName")
+        version = providers.gradleProperty("pluginVersion")
+
+        // Change notes from CHANGELOG env var (set by CI), or fallback to plugin.xml static content
+        val changelogEnv = providers.environmentVariable("CHANGELOG")
+        if (changelogEnv.isPresent && changelogEnv.get().isNotBlank()) {
+            changeNotes = changelogEnv
+        }
+
+        ideaVersion {
+            sinceBuild = providers.gradleProperty("pluginSinceBuild")
+            untilBuild = provider { null }
+        }
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
+
+    buildSearchableOptions = false
+}
+
+tasks {
+    wrapper {
+        gradleVersion = "8.10.2"
+    }
+}

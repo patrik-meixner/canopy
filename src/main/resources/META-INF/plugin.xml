@@ -1,0 +1,143 @@
+<idea-plugin>
+    <id>com.canopy</id>
+    <name>Canopy</name>
+    <vendor url="https://github.com/patrik-meixner/canopy">Patrik Meixner</vendor>
+
+    <description><![CDATA[
+    <p>One view over every tree an agent works in.</p>
+
+    <p>Canopy runs Claude Code sessions inside your JetBrains IDE and, when they are done, lets you
+    review what they changed — across the project, its submodules and every git worktree — in a
+    single diff tree.</p>
+
+    <p><b>Review</b></p>
+    <ul>
+        <li>Detail tab: one session's changes across every repository it wrote to, sectioned into
+            uncommitted, committed, pushed and untracked</li>
+        <li>Files open in the IDE's own diff viewer; content is read only when you open one</li>
+        <li>Commit across all touched repositories at once, updating submodule pointers in the parent</li>
+    </ul>
+
+    <p><b>Worktrees and submodules</b></p>
+    <ul>
+        <li>Worktrees grouped under the repository that owns them, with the sessions that ran in each</li>
+        <li>Submodules discovered from git, including their own worktrees</li>
+        <li>Create a worktree in any repository, not just the project root</li>
+        <li>Says why a leftover directory is orphaned instead of calling everything "unregistered"</li>
+    </ul>
+
+    <p><b>Sessions</b></p>
+    <ul>
+        <li>Blocked agents sort first: waiting for permission, waiting for you, working</li>
+        <li>Works for sessions running outside the plugin too</li>
+        <li>Cmd+Shift+O for the session palette, Cmd+Shift+J to jump to the next one waiting</li>
+        <li>Parsed transcripts are remembered between restarts, so a gigabyte of history is read once</li>
+    </ul>
+
+    <p><b>Terminal</b></p>
+    <ul>
+        <li>Clickable links and Cmd+V image paste in session terminals</li>
+        <li>A plain shell tab for running whichever agent you like</li>
+    </ul>
+
+    <p>Canopy is free, and stays free. If it saves you time, you can
+    <a href="https://ko-fi.com/patrikmeixner">buy me a coffee</a>.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+    <p>See <a href="https://github.com/patrik-meixner/canopy/releases">GitHub releases</a> for per-version notes. The JetBrains Marketplace "What's New" section is populated automatically by CI from git log between tags.</p>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+            id="Canopy"
+            anchor="left"
+            order="last"
+            icon="/icons/canopy.svg"
+            factoryClass="com.canopy.toolwindow.ClaudeSessionsToolWindowFactory"
+            canCloseContents="true"
+        />
+
+        <toolWindow
+            id="Context"
+            anchor="right"
+            icon="/icons/context.svg"
+            factoryClass="com.canopy.toolwindow.ClaudeContextToolWindowFactory"
+            canCloseContents="false"
+        />
+
+        <virtualFileSystem
+            implementationClass="com.canopy.editor.ClaudeSessionFileSystem"
+            key="claude-session"
+        />
+
+        <fileEditorProvider
+            implementation="com.canopy.editor.ClaudeSessionEditorProvider"
+        />
+
+        <editorTabTitleProvider
+            implementation="com.canopy.editor.ClaudeSessionTabTitleProvider"
+        />
+
+        <fileIconProvider
+            implementation="com.canopy.editor.ClaudeSessionIconProvider"
+        />
+
+        <!--
+            Two groups, because a single displayType cannot serve both cases.
+            Successes are transient confirmations; failures need the user to act, so they must
+            not evaporate on a timer. This was a single group at NONE up to 0.7.30, which meant
+            every notification the plugin raised — operation failures included — went only to
+            the Event Log, a tool window that is hidden by default.
+        -->
+        <notificationGroup
+            id="Canopy"
+            displayType="BALLOON"
+        />
+
+        <notificationGroup
+            id="Canopy Errors"
+            displayType="STICKY_BALLOON"
+        />
+
+        <!--
+            Ambient, not user-initiated: fires whenever a background session wants attention.
+            Kept at NONE so un-muting operation feedback doesn't also start popping balloons
+            nobody asked for — the tab indicator already carries this. It gets its own id so a
+            user who *does* want the balloons can switch it on in
+            Settings > Appearance & Behavior > Notifications.
+        -->
+        <notificationGroup
+            id="Canopy Session Attention"
+            displayType="BALLOON"
+        />
+
+        <applicationConfigurable
+            parentId="tools"
+            instance="com.canopy.settings.CanopySettingsConfigurable"
+            id="com.canopy.settings.CanopySettingsConfigurable"
+            displayName="Canopy"
+        />
+    </extensions>
+    <actions>
+        <action id="Canopy.NewShellTerminal" class="com.canopy.editor.NewShellTerminalAction">
+            <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Canopy.SessionPalette" class="com.canopy.editor.SessionPaletteAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="meta shift O"/>
+        </action>
+
+        <action id="Canopy.FocusWaitingSession" class="com.canopy.editor.FocusWaitingSessionAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="meta shift J"/>
+        </action>
+    </actions>
+
+</idea-plugin>

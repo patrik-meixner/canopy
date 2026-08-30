@@ -1,0 +1,437 @@
+package com.canopy.toolwindow
+
+import com.canopy.services.RepoScopeService
+import com.canopy.util.CanopyExecutor
+import com.intellij.icons.AllIcons
+import com.intellij.ide.actions.RevealFileAction
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.Disposer
+import com.intellij.ui.ColoredTreeCellRenderer
+import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.PopupHandler
+import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.treeStructure.Tree
+import com.intellij.util.ui.JBUI
+import java.awt.BorderLayout
+import java.awt.event.HierarchyEvent
+import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.swing.JPanel
+import javax.swing.JTree
+import javax.swing.tree.DefaultMutableTreeNode
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreeSelectionModel
+
+/**
+ * Worktrees grouped by the repo that owns them: the superproject and each initialized submodule.
+ *
+ * Refreshes cost one `git worktree list` per repo, so they run off the EDT and only while the
+ * panel is on screen, under the same floor the session sweep uses.
+ */
+class WorktreeTreePanel(
+    private val project: Project,
+    parent: Disposable,
+    private val onWorktreeSelected: (WorktreeTreeNode.Worktree?) -> Unit,
+    private val onWorktreeActivated: (WorktreeTreeNode.Worktree) -> Unit,
+    private val loadSessions: () -> List<com.canopy.model.SessionDisplay>,
+    private val attentionOf: (com.canopy.model.SessionDisplay) -> com.canopy.model.SessionAttention,
+    private val onSessionActivated: (com.canopy.model.SessionDisplay) -> Unit,
+    private val onNewWorktree: (com.canopy.model.RepoScope, String) -> Unit
+) : JPanel(BorderLayout()), Disposable {
+
+    private val root = DefaultMutableTreeNode()
+    private val treeModel = DefaultTreeModel(root)
+    private val tree = Tree(treeModel)
+    private val refreshInFlight = AtomicBoolean(false)
+
+    /** Its own cache: the tree is now the only place worktree git state is shown. */
+    private val worktreeStatus = WorktreeStatusCache(project, this) { tree.repaint() }
+
+    @Volatile private var onScreen = false
+    @Volatile private var lastRefreshAt = 0L
+
+    init {
+        Disposer.register(parent, this)
+
+        tree.isRootVisible = false
+        tree.showsRootHandles = true
+        tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+        tree.cellRenderer = WorktreeTreeCellRenderer()
+        tree.border = JBUI.Borders.empty(2)
+
+        tree.addTreeSelectionListener { onWorktreeSelected(selectedWorktree()) }
+
+        object : DoubleClickListener() {
+            override fun onDoubleClick(event: java.awt.event.MouseEvent): Boolean {
+                selectedSession()?.let { onSessionActivated(it.session); return true }
+                val worktree = selectedWorktree() ?: return false
+
+                onWorktreeActivated(worktree)
+                return true
+            }
+        }.installOn(tree)
+
+        installContextMenu()
+        worktreeStatus.trackVisibility(this)
+
+        add(JBScrollPane(tree), BorderLayout.CENTER)
+
+        addHierarchyListener { event ->
+            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) return@addHierarchyListener
+
+            onScreen = isShowing
+            if (onScreen) refresh(force = true)
+        }
+    }
+
+    private fun selectedWorktree(): WorktreeTreeNode.Worktree? = selectedNode() as? WorktreeTreeNode.Worktree
+
+    private fun selectedSession(): WorktreeTreeNode.Session? = selectedNode() as? WorktreeTreeNode.Session
+
+    private fun selectedRepo(): WorktreeTreeNode.Repo? = selectedNode() as? WorktreeTreeNode.Repo
+
+    private fun selectedNode(): WorktreeTreeNode? {
+        val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return null
+
+        return node.userObject as? WorktreeTreeNode
+    }
+
+    private fun installContextMenu() {
+        val group = DefaultActionGroup().apply {
+            add(object : AnAction("New Worktree Here", "Create a worktree in this repository", AllIcons.General.Add) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val scope = selectedRepo()?.scope ?: return
+                    val name = Messages.showInputDialog(
+                        project,
+                        "Worktree name:",
+                        "New Worktree in ${scope.label}",
+                        null
+                    )?.trim().orEmpty()
+                    if (name.isEmpty()) return
+
+                    onNewWorktree(scope, name)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedRepo() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("New Session Here", "Start a Claude session in this worktree", AllIcons.General.Add) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    selectedWorktree()?.let(onWorktreeActivated)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Show Changes", "Diff this worktree against its base branch", AllIcons.Actions.Diff) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    selectedWorktree()?.let(::showChanges)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            addSeparator()
+            add(object : AnAction("Set Up Worktree", "Copy the untracked files it needs, then run the install command", AllIcons.Actions.Install) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val worktree = selectedWorktree() ?: return
+
+                    provision(worktree.scope, worktree.entry.path)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Configure Worktree Setup\u2026", "Choose the ignored files and install command this repository's worktrees need", AllIcons.General.Settings) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val scope = selectedRepo()?.scope ?: selectedWorktree()?.scope ?: return
+
+                    WorktreeSetupDialog(project, scope.label, scope.root).show()
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedRepo() != null || selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            addSeparator()
+            add(object : AnAction("Disk Usage", "Measure what this repository's worktrees cost on disk", AllIcons.Actions.Profile) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val repo = selectedRepo() ?: return
+
+                    reportDiskUsage(repo, worktreesUnderSelection())
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedRepo() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Prune Registrations", "Drop git's entries for worktree directories that are gone", AllIcons.Actions.GC) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val repo = selectedRepo() ?: return
+
+                    pruneRegistrations(repo)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedRepo() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Reveal in Finder", "Open the worktree directory", AllIcons.Actions.MenuOpen) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val path = selectedWorktree()?.entry?.path ?: return
+
+                    RevealFileAction.openDirectory(java.io.File(path))
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+        }
+        PopupHandler.installPopupMenu(tree, group, "CanopyWorktreeTree")
+    }
+
+    private fun worktreesUnderSelection(): List<Pair<String, String>> {
+        val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return emptyList()
+
+        return (0 until node.childCount)
+            .mapNotNull { (node.getChildAt(it) as? DefaultMutableTreeNode)?.userObject as? WorktreeTreeNode.Worktree }
+            .map { (it.status?.name ?: Path.of(it.entry.path).fileName.toString()) to it.entry.path }
+    }
+
+    private fun provision(scope: com.canopy.model.RepoScope, targetPath: String) {
+        val copied = WorktreeProvisioning.provision(project, scope.label, scope.root, targetPath)
+
+        notify(if (copied.isEmpty()) "Nothing to copy" else "Copied ${copied.joinToString(", ")}")
+    }
+
+    /** Walking a worktree with installed dependencies takes seconds, so it never runs on the EDT. */
+    private fun reportDiskUsage(repo: WorktreeTreeNode.Repo, worktrees: List<Pair<String, String>>) {
+        if (worktrees.isEmpty()) {
+            return notify("${repo.scope.label} has no secondary worktrees")
+        }
+
+        CanopyExecutor.submit {
+            val measured = worktrees.map { (name, path) -> name to WorktreeDiskUsage.measure(path) }
+            val total = measured.sumOf { it.second ?: 0L }
+            val lines = measured
+                .sortedByDescending { it.second ?: 0L }
+                .joinToString("<br>") { (name, bytes) -> "$name: " + (bytes?.let(::formatSize) ?: "unreadable") }
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                notify("${repo.scope.label} worktrees: ${formatSize(total)}<br>$lines")
+            }
+        }
+    }
+
+    private fun pruneRegistrations(repo: WorktreeTreeNode.Repo) {
+        CanopyExecutor.submit {
+            val (succeeded, output) = WorktreeInspector.prune(repo.scope.root)
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                notify(if (succeeded) output.ifBlank { "Nothing to prune" } else "Prune failed: $output")
+                refresh(force = true)
+            }
+        }
+    }
+
+    private fun notify(message: String) {
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup("Canopy")
+            .createNotification(message, NotificationType.INFORMATION)
+            .notify(project)
+    }
+
+    /** Runs against the worktree directory, so a submodule's worktree diffs against its own repo. */
+    private fun showChanges(worktree: WorktreeTreeNode.Worktree) {
+        val directory = worktree.entry.path
+        val title = "${worktree.scope.label}: ${Path.of(directory).fileName}"
+
+        CanopyExecutor.submit {
+            val result = WorktreeChanges.compute(directory)
+            ApplicationManager.getApplication().invokeLater {
+                if (result.changes.isEmpty()) {
+                    return@invokeLater Messages.showInfoMessage(
+                        project,
+                        result.error ?: "No changes in this worktree.",
+                        "Worktree Changes"
+                    )
+                }
+
+                WorktreeChanges.openDialog(project, title, directory, result.changes)
+            }
+        }
+    }
+
+    fun refresh(force: Boolean = false) {
+        if (!onScreen) return
+        if (!force && System.currentTimeMillis() - lastRefreshAt < com.canopy.settings.CanopySettings.getInstance().state.worktreeRefreshSeconds * 1000L) return
+        if (!refreshInFlight.compareAndSet(false, true)) return
+
+        val scopeService = RepoScopeService.getInstance(project)
+        scopeService.refreshIfStale { refresh(force = true) }
+
+        CanopyExecutor.submit {
+            try {
+                val collected = scopeService.cachedScopes().map { WorktreeInspector.collect(it) }
+                val sessions = loadSessions()
+                lastRefreshAt = System.currentTimeMillis()
+                ApplicationManager.getApplication().invokeLater { rebuild(collected, sessions) }
+            } finally {
+                refreshInFlight.set(false)
+            }
+        }
+    }
+
+    private fun rebuild(
+        collected: List<com.canopy.model.RepoWorktrees>,
+        sessions: List<com.canopy.model.SessionDisplay>
+    ) {
+        if (Disposer.isDisposed(this)) return
+
+        val expandedLabels = expandedRepoLabels()
+        val byWorktreeName = sessions.filter { it.worktreeName != null }.groupBy { it.worktreeName }
+        val placed = byWorktreeName.values.flatten().toSet()
+        root.removeAllChildren()
+
+        for (repo in collected) {
+            val repoNode = DefaultMutableTreeNode(
+                WorktreeTreeNode.Repo(repo.scope, repo.branch, repo.worktrees.size)
+            )
+            for (entry in repo.worktrees) {
+                val name = Path.of(entry.path).fileName?.toString() ?: entry.path
+                val worktreeNode = DefaultMutableTreeNode(
+                    WorktreeTreeNode.Worktree(repo.scope, entry, worktreeStatus.get(name))
+                )
+                byWorktreeName[name].orEmpty().forEach { worktreeNode.add(sessionNode(it)) }
+                repoNode.add(worktreeNode)
+            }
+            sessionsInCheckout(sessions - placed, repo.scope.root).forEach { repoNode.add(sessionNode(it)) }
+            root.add(repoNode)
+        }
+
+        treeModel.reload()
+        expandRepos(expandedLabels)
+
+        worktreeStatus.setTargets(collected.flatMap { it.worktrees }.map { worktreeNameOf(it.path) })
+        worktreeStatus.requestRefresh()
+    }
+
+    private fun worktreeNameOf(path: String): String = Path.of(path).fileName?.toString() ?: path
+
+    /** A session with no worktree belongs to the repo it wrote to most. */
+    private fun sessionsInCheckout(sessions: List<com.canopy.model.SessionDisplay>, root: String) =
+        sessions.filter { session ->
+            val primary = session.touchedRoots.maxByOrNull { it.value }?.key
+            primary == root || (primary == null && session.projectPath == root)
+        }
+
+    private fun sessionNode(session: com.canopy.model.SessionDisplay) =
+        DefaultMutableTreeNode(WorktreeTreeNode.Session(session, attentionOf(session)))
+
+    /** Rebuilding replaces every node, so the user's expanded repos have to be restored by label. */
+    private fun expandedRepoLabels(): Set<String> {
+        if (root.childCount == 0) return emptySet()
+
+        return (0 until root.childCount)
+            .map { root.getChildAt(it) as DefaultMutableTreeNode }
+            .filter { tree.isExpanded(javax.swing.tree.TreePath(it.path)) }
+            .mapNotNull { (it.userObject as? WorktreeTreeNode.Repo)?.scope?.label }
+            .toSet()
+    }
+
+    private fun expandRepos(labels: Set<String>) {
+        for (index in 0 until root.childCount) {
+            val node = root.getChildAt(index) as DefaultMutableTreeNode
+            val label = (node.userObject as? WorktreeTreeNode.Repo)?.scope?.label ?: continue
+            val isFirstBuild = labels.isEmpty()
+            if (isFirstBuild || label in labels) tree.expandPath(javax.swing.tree.TreePath(node.path))
+        }
+    }
+
+    override fun dispose() = Unit
+
+}
+
+private class WorktreeTreeCellRenderer : ColoredTreeCellRenderer() {
+
+    override fun customizeCellRenderer(
+        tree: JTree,
+        value: Any?,
+        selected: Boolean,
+        expanded: Boolean,
+        leaf: Boolean,
+        row: Int,
+        hasFocus: Boolean
+    ) {
+        when (val node = (value as? DefaultMutableTreeNode)?.userObject) {
+            is WorktreeTreeNode.Repo -> renderRepo(node)
+            is WorktreeTreeNode.Worktree -> renderWorktree(node)
+            is WorktreeTreeNode.Session -> renderSession(node)
+        }
+    }
+
+    private fun renderRepo(node: WorktreeTreeNode.Repo) {
+        icon = if (node.scope.isSubmodule) AllIcons.Nodes.Module else AllIcons.Nodes.ModuleGroup
+        append(node.scope.label, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+        node.branch?.let { append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES) }
+        if (node.worktreeCount == 0) append("  no worktrees", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+    }
+
+    private fun renderWorktree(node: WorktreeTreeNode.Worktree) {
+        icon = AllIcons.Vcs.Branch
+        append(Path.of(node.entry.path).fileName?.toString() ?: node.entry.path)
+        node.entry.branch?.let { append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES) }
+
+        val dirtyCount = node.status?.dirtyCount ?: 0
+        if (dirtyCount > 0) {
+            append("  $dirtyCount uncommitted", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, DIRTY_COLOR))
+        }
+    }
+
+    private fun renderSession(node: WorktreeTreeNode.Session) {
+        icon = com.canopy.editor.ClaudeSessionIconProvider.TREE_ICON
+        val glyph = node.attention.glyph
+        if (glyph.isNotEmpty()) append("$glyph ", SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, DIRTY_COLOR))
+        append(node.session.displayName)
+    }
+
+    private companion object {
+        val DIRTY_COLOR = JBColor(0xB8730E, 0xD9A343)
+    }
+}
