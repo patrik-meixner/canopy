@@ -14,14 +14,34 @@ class SessionTableModel(
     getWorktreeStatus: ((String) -> WorktreeStatus?)? = null
 ) : ListTableModel<SessionDisplay>() {
     init {
-        val cols = mutableListOf<ColumnInfo<SessionDisplay, *>>(
-            StatusColumnInfo(getStatus, getAttention),
-            NameColumnInfo(getDetail)
-        )
-        if (showWorktreeColumn) cols.add(WorktreeColumnInfo())
-        if (getWorktreeStatus != null) cols.add(GitColumnInfo(getWorktreeStatus))
-        columnInfos = cols.toTypedArray()
+        // The worktree mode keeps real columns because it sorts by them; the session list has no
+        // header at all, so a row there is free to be one card instead of two competing cells.
+        val hasColumns = showWorktreeColumn || getWorktreeStatus != null
+        columnInfos = if (hasColumns) {
+            val cols = mutableListOf<ColumnInfo<SessionDisplay, *>>(
+                StatusColumnInfo(getStatus, getAttention),
+                NameColumnInfo(getDetail)
+            )
+            if (showWorktreeColumn) cols.add(WorktreeColumnInfo())
+            if (getWorktreeStatus != null) cols.add(GitColumnInfo(getWorktreeStatus))
+            cols.toTypedArray()
+        } else {
+            arrayOf(CardColumnInfo(getStatus, getAttention, getDetail))
+        }
     }
+}
+
+private class CardColumnInfo(
+    getStatus: (String) -> SessionStatus,
+    getAttention: (SessionDisplay) -> com.canopy.model.SessionAttention,
+    getDetail: (SessionDisplay) -> String
+) : ColumnInfo<SessionDisplay, SessionDisplay>("Name") {
+
+    private val renderer = SessionCardRenderer(getStatus, getAttention, getDetail)
+
+    override fun valueOf(item: SessionDisplay): SessionDisplay = item
+
+    override fun getRenderer(item: SessionDisplay?): javax.swing.table.TableCellRenderer = renderer
 }
 
 private class StatusColumnInfo(

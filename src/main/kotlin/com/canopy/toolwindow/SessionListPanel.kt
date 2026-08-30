@@ -147,7 +147,7 @@ class SessionListPanel(
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
         table.setShowGrid(false)
         table.intercellSpacing = java.awt.Dimension(0, 0)
-        table.rowHeight = JBUI.scale(26)
+        table.rowHeight = if (worktreeMode) JBUI.scale(26) else JBUI.scale(46)
         // One column called "Name" is a header that says nothing; the worktree mode has real ones.
         if (!worktreeMode) table.tableHeader = null
 
@@ -164,8 +164,10 @@ class SessionListPanel(
                 }
             }
         }
-        sorter.setSortable(0, false)  // status icon column: inert
-        sorter.setComparator(1, String.CASE_INSENSITIVE_ORDER)  // Name
+        if (worktreeMode) {
+            sorter.setSortable(0, false)  // status icon column: inert
+            sorter.setComparator(1, String.CASE_INSENSITIVE_ORDER)  // Name
+        }
         if (worktreeMode) {
             sorter.setComparator(2, String.CASE_INSENSITIVE_ORDER)  // Worktree
             // Git (3) needs no comparator: its ColumnInfo declares Integer and ranks on
@@ -182,8 +184,6 @@ class SessionListPanel(
             cm.getColumn(1).preferredWidth = 180  // Name
             cm.getColumn(2).preferredWidth = 140  // Worktree
             cm.getColumn(3).preferredWidth = 72   // Git
-        } else {
-            cm.getColumn(1).preferredWidth = 240  // Name
         }
     }
 
