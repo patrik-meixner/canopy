@@ -19,13 +19,20 @@ object MessageThumbnails {
 
     private val cache = ConcurrentHashMap<String, Icon>()
 
-    fun of(base64: String): Icon? = cache.getOrPut(key(base64)) { decode(base64) ?: EMPTY }.takeIf { it != EMPTY }
+    fun of(base64: String): Icon? = cache.getOrPut(key(base64)) { decode(base64, THUMBNAIL) ?: EMPTY }.takeIf { it != EMPTY }
 
-    private fun decode(base64: String): Icon? = try {
+    /** Only what a popup is showing right now, so a full-size decode is never cached. */
+    fun full(base64: String): Icon? = decode(base64, JBUI.scale(560))
+
+    private fun decode(base64: String, bound: Int): Icon? = try {
         val bytes = Base64.getDecoder().decode(base64)
         val image = ImageIO.read(ByteArrayInputStream(bytes))
 
-        image?.let { ImageIcon(it.getScaledInstance(scaledWidth(it.width, it.height), scaledHeight(it.width, it.height), Image.SCALE_SMOOTH)) }
+        image?.let {
+            val width = boundedWidth(it.width, it.height, bound)
+            val height = boundedHeight(it.width, it.height, bound)
+            ImageIcon(it.getScaledInstance(width, height, Image.SCALE_SMOOTH))
+        }
     } catch (_: Exception) {
         null
     }
@@ -36,10 +43,10 @@ object MessageThumbnails {
     private val EMPTY: Icon = ImageIcon()
 }
 
-internal fun scaledWidth(width: Int, height: Int): Int =
-    if (width >= height) MAX_THUMBNAIL else (MAX_THUMBNAIL * width / height).coerceAtLeast(1)
+internal fun boundedWidth(width: Int, height: Int, bound: Int): Int =
+    if (width >= height) bound else (bound * width / height).coerceAtLeast(1)
 
-internal fun scaledHeight(width: Int, height: Int): Int =
-    if (height > width) MAX_THUMBNAIL else (MAX_THUMBNAIL * height / width).coerceAtLeast(1)
+internal fun boundedHeight(width: Int, height: Int, bound: Int): Int =
+    if (height > width) bound else (bound * height / width).coerceAtLeast(1)
 
-private val MAX_THUMBNAIL = JBUI.scale(96)
+private val THUMBNAIL: Int get() = JBUI.scale(72)

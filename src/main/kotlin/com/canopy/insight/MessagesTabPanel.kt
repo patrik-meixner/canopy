@@ -3,8 +3,6 @@ package com.canopy.insight
 import com.canopy.editor.ClaudeSessionEditor
 import com.canopy.toolwindow.MessageCardRenderer
 import com.canopy.toolwindow.SessionMessage
-import com.intellij.notification.NotificationGroupManager
-import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -12,12 +10,12 @@ import com.intellij.openapi.project.Project
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SearchTextField
-import com.intellij.ui.components.JBList
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
+import java.awt.event.MouseMotionAdapter
 import java.awt.event.MouseEvent
 import javax.swing.DefaultListModel
 import javax.swing.JPanel
@@ -30,9 +28,10 @@ import javax.swing.event.DocumentEvent
 class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
     private val model = DefaultListModel<SessionMessage>()
-    private val list = JBList(model)
+    private val list = ViewportWidthList(model)
     private val search = SearchTextField(false)
     private var messages: List<SessionMessage> = emptyList()
+    private var hoveredImage: String? = null
 
     init {
         list.cellRenderer = MessageCardRenderer()
@@ -47,10 +46,23 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
 
         list.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(event: MouseEvent) {
-                val index = list.locationToIndex(event.point)
-                if (index < 0 || !list.getCellBounds(index, index).contains(event.point)) return
+                val message = messageAt(event) ?: return
 
-                jumpTo(model.getElementAt(index))
+                MessagePreview.show(list, event.point, message) { jumpTo(message) }
+            }
+
+            override fun mouseExited(event: MouseEvent) = ImagePreview.hide()
+        })
+
+        // Thumbnails are 72px: readable enough to spot the right message, never enough to read.
+        list.addMouseMotionListener(object : MouseMotionAdapter() {
+            override fun mouseMoved(event: MouseEvent) {
+                val image = imageAt(event)
+                if (image == null) return ImagePreview.hide()
+                if (image == hoveredImage) return
+
+                hoveredImage = image
+                ImagePreview.show(list, event.point, image)
             }
         })
 
@@ -82,6 +94,29 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
         messages.filter { it.text.contains(query, ignoreCase = true) }.forEach { model.addElement(it) }
     }
 
+    private fun messageAt(event: MouseEvent): SessionMessage? {
+        val index = list.locationToIndex(event.point)
+        if (index < 0 || !list.getCellBounds(index, index).contains(event.point)) return null
+
+        return model.getElementAt(index)
+    }
+
+    /** The thumbnail strip sits in the bottom band of a card, which is enough to place the cursor. */
+    private fun imageAt(event: MouseEvent): String? {
+        val index = list.locationToIndex(event.point)
+        if (index < 0) return null
+        val bounds = list.getCellBounds(index, index) ?: return null
+        if (!bounds.contains(event.point)) return null
+        val message = model.getElementAt(index)
+        if (message.images.isEmpty()) return null
+
+        val fromBottom = bounds.y + bounds.height - event.point.y
+        if (fromBottom > com.intellij.util.ui.JBUI.scale(96)) return null
+        val column = ((event.point.x - bounds.x - com.intellij.util.ui.JBUI.scale(44)) / com.intellij.util.ui.JBUI.scale(78))
+
+        return message.images.getOrNull(column.coerceAtLeast(0))
+    }
+
     /** Scrolling the terminal is best effort: a message older than the scrollback is simply gone. */
     private fun jumpTo(message: SessionMessage) {
         val terminal = selectedSession()
@@ -91,19 +126,7 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
             ?.terminal()
             ?: return
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val found = TerminalScroll.scrollTo(terminal, message.headline)
-
-            if (!found) ApplicationManager.getApplication().invokeLater { reportMissing() }
-        }
-    }
-
-    private fun reportMissing() {
-        if (project.isDisposed) return
-
-        NotificationGroupManager.getInstance()
-            .getNotificationGroup("Canopy")
-            .createNotification("That message has scrolled out of the terminal's history", NotificationType.INFORMATION)
-            .notify(project)
+        // Silently: the preview is already open, and a balloon per click for the common case is noise.
+        ApplicationManager.getApplication().executeOnPooledThread { TerminalScroll.scrollTo(terminal, message.headline) }
     }
 }

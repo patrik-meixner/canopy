@@ -23,11 +23,11 @@ class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
         toolWindow.component.putClientProperty(ToolWindowContentUi.HIDE_ID_LABEL, "true")
 
         val parent = toolWindow.disposable
+        addTab(toolWindow, "Context", "context", ClaudeContextPanel(project, parent))
+        addTab(toolWindow, "Plan", "tab-plan", PlanTabPanel(project, parent))
         addTab(toolWindow, "Messages", "tab-messages", MessagesTabPanel(project, parent))
         addTab(toolWindow, "Activity", "tab-activity", ActivityTabPanel(project, parent))
-        addTab(toolWindow, "Plan", "tab-plan", PlanTabPanel(project, parent))
         addTab(toolWindow, "Files", "tab-files", FilesTabPanel(project, parent))
-        addTab(toolWindow, "Context", "context", ClaudeContextPanel(project, parent))
     }
 
     private fun addTab(toolWindow: ToolWindow, title: String, icon: String, panel: JComponent) {

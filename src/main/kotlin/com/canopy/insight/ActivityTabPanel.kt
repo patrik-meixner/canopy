@@ -2,12 +2,23 @@ package com.canopy.insight
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.ToggleAction
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.JBColor
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.ui.components.JBList
 import com.intellij.util.ui.JBUI
+import java.awt.BorderLayout
+import java.awt.event.MouseEvent
+import java.nio.file.Path
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -16,44 +27,87 @@ import javax.swing.Icon
 import javax.swing.JList
 
 /**
- * What the agent has been doing, call by call, so the answer does not have to be read off a
- * terminal that has already scrolled past it.
+ * What the agent has been doing, folded into runs.
+ *
+ * Twelve consecutive Bash rows say nothing that "Bash ×12" does not, and they bury the one Edit
+ * between them; a file it wrote to opens on a double click.
  */
 class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
-    private val model = DefaultListModel<ActivityEntry>()
-    private val list = JBList(model)
+    private val model = DefaultListModel<ActivityRun>()
+    private val list = ViewportWidthList(model)
+    private var entries: List<ActivityEntry> = emptyList()
+    private var writesOnly = false
 
     init {
         list.cellRenderer = ActivityRenderer()
         list.emptyText.text = "Nothing recorded for this session yet"
         list.border = JBUI.Borders.empty(InsightUi.GAP, InsightUi.GAP)
 
-        add(ScrollPaneFactory.createScrollPane(list, true))
+        object : DoubleClickListener() {
+            override fun onDoubleClick(event: MouseEvent): Boolean = openSelected()
+        }.installOn(list)
+
+        add(toolbar(), BorderLayout.NORTH)
+        add(ScrollPaneFactory.createScrollPane(list, true), BorderLayout.CENTER)
     }
 
     override fun render(insight: SessionInsight) {
-        val atBottom = list.lastVisibleIndex >= model.size() - 1
-
-        model.clear()
-        insight.activity.asReversed().forEach { model.addElement(it) }
-        if (atBottom && !model.isEmpty) list.ensureIndexIsVisible(0)
+        entries = insight.activity
+        rebuild()
     }
 
-    private class ActivityRenderer : ColoredListCellRenderer<ActivityEntry>() {
+    private fun rebuild() {
+        val atTop = list.firstVisibleIndex <= 0
+
+        model.clear()
+        activityRuns(entries, writesOnly).asReversed().forEach { model.addElement(it) }
+        if (atTop && !model.isEmpty) list.ensureIndexIsVisible(0)
+    }
+
+    private fun toolbar(): javax.swing.JComponent {
+        val group = DefaultActionGroup()
+        group.add(object : ToggleAction("Writes Only", "Hide reads, searches and shell calls", AllIcons.Actions.Edit) {
+            override fun isSelected(event: AnActionEvent) = writesOnly
+
+            override fun setSelected(event: AnActionEvent, state: Boolean) {
+                writesOnly = state
+                rebuild()
+            }
+
+            override fun getActionUpdateThread() = ActionUpdateThread.EDT
+        })
+
+        return ActionManager.getInstance().createActionToolbar("CanopyActivity", group, true)
+            .also { it.targetComponent = this }
+            .component
+    }
+
+    private fun openSelected(): Boolean {
+        val run = list.selectedValue ?: return false
+        if (!run.detail.startsWith("/")) return false
+        val file = LocalFileSystem.getInstance().findFileByNioFile(Path.of(run.detail)) ?: return false
+
+        return FileEditorManager.getInstance(project).openFile(file, true).isNotEmpty()
+    }
+
+    private class ActivityRenderer : ColoredListCellRenderer<ActivityRun>() {
         override fun customizeCellRenderer(
-            list: JList<out ActivityEntry>,
-            value: ActivityEntry,
+            list: JList<out ActivityRun>,
+            value: ActivityRun,
             index: Int,
             selected: Boolean,
             hasFocus: Boolean
         ) {
             icon = iconFor(value.tool)
-            append(value.tool, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-            if (value.detail.isNotEmpty()) append("  ${value.detail}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            timeOf(value.atMillis)?.let { append("   $it", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES) }
+            append(value.tool, if (value.isWrite) writeAttributes else SimpleTextAttributes.REGULAR_ATTRIBUTES)
+            if (value.count > 1) append(" ×${value.count}", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
+            if (value.detail.isNotEmpty()) append("  ${shortDetail(value.detail)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            timeOf(value.lastAtMillis)?.let { append("   $it", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES) }
             toolTipText = value.detail.takeIf { it.isNotBlank() }
         }
+
+        private val writeAttributes = SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, JBColor(0x12A57C, 0x67F7C3))
     }
 }
 
@@ -61,6 +115,14 @@ private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.syste
 
 internal fun timeOf(millis: Long): String? =
     if (millis <= 0) null else TIME.format(Instant.ofEpochMilli(millis))
+
+/** A path is read by its tail; a command is read by its head. */
+internal fun shortDetail(detail: String): String {
+    if (!detail.startsWith("/")) return detail
+    val parts = detail.split("/").filter { it.isNotEmpty() }
+
+    return if (parts.size <= 2) detail else "…/" + parts.takeLast(2).joinToString("/")
+}
 
 internal fun iconFor(tool: String): Icon = when {
     tool == "Bash" -> AllIcons.Debugger.Console

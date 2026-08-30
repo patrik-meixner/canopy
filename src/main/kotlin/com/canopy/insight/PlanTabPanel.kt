@@ -21,7 +21,7 @@ import javax.swing.SwingConstants
 class PlanTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
     private val model = DefaultListModel<PlannedTask>()
-    private val list = JBList(model)
+    private val list = ViewportWidthList(model)
 
     private val summary = JBLabel().apply {
         border = JBUI.Borders.empty(6, 12)
