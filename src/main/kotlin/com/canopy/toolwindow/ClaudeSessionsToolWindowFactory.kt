@@ -46,17 +46,10 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         // name survives for the stripe tooltip and the View menu.
         toolWindow.component.putClientProperty(ToolWindowContentUi.HIDE_ID_LABEL, "true")
 
-        val detailPanel = SessionDetailPanel(project, toolWindow.disposable) { sessionId ->
-            sessionService.getSessions().firstOrNull { it.sessionId == sessionId }
-        }
-        val detailContent = ContentFactory.getInstance().createContent(detailPanel, "Detail", false)
-        detailContent.icon = IconLoader.getIcon("/icons/canopy.svg", ClaudeSessionsToolWindowFactory::class.java)
-        detailContent.isCloseable = false
-
-        /** Opening a session is the start of reviewing it, so the tool window follows it there. */
+        /** Reviewing a session happens in its own window, so opening one brings that window up. */
         val openForReview: (SessionDisplay) -> Unit = { session ->
             callbacks.onSessionSelected(session)
-            toolWindow.contentManager.setSelectedContent(detailContent)
+            SessionWindow.activateDetail(project)
         }
 
         val sessionsPanel = SessionListPanel(
@@ -68,9 +61,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         sessionsContent.isCloseable = false
         sessionsContent.setDisposer(sessionsPanel)
         toolWindow.contentManager.addContent(sessionsContent)
-
-        // Worktree sessions tab
-        toolWindow.contentManager.addContent(detailContent)
 
         val repoTreePanel = WorktreeTreePanel(
             project,
@@ -94,17 +84,21 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         repoTreeContent.isCloseable = false
         toolWindow.contentManager.addContent(repoTreeContent)
 
+        val branchPanel = BranchTreePanel(project, toolWindow.disposable) { scope, branch ->
+            openNewWorktreeSession(project, branch, scope.root)
+        }
+        branchPanel.addHierarchyListener { event ->
+            if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) return@addHierarchyListener
+            if (branchPanel.isShowing) branchPanel.refresh()
+        }
+        val branchContent = ContentFactory.getInstance().createContent(branchPanel, "Branches", false)
+        branchContent.icon = IconLoader.getIcon("/icons/tab-branches.svg", ClaudeSessionsToolWindowFactory::class.java)
+        branchContent.isCloseable = false
+        toolWindow.contentManager.addContent(branchContent)
+
         sessionService.startWatching()
 
-        // Refresh session list status column when editor tabs open/close
-        fun showActiveSessionDetail(file: VirtualFile?) {
-            detailPanel.showSession((file as? ClaudeSessionVirtualFile)?.sessionId)
-        }
-
         val editorListener = object : FileEditorManagerListener {
-            override fun selectionChanged(event: FileEditorManagerEvent) {
-                showActiveSessionDetail(event.newFile)
-            }
 
             override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
                 if (file is ClaudeSessionVirtualFile) {
@@ -122,8 +116,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         project.messageBus.connect(sessionsPanel).subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER, editorListener
         )
-
-        showActiveSessionDetail(FileEditorManager.getInstance(project).selectedFiles.firstOrNull())
 
         restoreOpenSessions(project, sessionService)
     }

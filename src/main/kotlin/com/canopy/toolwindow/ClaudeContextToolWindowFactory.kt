@@ -22,10 +22,30 @@ class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
         toolWindow.component.putClientProperty(ToolWindowContentUi.HIDE_ID_LABEL, "true")
 
         val parent = toolWindow.disposable
+        addTab(toolWindow, "Detail", "canopy", detailPanel(project, parent))
         addTab(toolWindow, "Context", "context", ClaudeContextPanel(project, parent))
         addTab(toolWindow, "Plan", "tab-plan", PlanTabPanel(project, parent))
         addTab(toolWindow, "Messages", "tab-messages", MessagesTabPanel(project, parent))
         addTab(toolWindow, "Activity", "tab-activity", ActivityTabPanel(project, parent))
+    }
+
+    /** The review follows the selected session, the same way every other tab here does. */
+    private fun detailPanel(project: Project, parent: com.intellij.openapi.Disposable): SessionDetailPanel {
+        val sessions = com.canopy.services.ClaudeSessionService.getInstance(project)
+        val panel = SessionDetailPanel(project, parent) { id -> sessions.getSessions().firstOrNull { it.sessionId == id } }
+
+        project.messageBus.connect(parent).subscribe(
+            com.intellij.openapi.fileEditor.FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : com.intellij.openapi.fileEditor.FileEditorManagerListener {
+                override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
+                    val session = event.newFile as? com.canopy.editor.ClaudeSessionVirtualFile ?: return
+
+                    panel.showSession(session.sessionId)
+                }
+            }
+        )
+
+        return panel
     }
 
     private fun addTab(toolWindow: ToolWindow, title: String, icon: String, panel: JComponent) {
