@@ -66,14 +66,14 @@ class SessionCardRenderer(
         val attention = getAttention(session)
 
         outer.background = table.background
-        island.islandColor = if (selected) UIUtil.getListSelectionBackground(true) else InsightUi.islandBackground()
+        island.islandColor = InsightUi.cardBackground(selected)
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)
         glyph.toolTipText = attention.takeIf { it != SessionAttention.None }?.name
         title.text = session.displayName
-        title.foreground = if (selected) UIUtil.getListSelectionForeground(true) else UIUtil.getLabelForeground()
+        title.foreground = InsightUi.cardForeground(selected)
         meta.text = metaLine(session, getDetail(session))
-        meta.foreground = if (selected) UIUtil.getListSelectionForeground(true) else UIUtil.getLabelDisabledForeground()
+        meta.foreground = if (selected) InsightUi.cardForeground(true) else UIUtil.getLabelDisabledForeground()
 
         return outer
     }
@@ -89,10 +89,10 @@ class SessionCardRenderer(
     }
 
     private fun glyphColor(session: SessionDisplay, attention: SessionAttention, selected: Boolean): java.awt.Color = when {
-        selected -> UIUtil.getListSelectionForeground(true)
-        attention == SessionAttention.NeedsPermission -> JBColor(0xC7402F, 0xE06C5E)
-        attention == SessionAttention.WaitingForInput -> JBColor(0xB8730E, 0xD9A343)
-        getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN -> JBColor(0x12A57C, 0x67F7C3)
+        selected -> InsightUi.cardForeground(true)
+        attention == SessionAttention.NeedsPermission -> InsightUi.needsAttention()
+        attention == SessionAttention.WaitingForInput -> InsightUi.waiting()
+        getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN -> InsightUi.accent()
         else -> UIUtil.getLabelDisabledForeground()
     }
 }

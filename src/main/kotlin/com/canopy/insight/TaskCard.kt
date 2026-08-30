@@ -40,7 +40,7 @@ class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
     }
 
     private fun highlight(hovered: Boolean) {
-        island.islandColor = if (hovered) UIUtil.getListSelectionBackground(false) else InsightUi.islandBackground()
+        island.islandColor = if (hovered) InsightUi.hoverBackground() else InsightUi.islandBackground()
         island.repaint()
     }
 
@@ -94,10 +94,10 @@ class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
         alignmentX = LEFT_ALIGNMENT
     }
 
-    private fun statusColor(status: TaskStatus): JBColor = when (status) {
-        TaskStatus.IN_PROGRESS -> JBColor(0x12A57C, 0x67F7C3)
+    private fun statusColor(status: TaskStatus): java.awt.Color = when (status) {
+        TaskStatus.IN_PROGRESS -> InsightUi.accent()
         TaskStatus.COMPLETED -> JBColor.GRAY
-        TaskStatus.PENDING -> JBColor(0x8A8F98, 0x9AA0A8)
+        TaskStatus.PENDING -> UIUtil.getLabelDisabledForeground()
     }
 }
 

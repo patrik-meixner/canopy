@@ -50,7 +50,7 @@ class MessageCard(
 
     /** Only the tone changes on hover: touching size or insets is what made rows jump. */
     private fun highlight(hovered: Boolean) {
-        island.islandColor = if (hovered) UIUtil.getListSelectionBackground(false) else InsightUi.islandBackground()
+        island.islandColor = if (hovered) InsightUi.hoverBackground() else InsightUi.islandBackground()
         island.repaint()
     }
 

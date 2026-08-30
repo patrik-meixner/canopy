@@ -261,7 +261,8 @@ class SessionListPanel(
     private fun setupOrphanSection() {
         orphanList.selectionMode = ListSelectionModel.SINGLE_SELECTION
         orphanList.visibleRowCount = 4
-        orphanList.cellRenderer = OrphanCellRenderer()
+        orphanList.cellRenderer = OrphanCardRenderer()
+        orphanList.fixedCellHeight = JBUI.scale(46)
 
         val header = com.intellij.ui.components.JBLabel("Orphaned worktrees").apply {
             border = JBUI.Borders.empty(4, 6, 2, 6)
@@ -765,32 +766,6 @@ class SessionListPanel(
 
     override fun dispose() {
         sessionService.removeChangeListener(changeListener)
-    }
-
-    private class OrphanCellRenderer : com.intellij.ui.ColoredListCellRenderer<OrphanWorktree>() {
-        override fun customizeCellRenderer(
-            list: javax.swing.JList<out OrphanWorktree>, value: OrphanWorktree?, index: Int,
-            selected: Boolean, hasFocus: Boolean
-        ) {
-            if (value == null) return
-            icon = com.canopy.editor.ClaudeSessionIconProvider.TREE_ICON
-            append(value.name, com.intellij.ui.SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-            if (value.repoLabel.isNotEmpty()) {
-                append("  ${value.repoLabel}", com.intellij.ui.SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            }
-            val hint = "  — ${describeReason(value)}"
-            append(hint, com.intellij.ui.SimpleTextAttributes.GRAYED_ATTRIBUTES)
-        }
-
-        private fun describeReason(orphan: OrphanWorktree): String =
-            when (val reason = orphan.reason) {
-                is com.canopy.model.OrphanReason.NoSession -> orphan.branch ?: "detached HEAD"
-                is com.canopy.model.OrphanReason.EmptyDirectory -> "empty directory, safe to delete"
-                is com.canopy.model.OrphanReason.LeftoverFiles ->
-                    "left behind after removal: ${reason.names.joinToString(", ")}"
-                is com.canopy.model.OrphanReason.MissingGitDir -> "git metadata gone (${reason.gitDir})"
-                is com.canopy.model.OrphanReason.OwnedByOtherRepo -> "worktree of another repo"
-            }
     }
 
     private companion object {

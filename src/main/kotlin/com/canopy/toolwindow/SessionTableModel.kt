@@ -74,11 +74,11 @@ private class StatusColumnInfo(
                 foreground = when {
                     isSelected -> table.selectionForeground
                     item != null && getAttention(item) == com.canopy.model.SessionAttention.NeedsPermission ->
-                        com.intellij.ui.JBColor(0xC7402F, 0xE06C5E)
+                        com.canopy.insight.InsightUi.needsAttention()
                     item != null && getAttention(item) == com.canopy.model.SessionAttention.WaitingForInput ->
-                        com.intellij.ui.JBColor(0xB8730E, 0xD9A343)
+                        com.canopy.insight.InsightUi.waiting()
                     item != null && getStatus(item.sessionId) == SessionStatus.OPEN_IN_PLUGIN ->
-                        com.intellij.ui.JBColor.namedColor("Component.focusColor", com.intellij.ui.JBColor(0x3574F0, 0x548AF7))
+                        com.intellij.ui.JBColor.namedColor("Component.focusColor", com.canopy.insight.InsightUi.accent())
                     item != null && getStatus(item.sessionId) == SessionStatus.OPEN_EXTERNALLY ->
                         com.intellij.util.ui.UIUtil.getLabelDisabledForeground()
                     else -> com.intellij.util.ui.UIUtil.getLabelDisabledForeground()
@@ -243,7 +243,7 @@ private class GitColumnInfo(
     }
 
     private companion object {
-        val DIRTY_COLOR = com.intellij.ui.JBColor(0xB8730E, 0xD9A343)
+        val DIRTY_COLOR = com.canopy.insight.InsightUi.waiting()
         val INTERRUPTED_STATES = setOf(
             WorktreeState.REBASING, WorktreeState.MERGING, WorktreeState.CHERRY_PICKING
         )

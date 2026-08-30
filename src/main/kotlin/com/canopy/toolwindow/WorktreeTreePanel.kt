@@ -432,6 +432,6 @@ private class WorktreeTreeCellRenderer : ColoredTreeCellRenderer() {
     }
 
     private companion object {
-        val DIRTY_COLOR = JBColor(0xB8730E, 0xD9A343)
+        val DIRTY_COLOR = com.canopy.insight.InsightUi.waiting()
     }
 }

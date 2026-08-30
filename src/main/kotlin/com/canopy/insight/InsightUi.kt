@@ -16,13 +16,23 @@ object InsightUi {
     val GAP: Int get() = JBUI.scale(6)
 
     fun cardBackground(selected: Boolean): Color =
-        if (selected) UIUtil.getListSelectionBackground(true) else islandBackground()
+        if (selected) JBUI.CurrentTheme.List.Selection.background(true) else islandBackground()
+
+    /** Hover is the theme's own unfocused selection, so it follows the IDE accent rather than a guess. */
+    fun hoverBackground(): Color = JBUI.CurrentTheme.List.Selection.background(false)
 
     fun cardForeground(selected: Boolean): Color =
-        if (selected) UIUtil.getListSelectionForeground(true) else UIUtil.getLabelForeground()
+        if (selected) JBUI.CurrentTheme.List.Selection.foreground(true) else UIUtil.getLabelForeground()
 
     fun mutedForeground(selected: Boolean): Color =
-        if (selected) UIUtil.getListSelectionForeground(true) else JBColor.GRAY
+        if (selected) JBUI.CurrentTheme.List.Selection.foreground(true) else JBColor.GRAY
+
+    /** The accent the IDE is themed with; there is no reason for the plugin to invent one. */
+    fun accent(): Color = JBUI.CurrentTheme.Focus.focusColor()
+
+    fun needsAttention(): Color = JBUI.CurrentTheme.Focus.errorColor(true)
+
+    fun waiting(): Color = JBUI.CurrentTheme.Focus.warningColor(true)
 
     /** A touch off the list background, so a card reads as a raised island without a border. */
     fun islandBackground(): Color = JBColor.lazy {

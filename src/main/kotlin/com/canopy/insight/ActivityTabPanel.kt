@@ -108,7 +108,7 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
             toolTipText = value.detail.takeIf { it.isNotBlank() }
         }
 
-        private val writeAttributes = SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, JBColor(0x12A57C, 0x67F7C3))
+        private val writeAttributes get() = SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, InsightUi.accent())
     }
 }
 
