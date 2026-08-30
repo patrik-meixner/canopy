@@ -27,7 +27,7 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
     init {
         list.cellRenderer = ActivityRenderer()
         list.emptyText.text = "Nothing recorded for this session yet"
-        list.border = JBUI.Borders.empty(4, 2)
+        list.border = JBUI.Borders.empty(InsightUi.GAP, InsightUi.GAP)
 
         add(ScrollPaneFactory.createScrollPane(list, true))
     }

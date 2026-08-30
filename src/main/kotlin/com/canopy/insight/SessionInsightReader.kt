@@ -6,6 +6,7 @@ import com.canopy.util.JsonlTailReader
 import com.canopy.util.touchedFilePathsIn
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -21,6 +22,9 @@ class SessionInsightReader {
     private val messages = mutableListOf<SessionMessage>()
     private val activity = mutableListOf<ActivityEntry>()
     private val writes = LinkedHashMap<String, Int>()
+    private val repositories = HashMap<String, String>()
+    private var revision = 0L
+    private var snapshot: SessionInsight? = null
 
     fun reset() {
         tail.reset()
@@ -29,16 +33,30 @@ class SessionInsightReader {
 
     @Synchronized
     fun read(path: Path): SessionInsight {
+        val before = revision
         tail.consume(path, onRestart = ::clear, onLine = ::consumeLine)
+        if (revision == before && snapshot != null) return snapshot!!
 
-        return SessionInsight(
+        val fresh = SessionInsight(
+            revision = revision,
             messages = messages.toList(),
             activity = activity.takeLast(ACTIVITY_LIMIT),
-            files = writes.entries.map { TouchedFile(it.key, it.value) }.sortedByDescending { it.writes }
+            files = writes.entries
+                .map { TouchedFile(it.key, it.value, repositoryOf(it.key)) }
+                .sortedWith(compareBy({ it.repository }, { -it.writes }))
         )
+        snapshot = fresh
+
+        return fresh
     }
 
+    /** Walking up to a .git per file per tick was disk work on the EDT; the answer never changes. */
+    private fun repositoryOf(path: String): String =
+        repositories.getOrPut(Path.of(path).parent?.toString() ?: path) { repositoryLabel(path) }
+
     private fun clear() {
+        revision++
+        snapshot = null
         messages.clear()
         activity.clear()
         writes.clear()
@@ -48,8 +66,8 @@ class SessionInsightReader {
         if (line.isBlank()) return
         val record = runCatching { gson.fromJson(line, JsonObject::class.java) }.getOrNull() ?: return
 
-        humanMessageIn(record, messages.size + 1)?.let { messages.add(it) }
-        touchedFilePathsIn(record).forEach { writes[it] = (writes[it] ?: 0) + 1 }
+        humanMessageIn(record, messages.size + 1)?.let { messages.add(it); revision++ }
+        touchedFilePathsIn(record).forEach { writes[it] = (writes[it] ?: 0) + 1; revision++ }
 
         val content = record.getAsJsonObject("message")?.get("content") ?: return
         if (!content.isJsonArray) return
@@ -69,6 +87,7 @@ class SessionInsightReader {
         val input = block.getAsJsonObject("input")
 
         activity.add(ActivityEntry(name, activityDetail(name, input), at))
+        revision++
         if (activity.size > ACTIVITY_LIMIT * 2) activity.subList(0, activity.size - ACTIVITY_LIMIT).clear()
     }
 

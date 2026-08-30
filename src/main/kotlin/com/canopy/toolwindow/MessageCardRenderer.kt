@@ -1,6 +1,7 @@
 package com.canopy.toolwindow
 
-import com.intellij.ui.JBColor
+import com.canopy.insight.InsightUi
+import com.canopy.insight.IslandPanel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
@@ -13,29 +14,34 @@ import javax.swing.ListCellRenderer
 import javax.swing.SwingConstants
 
 /**
- * One message as a card: its number, its text wrapped to whatever width the panel has, and a strip
- * of thumbnails for anything pasted into it.
+ * One message as an island: an ordinal chip, its text wrapped to whatever width the panel has, and
+ * a strip of thumbnails for anything pasted into it.
  *
  * The text wraps through HTML sized to the list, because a fixed character cut left half the panel
  * empty when the splitter was dragged wide and still truncated when it was narrow.
  */
 class MessageCardRenderer : ListCellRenderer<SessionMessage> {
 
-    private val card = JPanel(BorderLayout(JBUI.scale(8), JBUI.scale(4)))
+    private val outer = JPanel(BorderLayout())
+    private val card = IslandPanel(BorderLayout(JBUI.scale(8), JBUI.scale(6)))
     private val ordinal = JLabel("", SwingConstants.RIGHT)
     private val text = JLabel()
-    private val thumbnails = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0))
+    private val thumbnails = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0))
 
     init {
-        card.border = JBUI.Borders.empty(6, 8)
-        card.isOpaque = true
+        outer.isOpaque = true
+        outer.border = JBUI.Borders.empty(InsightUi.GAP / 2, InsightUi.GAP, 0, InsightUi.GAP)
+        card.border = JBUI.Borders.empty(8, 10)
         ordinal.font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
-        ordinal.preferredSize = java.awt.Dimension(JBUI.scale(26), 0)
+        ordinal.preferredSize = java.awt.Dimension(JBUI.scale(24), 0)
+        ordinal.verticalAlignment = SwingConstants.TOP
+        text.verticalAlignment = SwingConstants.TOP
         thumbnails.isOpaque = false
 
         card.add(ordinal, BorderLayout.WEST)
         card.add(text, BorderLayout.CENTER)
         card.add(thumbnails, BorderLayout.SOUTH)
+        outer.add(card, BorderLayout.CENTER)
     }
 
     override fun getListCellRendererComponent(
@@ -45,10 +51,10 @@ class MessageCardRenderer : ListCellRenderer<SessionMessage> {
         selected: Boolean,
         hasFocus: Boolean
     ): Component {
-        val background = if (selected) UIUtil.getListSelectionBackground(true) else UIUtil.getListBackground()
-        card.background = background
-        text.foreground = if (selected) UIUtil.getListSelectionForeground(true) else UIUtil.getLabelForeground()
-        ordinal.foreground = if (selected) UIUtil.getListSelectionForeground(true) else JBColor.GRAY
+        outer.background = UIUtil.getListBackground()
+        card.islandColor = InsightUi.cardBackground(selected)
+        text.foreground = InsightUi.cardForeground(selected)
+        ordinal.foreground = InsightUi.mutedForeground(selected)
         ordinal.text = value.ordinal.toString()
         text.text = wrappedHtml(value.text, textWidth(list))
 
@@ -58,11 +64,11 @@ class MessageCardRenderer : ListCellRenderer<SessionMessage> {
         }
         thumbnails.isVisible = thumbnails.componentCount > 0
 
-        return card
+        return outer
     }
 
     private fun textWidth(list: JList<out SessionMessage>): Int =
-        (list.width - JBUI.scale(60)).coerceAtLeast(JBUI.scale(120))
+        (list.width - JBUI.scale(72)).coerceAtLeast(JBUI.scale(120))
 
     private companion object {
         const val MAX_THUMBNAILS = 4

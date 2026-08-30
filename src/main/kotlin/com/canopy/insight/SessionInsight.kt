@@ -25,10 +25,16 @@ data class ActivityEntry(
 
 data class TouchedFile(
     val path: String,
-    val writes: Int
+    val writes: Int,
+    val repository: String
 )
 
+/**
+ * [revision] changes only when something a tab draws changed, so a tick that appended nothing but
+ * tool results does not rebuild five list models and repaint them.
+ */
 data class SessionInsight(
+    val revision: Long = 0,
     val messages: List<SessionMessage> = emptyList(),
     val activity: List<ActivityEntry> = emptyList(),
     val tasks: List<PlannedTask> = emptyList(),

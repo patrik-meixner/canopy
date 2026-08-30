@@ -20,14 +20,20 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
 
     private val service = SessionInsightService.getInstance(project)
     private var watching = false
+    private var drawnRevision = -1L
+    private var drawnTasks: List<PlannedTask>? = null
 
     init {
         Disposer.register(parent, this)
 
         service.addListener(this) { insight ->
+            if (insight.revision == drawnRevision && insight.tasks === drawnTasks) return@addListener
+
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed || Disposer.isDisposed(this)) return@invokeLater
 
+                drawnRevision = insight.revision
+                drawnTasks = insight.tasks
                 render(insight)
             }
         }
@@ -66,6 +72,7 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
     private fun startWatching() {
         if (watching) return
         watching = true
+        drawnRevision = -1L
         bindToSelection()
         service.watch()
     }

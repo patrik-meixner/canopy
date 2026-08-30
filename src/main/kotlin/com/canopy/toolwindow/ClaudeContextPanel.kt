@@ -85,6 +85,7 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         PopupHandler.installPopupMenu(tree, contextMenu(), "CanopyContextTree")
 
         add(createToolbar(), BorderLayout.NORTH)
+        tree.border = JBUI.Borders.empty(com.canopy.insight.InsightUi.GAP, com.canopy.insight.InsightUi.GAP)
         add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER)
         add(boundTo, BorderLayout.SOUTH)
 

@@ -34,7 +34,7 @@ class FilesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(proj
         tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
         tree.cellRenderer = FileRenderer()
         tree.emptyText.text = "This session has not written to any file yet"
-        tree.border = JBUI.Borders.empty(4, 2)
+        tree.border = JBUI.Borders.empty(InsightUi.GAP, InsightUi.GAP)
 
         object : DoubleClickListener() {
             override fun onDoubleClick(event: MouseEvent): Boolean = openSelected()
@@ -51,7 +51,7 @@ class FilesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(proj
             .toSet()
 
         root.removeAllChildren()
-        for ((repository, files) in groupByRepository(insight.files)) {
+        for ((repository, files) in insight.files.groupBy { it.repository }) {
             val repositoryNode = DefaultMutableTreeNode(RepositoryRow(repository, files.size))
             files.forEach { repositoryNode.add(DefaultMutableTreeNode(it)) }
             root.add(repositoryNode)
@@ -103,10 +103,7 @@ class FilesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(proj
     }
 }
 
-/** Files are grouped by their nearest enclosing directory that carries a .git, which is the repo. */
-internal fun groupByRepository(files: List<TouchedFile>): Map<String, List<TouchedFile>> =
-    files.groupBy { repositoryLabel(it.path) }.toSortedMap()
-
+/** The nearest enclosing directory carrying a .git, resolved off the EDT and cached by the reader. */
 internal fun repositoryLabel(path: String): String {
     var current: Path? = Path.of(path).parent
     while (current != null) {
