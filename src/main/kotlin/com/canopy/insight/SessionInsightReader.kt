@@ -54,6 +54,16 @@ class SessionInsightReader {
     private fun repositoryOf(path: String): String =
         repositories.getOrPut(Path.of(path).parent?.toString() ?: path) { repositoryLabel(path) }
 
+    private fun repositoryLabel(path: String): String {
+        var current: Path? = Path.of(path).parent
+        while (current != null) {
+            if (Files.exists(current.resolve(".git"))) return current.fileName?.toString() ?: current.toString()
+            current = current.parent
+        }
+
+        return "Outside any repository"
+    }
+
     private fun clear() {
         revision++
         snapshot = null

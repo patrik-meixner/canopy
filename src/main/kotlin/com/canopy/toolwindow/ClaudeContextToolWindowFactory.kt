@@ -1,7 +1,6 @@
 package com.canopy.toolwindow
 
 import com.canopy.insight.ActivityTabPanel
-import com.canopy.insight.FilesTabPanel
 import com.canopy.insight.MessagesTabPanel
 import com.canopy.insight.PlanTabPanel
 import com.intellij.openapi.project.DumbAware
@@ -27,7 +26,6 @@ class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
         addTab(toolWindow, "Plan", "tab-plan", PlanTabPanel(project, parent))
         addTab(toolWindow, "Messages", "tab-messages", MessagesTabPanel(project, parent))
         addTab(toolWindow, "Activity", "tab-activity", ActivityTabPanel(project, parent))
-        addTab(toolWindow, "Files", "tab-files", FilesTabPanel(project, parent))
     }
 
     private fun addTab(toolWindow: ToolWindow, title: String, icon: String, panel: JComponent) {

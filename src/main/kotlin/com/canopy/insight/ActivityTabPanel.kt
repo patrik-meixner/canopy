@@ -100,9 +100,10 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
             hasFocus: Boolean
         ) {
             icon = iconFor(value.tool)
-            append(value.tool, if (value.isWrite) writeAttributes else SimpleTextAttributes.REGULAR_ATTRIBUTES)
+            val headline = headlineOf(value)
+            append(headline.first, if (value.isWrite) writeAttributes else SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             if (value.count > 1) append(" ×${value.count}", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
-            if (value.detail.isNotEmpty()) append("  ${shortDetail(value.detail)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            if (headline.second.isNotEmpty()) append("  ${headline.second}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
             timeOf(value.lastAtMillis)?.let { append("   $it", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES) }
             toolTipText = value.detail.takeIf { it.isNotBlank() }
         }
@@ -115,6 +116,14 @@ private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.syste
 
 internal fun timeOf(millis: Long): String? =
     if (millis <= 0) null else TIME.format(Instant.ofEpochMilli(millis))
+
+/** A shell call reads as its verb; anything else reads as its tool and target. */
+internal fun headlineOf(run: ActivityRun): Pair<String, String> {
+    if (run.tool != "Bash") return run.tool to shortDetail(run.detail)
+    val summary = summarizeCommand(run.detail)
+
+    return summary.verb to shortDetail(summary.rest)
+}
 
 /** A path is read by its tail; a command is read by its head. */
 internal fun shortDetail(detail: String): String {

@@ -29,7 +29,7 @@ fun activityRuns(entries: List<ActivityEntry>, writesOnly: Boolean): List<Activi
             runs[runs.lastIndex] = last.copy(count = last.count + 1, lastAtMillis = entry.atMillis)
             continue
         }
-        if (last != null && last.tool == entry.tool && entry.detail.isEmpty()) {
+        if (last != null && last.tool == entry.tool && sameShellVerb(last.detail, entry.detail)) {
             runs[runs.lastIndex] = last.copy(count = last.count + 1, lastAtMillis = entry.atMillis)
             continue
         }
@@ -40,3 +40,7 @@ fun activityRuns(entries: List<ActivityEntry>, writesOnly: Boolean): List<Activi
 }
 
 internal fun isWrite(tool: String): Boolean = tool in WRITE_TOOLS
+
+/** Twenty greps in a row are one activity, whatever each of them was looking for. */
+private fun sameShellVerb(first: String, second: String): Boolean =
+    second.isEmpty() || summarizeCommand(first).verb == summarizeCommand(second).verb
