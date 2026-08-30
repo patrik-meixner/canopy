@@ -63,7 +63,7 @@
         />
 
         <toolWindow
-            id="Context"
+            id="Session"
             anchor="right"
             icon="/icons/context.svg"
             factoryClass="com.canopy.toolwindow.ClaudeContextToolWindowFactory"
@@ -128,13 +128,8 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
 
             <reference id="ActivateCanopyToolWindow"/>
-            <reference id="ActivateContextToolWindow"/>
+            <reference id="ActivateSessionToolWindow"/>
             <separator/>
-            <action id="Canopy.ToggleMessageHistory"
-                    class="com.canopy.editor.ToggleMessageHistoryAction"
-                    text="Message History"
-                    description="Show this session's messages beside its terminal"
-                    icon="AllIcons.General.User"/>
             <action id="Canopy.SessionPalette" class="com.canopy.editor.SessionPaletteAction">
                 <keyboard-shortcut keymap="$default" first-keystroke="meta shift O"/>
             </action>

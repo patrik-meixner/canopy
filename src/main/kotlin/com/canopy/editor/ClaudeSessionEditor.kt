@@ -5,7 +5,6 @@ import com.canopy.services.ClaudeSessionService
 import com.canopy.services.ClaudeStatusService
 import com.canopy.services.ClaudeTerminalService
 import com.canopy.services.OpenSessionsPersistence
-import com.canopy.toolwindow.MessageHistoryPanel
 import com.canopy.toolwindow.WorktreeInspector
 import com.canopy.toolwindow.WorktreeState
 import com.intellij.icons.AllIcons
@@ -20,6 +19,7 @@ import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
+import com.intellij.terminal.JBTerminalWidget
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.vfs.VirtualFile
@@ -71,8 +71,8 @@ class ClaudeSessionEditor(
     private var currentContent: JComponent? = null
     private var focusComponent: JComponent? = null
     private var ptyProcess: PtyProcess? = null
-    private var historyPanel: MessageHistoryPanel? = null
-    private var historySplitter: JBSplitter? = null
+    private var terminalWidget: JBTerminalWidget? = null
+    private var terminalArea: JPanel? = null
     @Volatile private var lastTitle: String? = null
     private var maxEffortButton: javax.swing.JButton? = null
     private var reconnectButton: javax.swing.JButton? = null
@@ -333,8 +333,7 @@ class ClaudeSessionEditor(
         val toolbar = createToolbar()
         sessionToolbar = toolbar
 
-        // Message history side panel
-        historyPanel = MessageHistoryPanel(project, session.widget, { file.sessionId }, { file.workingDir }, sessionDisposable)
+        terminalWidget = session.widget
         // JediTerm draws the first glyph flush against the edge; the gap has to come from a wrapper.
         val terminalArea = JPanel(BorderLayout()).apply {
             border = JBUI.Borders.emptyLeft(8)
@@ -342,10 +341,7 @@ class ClaudeSessionEditor(
             add(session.widget.component, BorderLayout.CENTER)
         }
 
-        historySplitter = JBSplitter(false, 0.8f).apply {
-            firstComponent = terminalArea
-            secondComponent = null  // starts closed
-        }
+        this.terminalArea = terminalArea
 
         // Layout: toolbar(s) on top, splitter in center, context bar at bottom
         val gitDir = file.workingDir ?: project.basePath
@@ -373,7 +369,7 @@ class ClaudeSessionEditor(
 
         val contentPanel = JPanel(BorderLayout())
         contentPanel.add(topPanel, BorderLayout.NORTH)
-        contentPanel.add(historySplitter!!, BorderLayout.CENTER)
+        contentPanel.add(terminalArea!!, BorderLayout.CENTER)
         contentPanel.add(contextBar, BorderLayout.SOUTH)
 
         currentContent = contentPanel
@@ -510,17 +506,6 @@ class ClaudeSessionEditor(
         leftPanel.add(deleteButton)
 
         val rightPanel = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 2))
-        val historyToggle = javax.swing.JToggleButton("Messages")
-        historyToggle.isFocusable = false
-        historyToggle.addActionListener {
-            val splitter = historySplitter ?: return@addActionListener
-            if (historyToggle.isSelected) {
-                splitter.secondComponent = historyPanel
-            } else {
-                splitter.secondComponent = null
-            }
-        }
-        rightPanel.add(historyToggle)
 
         val toolbar = JPanel(BorderLayout())
         toolbar.add(leftPanel, BorderLayout.WEST)
@@ -1394,12 +1379,8 @@ class ClaudeSessionEditor(
         })
     }
 
-    /** Also reachable from the action, so it survives the session toolbar being hidden. */
-    fun toggleMessageHistory() {
-        val splitter = historySplitter ?: return
-
-        splitter.secondComponent = if (splitter.secondComponent == null) historyPanel else null
-    }
+    /** The Messages tab searches this buffer to jump back to a message. */
+    fun terminal(): JBTerminalWidget? = terminalWidget
 
     fun sendToTerminal(text: String) {
         val process = ptyProcess ?: return
@@ -1547,8 +1528,8 @@ class ClaudeSessionEditor(
         sessionDisposable = Disposer.newDisposable(rootDisposable, "claude-session")
 
         focusComponent = null
-        historyPanel = null
-        historySplitter = null
+        terminalWidget = null
+        terminalArea = null
         maxEffortButton = null
         lastTitle = null
 

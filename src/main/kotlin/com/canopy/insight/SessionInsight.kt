@@ -1,0 +1,36 @@
+package com.canopy.insight
+
+import com.canopy.toolwindow.SessionMessage
+
+enum class TaskStatus(val glyph: String) {
+    PENDING("☐"),
+    IN_PROGRESS("▶"),
+    COMPLETED("☑")
+}
+
+data class PlannedTask(
+    val id: String,
+    val subject: String,
+    val description: String,
+    val activeForm: String,
+    val status: TaskStatus,
+    val blockedBy: List<String>
+)
+
+data class ActivityEntry(
+    val tool: String,
+    val detail: String,
+    val atMillis: Long
+)
+
+data class TouchedFile(
+    val path: String,
+    val writes: Int
+)
+
+data class SessionInsight(
+    val messages: List<SessionMessage> = emptyList(),
+    val activity: List<ActivityEntry> = emptyList(),
+    val tasks: List<PlannedTask> = emptyList(),
+    val files: List<TouchedFile> = emptyList()
+)
