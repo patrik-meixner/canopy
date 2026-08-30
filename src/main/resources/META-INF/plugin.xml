@@ -124,20 +124,28 @@
         />
     </extensions>
     <actions>
-        <action id="Canopy.NewShellTerminal" class="com.canopy.editor.NewShellTerminalAction">
-            <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
+        <group id="Canopy.Menu" text="Canopy" popup="true" icon="/icons/canopy.svg">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
-        <action id="Canopy.SessionPalette" class="com.canopy.editor.SessionPaletteAction">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-            <keyboard-shortcut keymap="$default" first-keystroke="meta shift O"/>
-        </action>
 
-        <action id="Canopy.FocusWaitingSession" class="com.canopy.editor.FocusWaitingSessionAction">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-            <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
-            <keyboard-shortcut keymap="$default" first-keystroke="meta shift J"/>
-        </action>
+            <reference id="ActivateCanopyToolWindow"/>
+            <reference id="ActivateContextToolWindow"/>
+            <separator/>
+            <action id="Canopy.ToggleMessageHistory"
+                    class="com.canopy.editor.ToggleMessageHistoryAction"
+                    text="Message History"
+                    description="Show this session's messages beside its terminal"
+                    icon="AllIcons.General.User"/>
+            <action id="Canopy.SessionPalette" class="com.canopy.editor.SessionPaletteAction">
+                <keyboard-shortcut keymap="$default" first-keystroke="meta shift O"/>
+            </action>
+            <action id="Canopy.FocusWaitingSession" class="com.canopy.editor.FocusWaitingSessionAction">
+                <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
+                <keyboard-shortcut keymap="$default" first-keystroke="meta shift J"/>
+            </action>
+            <action id="Canopy.NewShellTerminal" class="com.canopy.editor.NewShellTerminalAction">
+                <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
+            </action>
+        </group>
     </actions>
 
 </idea-plugin>

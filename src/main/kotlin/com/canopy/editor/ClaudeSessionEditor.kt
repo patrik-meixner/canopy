@@ -1394,6 +1394,13 @@ class ClaudeSessionEditor(
         })
     }
 
+    /** Also reachable from the action, so it survives the session toolbar being hidden. */
+    fun toggleMessageHistory() {
+        val splitter = historySplitter ?: return
+
+        splitter.secondComponent = if (splitter.secondComponent == null) historyPanel else null
+    }
+
     fun sendToTerminal(text: String) {
         val process = ptyProcess ?: return
         if (!process.isAlive) return

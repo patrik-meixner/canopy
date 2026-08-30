@@ -24,6 +24,7 @@ import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.DoubleClickListener
@@ -37,6 +38,7 @@ import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.event.MouseEvent
 import java.nio.file.Path
+import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTree
@@ -144,7 +146,7 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         return toolbar.component
     }
 
-    private fun kindToggle(kind: ContextKind) = object : ToggleAction(kind.label) {
+    private fun kindToggle(kind: ContextKind) = object : ToggleAction(kind.label, "Show ${kind.label.lowercase()}", kindIcon(kind)) {
         override fun isSelected(event: AnActionEvent) = kind !in hiddenKinds
 
         override fun setSelected(event: AnActionEvent, state: Boolean) {
@@ -299,14 +301,14 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         }
 
         private fun renderSource(node: SourceRow) {
-            icon = AllIcons.Nodes.Folder
+            icon = kindIcon(node.source.kind)
             append(node.source.kind.label, SimpleTextAttributes.REGULAR_ATTRIBUTES)
             append("  ${node.count}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
             append("   ${shorten(node.source.directory)}", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
         }
 
         private fun renderItem(node: ContextItem) {
-            icon = AllIcons.FileTypes.Text
+            icon = kindIcon(node.source.kind)
             append(node.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
             node.description?.let {
                 val short = if (it.length > 70) it.take(67) + "…" else it
@@ -315,6 +317,12 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         }
     }
 }
+
+private val KIND_ICONS = ContextKind.entries.associateWith {
+    IconLoader.getIcon("/icons/kind-${it.name.lowercase()}.svg", ClaudeContextPanel::class.java)
+}
+
+internal fun kindIcon(kind: ContextKind): Icon = KIND_ICONS.getValue(kind)
 
 /** Home-relative paths keep the row readable; the full path is one Reveal away. */
 internal fun shorten(directory: Path): String {
