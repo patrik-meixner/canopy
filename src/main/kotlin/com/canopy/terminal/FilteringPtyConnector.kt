@@ -5,13 +5,7 @@ import com.pty4j.PtyProcess
 import java.nio.charset.Charset
 
 /**
- * Extends [PtyProcessTtyConnector] to strip terminal escape sequences that
- * JediTerm does not support, preventing noisy WARN log entries.
- *
- * Filters sequences emitted by Claude Code's TUI that JediTerm cannot handle:
- * - Mode 2026 (synchronized output): `ESC[?2026h` / `ESC[?2026l`
- * - Kitty keyboard protocol: `ESC[>Nu` (push) / `ESC[u` (pop)
- * - modifyOtherKeys: `ESC[>N;Nm` (set) / `ESC[>Nm` (reset)
+ * Strips the escape sequences JediTerm does not understand, which it otherwise logs as warnings.
  */
 open class FilteringPtyConnector(
     process: PtyProcess,
@@ -19,12 +13,7 @@ open class FilteringPtyConnector(
 ) : PtyProcessTtyConnector(process, charset) {
 
     companion object {
-        private val UNSUPPORTED = Regex(
-            "\u001b\\[\\?2026[hl]" +          // synchronized output
-            "|\u001b\\[>\\d+(?:;\\d+)*u" +    // kitty push keyboard mode
-            "|\u001b\\[u" +                    // kitty pop keyboard mode
-            "|\u001b\\[>\\d+(?:;\\d+)*m"       // modifyOtherKeys set/reset
-        )
+        private val UNSUPPORTED = unsupportedSequences
     }
 
     override fun read(buf: CharArray, offset: Int, length: Int): Int {
@@ -42,3 +31,14 @@ open class FilteringPtyConnector(
         return filtered.length
     }
 }
+
+/**
+ * The kitty keyboard pop is `CSI < u`. Matching a bare `CSI u` instead swallows DECRC, which is how
+ * a TUI restores a cursor it saved, so the stream loses a sequence the terminal does support.
+ */
+internal val unsupportedSequences = Regex(
+    "\u001b\\[\\?2026[hl]" +
+        "|\u001b\\[>\\d+(?:;\\d+)*u" +
+        "|\u001b\\[<u" +
+        "|\u001b\\[>\\d+(?:;\\d+)*m"
+)
