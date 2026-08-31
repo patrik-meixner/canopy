@@ -244,6 +244,19 @@ class WorktreeTreePanel(
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
             addSeparator()
+            add(object : AnAction("Delete Merged Worktrees\u2026", "Find and remove worktrees with nothing left in them", AllIcons.Actions.GC) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val scope = scopeOfSelection() ?: return
+
+                    cleanUp(scope)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = scopeOfSelection() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
             add(object : AnAction("Delete Worktree", "Remove this worktree and its directory", AllIcons.Actions.GC) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val worktree = selectedWorktree() ?: return
@@ -307,6 +320,49 @@ class WorktreeTreePanel(
 
         plan.names.forEach { onNewWorktree(scope, it) }
         com.canopy.services.FanOutPrompts.getInstance(project).expect(plan.names, plan.prompt)
+    }
+
+    /** The sweep is conservative on purpose: it proposes, and every removal is still confirmed. */
+    private fun cleanUp(scope: com.canopy.model.RepoScope) {
+        val inUse = loadSessions().mapNotNull { it.worktreeName }.toSet()
+
+        CanopyExecutor.submit {
+            val entries = WorktreeInspector.list(scope.root)
+            val candidates = cleanupCandidates(entries, { name -> worktreeStatus.get(name) }, inUse)
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                if (candidates.isEmpty()) {
+                    return@invokeLater notify("Nothing to clean up in ${scope.label}")
+                }
+
+                val dialog = CleanupDialog(project, candidates)
+                if (!dialog.showAndGet()) return@invokeLater
+
+                removeAll(scope, dialog.selected())
+            }
+        }
+    }
+
+    private fun removeAll(scope: com.canopy.model.RepoScope, chosen: List<CleanupCandidate>) {
+        if (chosen.isEmpty()) return
+
+        CanopyExecutor.submit {
+            val failures = chosen.mapNotNull { candidate ->
+                val (removed, output) = WorktreeInspector.remove(scope.root, candidate.path, force = false)
+                candidate.branch?.takeIf { removed }?.let { WorktreeInspector.deleteBranchIfMerged(scope.root, it) }
+                if (removed) null else "${candidate.name}: ${output.take(120)}"
+            }
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                val removed = chosen.size - failures.size
+                val tail = if (failures.isEmpty()) "" else "<br>" + failures.joinToString("<br>")
+                notify("Removed $removed of ${chosen.size} worktree(s)$tail")
+                refresh(force = true)
+            }
+        }
     }
 
     /** Removal is not undoable, so it names what will go and what would be lost with it. */
