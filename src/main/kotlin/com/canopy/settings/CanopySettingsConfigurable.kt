@@ -47,6 +47,10 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
         group("Review") {
             row {
+                checkBox("Detect whether the agent is working").bindSelected(state::detectAgentActivity)
+            }.rowComment("Reads the terminal stream to sort blocked sessions first. Turning it off spawns the agent exactly as a shell tab does, at the cost of the working and waiting states.")
+
+            row {
                 checkBox("Show untracked files").bindSelected(state::showUnversionedInDetail)
             }.rowComment("Adds an Unversioned section to the Detail tree. A repository with generated output can carry hundreds of these.")
 

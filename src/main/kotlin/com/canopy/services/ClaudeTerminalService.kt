@@ -177,7 +177,8 @@ class ClaudeTerminalService(private val project: Project) {
             }
         } else null
 
-        val connector = if (wrappedOnActiveChanged != null) {
+        val monitoring = com.canopy.settings.CanopySettings.getInstance().state.detectAgentActivity
+        val connector = if (wrappedOnActiveChanged != null && monitoring) {
             val echoTimeout = com.canopy.settings.CanopySettings.getInstance().state.echoTimeoutMs.toLong()
             ActivityMonitoringTtyConnector(ptyProcess, StandardCharsets.UTF_8, echoTimeoutMs = echoTimeout, onActiveChanged = wrappedOnActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
         } else {

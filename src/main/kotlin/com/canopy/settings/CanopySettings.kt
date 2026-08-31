@@ -17,6 +17,9 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         /** Milliseconds before a terminal session is considered unresponsive after user input. */
         @JvmField var echoTimeoutMs: Int = 3000
 
+        /** Wraps the terminal stream to tell working from waiting. Off spawns the agent exactly as a shell tab does. */
+        @JvmField var detectAgentActivity: Boolean = true
+
         /** Manual override for the claude binary path. Empty string means auto-detect. */
         @JvmField var claudeBinaryPath: String = ""
 
