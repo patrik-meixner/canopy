@@ -554,13 +554,13 @@ class ClaudeSessionEditor(
 
                     // One parse per tick, shared by both consumers — this used to walk the
                     // whole transcript twice.
-                    val ops = getSessionFileOperations()
-                    val sessionFiles = ops.mapTo(HashSet()) { it.filePath }
+                    val writes = writesSoFar()
+                    val sessionFiles = writes.mapTo(HashSet()) { it.path }
                     val bySession = if (sessionFiles.isNotEmpty()) {
                         changedFiles.count { it in sessionFiles }
                     } else 0
 
-                    val pureFiles = getPureSessionFiles(gitDir, ops)
+                    val pureFiles = ownedChangedFiles(gitDir, writes)
 
                     ApplicationManager.getApplication().invokeLater {
                         branchName.text = branch
@@ -601,7 +601,7 @@ class ClaudeSessionEditor(
             val gitDir = resolveGitDir() ?: return@addActionListener
             ApplicationManager.getApplication().executeOnPooledThread {
                 try {
-                    val pureFiles = getPureSessionFiles(gitDir, getSessionFileOperations())
+                    val pureFiles = ownedChangedFiles(gitDir, writesSoFar())
                     if (pureFiles.isEmpty()) return@executeOnPooledThread
 
                     // Stage only the session's pure files
@@ -1136,138 +1136,59 @@ class ClaudeSessionEditor(
         return if (hint != null) "$hint<br/><br/>$escaped" else escaped
     }
 
-    private data class SessionFileOp(
-        val filePath: String,
-        val type: String,           // "Write" or "Edit"
-        val content: String? = null, // Write: full file content
-        val oldString: String? = null, // Edit
-        val newString: String? = null  // Edit
-    )
+    // Only the writes are kept, which measured about two percent of transcript bytes — cheap to
+    // hold, and it saves re-reading the whole file on every toolbar tick.
+    private val transcriptJson = com.google.gson.Gson()
+    private val writesTail = com.canopy.util.JsonlTailReader()
+    private val sessionWrites = mutableListOf<com.canopy.session.FileWrite>()
+    private var writesFrom: java.nio.file.Path? = null
 
-    /** Parse the JSONL for Write/Edit tool uses with full operation details. */
-    // Incremental parse state for this session's Write/Edit operations. Only the ops are
-    // retained, which measured ~2% of transcript bytes (0.86 MB for a 44 MB session) — cheap
-    // enough to keep, and it saves re-reading the whole transcript on every toolbar tick.
-    private val opsTail = com.canopy.util.JsonlTailReader()
-    private val cachedOps = mutableListOf<SessionFileOp>()
-    private var cachedOpsPath: java.nio.file.Path? = null
-
-    /**
-     * The session's file-writing operations, oldest first.
-     *
-     * Parses only what the transcript has gained since the last call; the op list is
-     * append-only, so accumulating it is equivalent to re-reading from the top.
-     */
     @Synchronized
-    private fun getSessionFileOperations(): List<SessionFileOp> {
-        val jsonlPath = transcriptPath() ?: return emptyList()
-        if (!java.nio.file.Files.exists(jsonlPath)) return emptyList()
+    private fun writesSoFar(): List<com.canopy.session.FileWrite> {
+        val transcript = transcriptPath()?.takeIf { java.nio.file.Files.exists(it) } ?: return emptyList()
 
-        // Session linked or rebound to a different transcript: start over.
-        if (jsonlPath != cachedOpsPath) {
-            cachedOpsPath = jsonlPath
-            opsTail.reset()
-            cachedOps.clear()
+        // Rebound to another transcript: nothing read from the old one still applies.
+        if (transcript != writesFrom) {
+            writesFrom = transcript
+            writesTail.reset()
+            sessionWrites.clear()
         }
 
-        try {
-            opsTail.consume(jsonlPath, onRestart = { cachedOps.clear() }) { line ->
-                appendFileOps(line, cachedOps)
+        runCatching {
+            writesTail.consume(transcript, onRestart = sessionWrites::clear) { line ->
+                sessionWrites += com.canopy.session.fileWritesIn(
+                    transcriptJson.fromJson(line, com.google.gson.JsonObject::class.java)
+                )
             }
-        } catch (_: Exception) {}
-        return java.util.ArrayList(cachedOps)
-    }
+        }
 
-    /** Extract any Write/Edit tool uses on one transcript line into [into]. */
-    private fun appendFileOps(line: String, into: MutableList<SessionFileOp>) {
-        try {
-            val obj = com.google.gson.Gson().fromJson(line, com.google.gson.JsonObject::class.java)
-            if (obj.get("type")?.asString != "assistant") return
-            val content = obj.getAsJsonObject("message")?.getAsJsonArray("content") ?: return
-            for (block in content) {
-                if (!block.isJsonObject) continue
-                val b = block.asJsonObject
-                if (b.get("type")?.asString != "tool_use") continue
-                val name = b.get("name")?.asString ?: continue
-                val input = b.getAsJsonObject("input") ?: continue
-                val filePath = input.get("file_path")?.asString ?: continue
-                when (name) {
-                    "Write" -> into.add(SessionFileOp(filePath, "Write",
-                        content = input.get("content")?.asString))
-                    "Edit" -> into.add(SessionFileOp(filePath, "Edit",
-                        oldString = input.get("old_string")?.asString,
-                        newString = input.get("new_string")?.asString))
-                }
-            }
-        } catch (_: Exception) {}
+        return sessionWrites.toList()
     }
 
     /**
-     * Check if the session's changed files are "pure" — i.e. the only changes in each
-     * file are from this session's Write/Edit operations.
-     *
-     * Approach: for each session-touched file that has uncommitted changes, replay the
-     * session's operations against the HEAD version. If the result matches the current
-     * file content, no external changes are mixed in.
-     *
-     * Returns the list of pure session files ready to commit, or empty if impure/nothing to commit.
+     * The changed files this session can be said to own, which is what may be committed on its
+     * behalf without asking. Git and the filesystem are read here; deciding is [ownedFiles].
      */
-    private fun getPureSessionFiles(gitDir: String, ops: List<SessionFileOp>): List<String> {
-        if (ops.isEmpty()) return emptyList()
+    private fun ownedChangedFiles(gitDir: String, writes: List<com.canopy.session.FileWrite>): List<String> {
+        if (writes.isEmpty()) return emptyList()
 
-        val status = execGit(gitDir, "status", "--porcelain").trim()
-        if (status.isEmpty()) return emptyList()
+        val root = java.nio.file.Path.of(gitDir)
+        val changed = execGit(gitDir, "status", "--porcelain")
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .map { it.drop(3).substringAfterLast(" -> ").trim() }
+            .filter { it.isNotEmpty() }
+            .mapTo(HashSet()) { root.resolve(it).toAbsolutePath().toString() }
 
-        val changedFiles = status.lines().filter { it.isNotBlank() }.mapNotNull { line ->
-            val path = line.drop(3).split(" -> ").last().trim()
-            if (path.isNotEmpty()) java.nio.file.Path.of(gitDir, path).toAbsolutePath().toString() else null
-        }.toSet()
-
-        val sessionFiles = ops.map { it.filePath }.toSet()
-        val sessionChangedFiles = changedFiles.filter { it in sessionFiles }
-        if (sessionChangedFiles.isEmpty()) return emptyList()
-
-        val pureFiles = mutableListOf<String>()
-        for (filePath in sessionChangedFiles) {
-            val fileOps = ops.filter { it.filePath == filePath }
-            if (isFilePure(gitDir, filePath, fileOps)) {
-                pureFiles.add(filePath)
-            } else {
-                return emptyList() // any impure file means we can't safely commit
-            }
-        }
-        return pureFiles
-    }
-
-    private fun isFilePure(gitDir: String, filePath: String, ops: List<SessionFileOp>): Boolean {
-        val relativePath = java.nio.file.Path.of(gitDir).relativize(java.nio.file.Path.of(filePath)).toString()
-
-        // Get HEAD version (empty if file is new)
-        val headContent = try {
-            val result = execGitWithExitCode(gitDir, "show", "HEAD:$relativePath")
-            if (result.exitCode == 0) result.output else ""
-        } catch (_: Exception) { "" }
-
-        // Replay session operations in order
-        var simulated = headContent
-        for (op in ops) {
-            when (op.type) {
-                "Write" -> simulated = op.content ?: return false
-                "Edit" -> {
-                    val old = op.oldString ?: return false
-                    val new = op.newString ?: return false
-                    if (!simulated.contains(old)) return false
-                    simulated = simulated.replaceFirst(old, new)
-                }
-            }
-        }
-
-        // Compare simulation with current file
-        val currentContent = try {
-            java.nio.file.Files.readString(java.nio.file.Path.of(filePath))
-        } catch (_: Exception) { return false }
-
-        return simulated == currentContent
+        return com.canopy.session.ownedFiles(
+            changed = changed,
+            writes = writes,
+            headOf = { path ->
+                val relative = root.relativize(java.nio.file.Path.of(path)).toString()
+                execGitWithExitCode(gitDir, "show", "HEAD:$relative").let { if (it.exitCode == 0) it.output else "" }
+            },
+            currentOf = { path -> runCatching { java.nio.file.Files.readString(java.nio.file.Path.of(path)) }.getOrNull() },
+        )
     }
 
     private fun createModelDropdown(): JComponent {
