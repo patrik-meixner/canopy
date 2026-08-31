@@ -108,6 +108,8 @@ Everything about the session on screen, beside its terminal:
 | **Messages** | What you asked it, with images, searchable, clickable back into the terminal |
 | **Activity** | What it has been doing, folded into runs, with a writes-only filter |
 
+<img src="docs/screenshots/05-plan.png" alt="The Plan tab: every task on the session's list, three done, one running, two waiting">
+
 ### Terminal parity
 
 Clickable links and `Cmd+V` image paste in session terminals, which the CLI enables only for
