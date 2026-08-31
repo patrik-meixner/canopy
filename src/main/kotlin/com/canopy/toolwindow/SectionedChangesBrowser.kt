@@ -118,22 +118,6 @@ class SectionedChangesBrowser(
         return (changed.toList() + untracked.toList()).distinct()
     }
 
-    /**
-     * What a revert can act on: work that has not been committed anywhere.
-     *
-     * A committed or pushed file is a different question with a different answer - undoing one
-     * means a commit, not a checkout - so it is left out rather than quietly reverted.
-     */
-    fun revertablePaths(): Pair<List<String>, List<String>> {
-        val selected = selectedPaths().toSet()
-        val uncommitted = sections[SessionChangeSection.Uncommitted].orEmpty()
-            .mapNotNull { it.afterRevision?.file?.path ?: it.beforeRevision?.file?.path }
-            .filter { it in selected }
-        val untracked = unversioned.map { it.path }.filter { it in selected }
-
-        return uncommitted to untracked
-    }
-
     /** Every file in the tree, for the checks that are about the change as a whole. */
     fun allPaths(): List<String> {
         val data = com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.all(viewer)
