@@ -7,6 +7,14 @@ Before the first shot: dark theme, zoom the IDE one step (`Ctrl+Shift+A` →
 "Zoom IDE In") so text survives Marketplace's downscaling, and close every tool
 window that is not part of the shot.
 
+Set each scene, then take it with:
+
+```
+/tmp/shotenv/bin/python tools/demo/shot.py 01-sessions-and-review
+```
+
+The window does not need to be in front — the capture finds it by title.
+
 ## 1 — Sessions and a review, side by side
 
 The one that has to carry the listing. Canopy on the left, a session open in the
