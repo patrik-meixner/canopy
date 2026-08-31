@@ -18,6 +18,52 @@ import uuid
 from pathlib import Path
 
 AUTHOR = ("Dana Reyes", "dana@example.com")
+
+WORKSPACE_RULES = {
+    "CLAUDE.md": """# Vestra
+
+Storefront, billing, and the infrastructure they run on. Each service is a submodule with its own
+history; nothing is shared between them but the contract in `docs/`.
+
+- Money is integer cents everywhere but the presentation layer.
+- A price is assembled once, in `billing`, and never recomputed downstream.
+- Tests name the behaviour they pin, not the function they call.
+""",
+    ".claude/rules/money.md": """# Money
+
+Integer cents in the domain, formatted only at the edge. A float that reaches the database is a bug
+that has not been noticed yet.
+""",
+    ".claude/rules/tests.md": """# Tests
+
+A test is done when it has been seen to fail for the right reason. Break the code it covers, watch
+it go red, then put the code back.
+""",
+    ".claude/rules/commits.md": """# Commits
+
+Conventional Commits, English, no trailing period. The subject says what the behaviour is now, not
+which files moved.
+""",
+    ".claude/skills/invoice-rules/SKILL.md": """---
+name: invoice-rules
+description: The VAT and reverse-charge rules an invoice has to satisfy, and where each one is enforced.
+---
+
+# Invoice rules
+
+Reverse charge omits the VAT row entirely rather than printing it at zero. A rate of zero is not the
+same thing: the row is absent, not empty.
+""",
+    ".claude/skills/release/SKILL.md": """---
+name: release
+description: How a service is cut, tagged and rolled out, and what has to be green before any of it.
+---
+
+# Release
+
+The suite is green on the branch tip before a tag exists, never after.
+""",
+}
 CLI_VERSION = "2.1.251"
 MODEL = "claude-opus-5"
 
@@ -153,6 +199,8 @@ def build_workspace(root: Path) -> dict:
 
     init_repo(root, "main")
     write(root / "README.md", "# Vestra\n\nStorefront, billing, and what runs them.\n")
+    for relative, body in WORKSPACE_RULES.items():
+        write(root / relative, body)
     write(root / ".gitignore", ".sources/\nworktrees/\n")
     commit(root, "chore: the workspace", now - timedelta(days=31))
 
@@ -180,6 +228,16 @@ def build_workspace(root: Path) -> dict:
         (worktree / target).write_text((worktree / target).read_text() + "\n// work in progress\n")
         commit(worktree, f"wip({branch.split('/')[1]}): first cut", now - timedelta(hours=5))
 
+    # One worktree whose branch is already merged, which is what the sweep is for.
+    merged = root / "worktrees" / "chore+pin-provider"
+    git(repos["infra"], "worktree", "add", "-q", "-b", "chore/pin-provider", str(merged))
+    git(repos["infra"], "merge", "-q", "--no-ff", "-m", "Merge chore/pin-provider", "chore/pin-provider")
+
+    # And a directory git no longer knows about, which is the other thing it reports.
+    orphan = root / "worktrees" / "feat+abandoned-idea"
+    orphan.mkdir(parents=True, exist_ok=True)
+    write(orphan / "README.md", "Left behind by a worktree that was removed.\n")
+
     # Uncommitted work, so the review tree has something in every section.
     billing = repos["billing"]
     (billing / "src/pricing/vat.ts").write_text(
@@ -204,9 +262,15 @@ def entry(
     parent: str | None,
     branch: str = "main",
     tool: dict | None = None,
+    image: str | None = None,
 ) -> tuple[str, str]:
     """One transcript line, in the shape the CLI writes and reads back."""
     message = {"role": kind, "content": [{"type": "text", "text": text}]}
+    if image:
+        message["content"].append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": image},
+        })
     if kind == "assistant":
         message |= {"id": f"msg_{uuid.uuid4().hex[:24]}", "type": "message", "model": MODEL}
     if tool:
@@ -239,69 +303,178 @@ def edit(path: Path) -> dict:
     return {"name": "Edit", "input": {"file_path": str(path)}}
 
 
+def read(path: Path) -> dict:
+    return {"name": "Read", "input": {"file_path": str(path)}}
+
+
+def grep(pattern: str, path: Path) -> dict:
+    return {"name": "Grep", "input": {"pattern": pattern, "path": str(path)}}
+
+
+def bash(command: str) -> dict:
+    return {"name": "Bash", "input": {"command": command}}
+
+
+def write_tool(path: Path) -> dict:
+    return {"name": "Write", "input": {"file_path": str(path)}}
+
+
 CONVERSATIONS = [
     {
         "name": "reverse charge on EU invoices",
         "branch": "feat/reverse-charge",
-        "minutes_ago": 4,
+        "minutes_ago": 6,
+        "tasks": [
+            ("Find where the rate is chosen", "completed"),
+            ("Make withVat return net when the charge is reversed", "completed"),
+            ("Decide what the invoice prints instead of a zero VAT row", "in_progress"),
+            ("Cover it with a test", "pending"),
+        ],
         "turns": [
-            ("user", "Invoices to EU businesses still carry VAT. They shouldn't — reverse charge applies.", None),
-            ("assistant", "Reading how the rate is chosen before I change anything.", ("billing", "src/pricing/vat.ts")),
-            ("assistant", "The rate table has no notion of who the customer is, so the caller has to say. "
-                          "Added `isReverseCharge` and made `withVat` return the net untouched when it holds.",
-             ("billing", "src/pricing/reverseCharge.ts")),
+            ("user", "Invoices to EU businesses still carry VAT. They shouldn't - reverse charge applies.", None),
+            ("assistant", "Reading how the rate is chosen before I change anything.",
+             ("read", "billing", "src/pricing/vat.ts")),
+            ("assistant", "Nothing in the rate table knows who the customer is, so the caller has to say.",
+             ("grep", "billing", "src/pricing")),
+            ("assistant", "Added `isReverseCharge` and made `withVat` return the net untouched when it holds.",
+             ("edit", "billing", "src/pricing/reverseCharge.ts")),
             ("user", "Does that leave the total wrong anywhere else?", None),
-            ("assistant", "Checkout sums the lines, so it follows. The invoice PDF prints a VAT row that would now "
-                          "read zero — worth a line saying why rather than a silent 0.",
-             ("billing", "src/routes/checkout.ts")),
+            ("assistant", "Checkout sums the lines, so it follows. The invoice PDF prints a VAT row that would "
+                          "now read zero - worth a line saying why, rather than a silent 0.",
+             ("edit", "billing", "src/routes/checkout.ts")),
+            ("assistant", "Tests pass, and both mutants died: dropping the guard fails the reverse-charge case, "
+                          "inverting it fails the domestic one.",
+             ("bash", "npm test -- pricing")),
         ],
     },
     {
         "name": "cart selection resets on quantity edit",
         "branch": "fix/cart-selection",
-        "minutes_ago": 26,
+        "minutes_ago": 34,
+        "tasks": [
+            ("Reproduce the reset", "completed"),
+            ("Key the selection on line id", "completed"),
+            ("Check the keyboard path too", "completed"),
+        ],
         "turns": [
-            ("user", "Editing a quantity clears which items were selected. Reproduces every time.", None),
+            ("user", "Editing a quantity clears which items were selected. Reproduces every time - here it is.",
+             ("screenshot",)),
             ("assistant", "The list rebuilds its rows on every cart change, and selection is held by row index.",
-             ("storefront", "app/cart/useCart.ts")),
+             ("read", "storefront", "app/cart/useCart.ts")),
             ("assistant", "Keyed the selection on line id instead. Editing a quantity now leaves it alone.",
-             ("storefront", "app/cart/CartSummary.tsx")),
+             ("edit", "storefront", "app/cart/CartSummary.tsx")),
+            ("assistant", "The keyboard path went through the same index, so it had the same bug. Both covered.",
+             ("write", "storefront", "app/cart/lineKey.ts")),
         ],
     },
     {
         "name": "why does the plan keep drifting",
         "branch": "main",
-        "minutes_ago": 95,
+        "minutes_ago": 128,
+        "tasks": [
+            ("Find what is unpinned", "completed"),
+            ("Pin it and prove the plan is empty", "completed"),
+        ],
         "turns": [
             ("user", "terraform plan shows changes nobody made. Again.", None),
             ("assistant", "The provider is unpinned, so every run resolves a newer one.",
-             ("infra", "terraform/main.tf")),
-            ("assistant", "Pinned it. The next plan should be empty; if it is not, the drift is real.", None),
+             ("read", "infra", "terraform/main.tf")),
+            ("assistant", "Pinned it. The next plan should be empty; if it is not, the drift is real.",
+             ("edit", "infra", "terraform/main.tf")),
+            ("assistant", "Empty plan, twice in a row.", ("bash", "terraform plan -detailed-exitcode")),
         ],
     },
     {
         "name": "round once, not per component",
         "branch": "main",
-        "minutes_ago": 260,
+        "minutes_ago": 295,
+        "tasks": [
+            ("Find where each component rounds", "completed"),
+            ("Round on the total instead", "completed"),
+            ("Pin the 2026 rate table", "completed"),
+        ],
         "turns": [
             ("user", "Totals are off by a cent on about one invoice in thirty.", None),
             ("assistant", "Each component rounds itself before the sum, so the error compounds.",
-             ("billing", "src/pricing/rounding.ts")),
+             ("read", "billing", "src/pricing/rounding.ts")),
             ("assistant", "Rounding happens once, on the total. The 2026 rate table is pinned by a test now.",
-             ("billing", "test/vat.test.ts")),
+             ("edit", "billing", "test/vat.test.ts")),
         ],
     },
     {
         "name": "checkout rejects what it cannot explain",
         "branch": "main",
         "minutes_ago": 1500,
+        "tasks": [("Add the guard and a reason", "completed")],
         "turns": [
             ("user", "If pricing can't explain a line, checkout should refuse it rather than guess.", None),
             ("assistant", "Added the guard and a reason on the failure, so support can read what happened.",
-             ("billing", "src/routes/checkout.ts")),
+             ("edit", "billing", "src/routes/checkout.ts")),
         ],
     },
 ]
+
+
+def tool_for(kind: str, argument, repos: dict) -> dict:
+    if kind == "bash":
+        return bash(argument)
+
+    repo, relative = argument
+    path = repos[repo] / relative
+
+    if kind == "grep":
+        return grep("reverse|vat|rate", path)
+    if kind == "read":
+        return read(path)
+    if kind == "write":
+        return write_tool(path)
+
+    return edit(path)
+
+
+def screenshot() -> str:
+    """A small PNG standing in for a pasted screenshot, built rather than shipped."""
+    import base64
+    import struct
+    import zlib
+
+    width, height = 320, 180
+    rows = b""
+    for y in range(height):
+        row = b"\x00"
+        for x in range(width):
+            band = y * 255 // height
+            row += bytes((32 + band // 3, 26 + band // 4, 40 + band // 2))
+        rows += row
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
+
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+    return base64.b64encode(png).decode()
+
+
+def build_tasks(session_id: str, tasks: list) -> None:
+    """The task list lives beside the transcript, one file per task, as the CLI keeps it."""
+    directory = Path.home() / ".claude" / "tasks" / session_id
+    directory.mkdir(parents=True, exist_ok=True)
+
+    for number, (subject, status) in enumerate(tasks, start=1):
+        (directory / f"{number}.json").write_text(json.dumps({
+            "id": str(number),
+            "subject": subject,
+            "description": "",
+            "activeForm": subject[0].lower() + subject[1:],
+            "status": status,
+            "blockedBy": [],
+        }, indent=2))
 
 
 def build_transcripts(root: Path, repos: dict, transcripts: Path) -> list:
@@ -312,25 +485,27 @@ def build_transcripts(root: Path, repos: dict, transcripts: Path) -> list:
     now = datetime.now(timezone.utc)
     written = []
 
-    for index, conversation in enumerate(CONVERSATIONS):
+    for conversation in CONVERSATIONS:
         session_id = str(uuid.uuid4())
-        started = now - timedelta(minutes=conversation["minutes_ago"] + 12 * len(conversation["turns"]))
+        started = now - timedelta(minutes=conversation["minutes_ago"] + 9 * len(conversation["turns"]))
         lines = [json.dumps({"type": "custom-title", "customTitle": conversation["name"]})]
         at = started
         parent = None
 
         for kind, text, touched in conversation["turns"]:
+            kind_of_tool = touched[0] if touched else None
             tool = None
-            if touched:
-                repo, relative = touched
-                tool = edit(repos[repo] / relative)
+            if touched and kind_of_tool not in ("screenshot",):
+                tool = tool_for(kind_of_tool, touched[1] if kind_of_tool == "bash" else touched[1:], repos)
             line, parent = entry(
-                kind, text, at, session_id, str(root), parent, conversation["branch"], tool
+                kind, text, at, session_id, str(root), parent, conversation["branch"], tool,
+                image=screenshot() if kind_of_tool == "screenshot" else None,
             )
             lines.append(line)
-            at += timedelta(minutes=random.randint(2, 9))
+            at += timedelta(minutes=random.randint(2, 7))
 
         (transcripts / f"{session_id}.jsonl").write_text("\n".join(lines) + "\n")
+        build_tasks(session_id, conversation["tasks"])
         written.append((conversation["name"], session_id))
 
     return written

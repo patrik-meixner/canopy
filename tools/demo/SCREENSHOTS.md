@@ -3,6 +3,16 @@
 `python3 tools/demo/seed_demo.py --force` builds the workspace, then open
 `~/CanopyDemo` in the IDE. Everything below is what that workspace shows.
 
+What the demo has, so every panel has something real in it:
+
+- three services as submodules of one superproject, ~30 commits between them,
+  the newest few from the last hours and some of them unpushed
+- four worktrees: two being worked in, one whose branch is already merged, and
+  one directory git no longer knows about
+- five sessions, renamed the way `/rename` renames them, one carrying a pasted
+  screenshot, each with its own task list
+- uncommitted work, untracked output, and a `.claude` with rules and skills
+
 Before the first shot: dark theme, zoom the IDE one step (`Ctrl+Shift+A` →
 "Zoom IDE In") so text survives Marketplace's downscaling, and close every tool
 window that is not part of the shot.
@@ -10,78 +20,68 @@ window that is not part of the shot.
 Set each scene, then take it with:
 
 ```
-/tmp/shotenv/bin/python tools/demo/shot.py 01-sessions-and-review
+/tmp/shotenv/bin/python tools/demo/shot.py 01-a-session-and-its-review
 ```
 
 The window does not need to be in front — the capture finds it by title.
 
-## 1 — Sessions and a review, side by side
+## 1 — A session and its review
 
-The one that has to carry the listing. Canopy on the left, a session open in the
-middle, the review on the right.
+The one that has to carry the listing.
 
-1. Open the **Canopy** tool window and the **Session** tool window.
-2. Click *reverse charge on EU invoices*.
-3. Detail tab, sections expanded: Changes, Committed, Pushed, Unversioned last.
-4. Frame all three panels.
+1. Canopy on the left, a session open, the Session window on the right.
+2. Detail tab, sections expanded.
+3. Best taken while an agent is mid-turn, so the glyph is spinning.
 
-Shows: the list, the glyphs, and a session's changes across two repositories.
+## 2 — Worktrees and branches
 
-## 2 — One session, several repositories
+1. **Workspaces** tab.
+2. Expand **Worktrees**, and one worktree under it, so its sessions show.
 
-1. Same session, Detail tab.
-2. Collapse everything except **Changes**.
-3. Expand until `billing` and `storefront` are both visible under it.
+Shows worktrees grouped under the repository that owns them, with the sessions
+that ran in each.
 
-Shows: what the pitch line means — one session, more than one working tree.
-
-## 3 — Commits across the whole session
-
-The demo has 16 commits in `billing` and 10 in `storefront`, the newest few from
-the last few hours, so the tab is full and a range is worth selecting.
+## 3 — Commits across a session
 
 1. **Commits** tab.
 2. Select the top commit, then shift-click three below it.
-3. Let the file tree fill in.
 
-Shows: multi-select and the union of what a range of commits did.
+Shows the union of what a range of commits did.
 
-## 4 — Workspaces
-
-1. **Workspaces** tab in the Canopy window.
-2. Expand **Worktrees**: `feat+reverse-charge`, `fix+cart-selection`.
-3. Right-click one, leave the context menu open.
-
-Shows: worktrees grouped under the repository that owns them, and what can be
-done to one.
-
-## 5 — Messages
+## 4 — Messages
 
 1. **Messages** tab.
-2. Scroll so three or four cards are visible whole.
+2. Scroll to the message carrying the screenshot.
 
-Shows: what a session was asked, as something you can read back.
+## 5 — Plan
+
+1. **Plan** tab, on the reverse-charge session.
+
+Shows a task list mid-flight: some done, one running, one still waiting.
 
 ## 6 — Context
 
 1. **Context** tab.
-2. Expand a level or two.
+2. Expand **Project** — the workspace's own rules and skills.
 
-Shows: what the agent is actually running with.
+Do not expand **Personal**: those are the rules on the machine taking the shot.
 
-## 7 — The terminal
+## 7 — Activity
 
-1. Focus the session tab itself, full width.
-2. Have an agent mid-turn if you can, so the tab glyph is spinning.
+1. **Activity** tab. Shows what the agent actually ran, in order.
 
-Shows: it is a real terminal, not a chat box.
+## 8 — The terminal
+
+1. Focus the session tab itself, full width, agent mid-turn.
+
+Shows it is a real terminal, not a chat box.
 
 ## For the Marketplace listing
 
-Order: 1, 2, 3, 4. The first is the one most people will look at.
+Order: 1, 2, 3, 6. The first is the one most people will look at.
 
 - 16:10, at least 1280 wide.
-- Same theme and zoom in all four.
+- Same theme and zoom in all of them.
 - No real repository names, no tokens, no customer data in any pixel — the demo
   workspace exists so none of that has to be cropped out.
 
