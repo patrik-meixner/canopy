@@ -59,3 +59,57 @@ class SessionMetaLineTest {
         assertFalse(metaLine(session(), "").trim().endsWith("   "))
     }
 }
+
+class SessionPlacesTest {
+
+    private fun session(touched: Map<String, Int>, worktree: String? = null) = SessionDisplay(
+        sessionId = "s1",
+        name = "s",
+        firstPrompt = "p",
+        messageCount = 1,
+        modified = Instant.now(),
+        gitBranch = null,
+        projectPath = "/Users/me/projects/urbido-2.0",
+        worktreeName = worktree,
+        touchedRoots = touched
+    )
+
+    @Test
+    fun `a session says where it wrote, not where it was launched`() {
+        val places = placesFor(session(mapOf("/Users/me/projects/canopy" to 40)))
+
+        assertEquals("canopy", places)
+    }
+
+    @Test
+    fun `the most written repository leads`() {
+        val places = placesFor(session(mapOf("/ws/dmm" to 3, "/ws/one-frontend" to 30)))
+
+        assertEquals("one-frontend, dmm", places)
+    }
+
+    @Test
+    fun `many repositories are counted rather than listed, so the card cannot widen`() {
+        val touched = mapOf("/ws/a" to 5, "/ws/b" to 4, "/ws/c" to 3, "/ws/d" to 2)
+
+        assertEquals("a, b +2", placesFor(session(touched)))
+    }
+
+    @Test
+    fun `a session that recorded nothing falls back to its worktree`() {
+        assertEquals("auth-refactor", placesFor(session(emptyMap(), worktree = "auth-refactor")))
+    }
+
+    @Test
+    fun `and to the project when there is no worktree either`() {
+        assertEquals("urbido-2.0", placesFor(session(emptyMap())))
+    }
+
+    @Test
+    fun `the project is never repeated next to the repositories`() {
+        val line = metaLine(session(mapOf("/ws/dmm" to 2)), "40%")
+
+        assertEquals(1, line.split("dmm").size - 1)
+        assertTrue(!line.contains("urbido-2.0"))
+    }
+}

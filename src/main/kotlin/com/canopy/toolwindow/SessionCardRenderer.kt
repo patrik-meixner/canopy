@@ -120,12 +120,36 @@ internal fun tooltipFor(session: SessionDisplay): String {
 private fun escape(text: String): String =
     text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-/** Where it ran, how long ago, and what it is costing, in that order of use. */
+/** Where it worked, how long ago, and what it is costing, in that order of use. */
 internal fun metaLine(session: SessionDisplay, detail: String, nowMillis: Long = System.currentTimeMillis()): String {
-    val place = session.worktreeName ?: session.projectPath.substringAfterLast('/').takeIf { it.isNotBlank() }
     val age = relativeAge(session.modified.toEpochMilli(), nowMillis)
 
-    return listOfNotNull(place, age, detail.takeIf { it.isNotBlank() }).joinToString("   ")
+    return listOfNotNull(placesFor(session), age, detail.takeIf { it.isNotBlank() }).joinToString("   ")
+}
+
+private const val MAX_PLACES = 2
+
+/**
+ * The repositories a session actually wrote to, not the project it was launched from.
+ *
+ * A session started in one project routinely works in another checkout entirely, and one working
+ * in a superproject usually writes to its submodules rather than to it. The list is capped so a
+ * session touching six repositories cannot widen the card.
+ */
+internal fun placesFor(session: SessionDisplay): String? {
+    val worked = session.touchedRoots.entries
+        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        .map { it.key.trimEnd('/').substringAfterLast('/') }
+        .filter { it.isNotBlank() }
+        .distinct()
+    if (worked.isEmpty()) {
+        return session.worktreeName ?: session.projectPath.substringAfterLast('/').takeIf { it.isNotBlank() }
+    }
+
+    val shown = worked.take(MAX_PLACES).joinToString(", ")
+    val rest = worked.size - MAX_PLACES
+
+    return if (rest > 0) "$shown +$rest" else shown
 }
 
 private const val MINUTE = 60_000L

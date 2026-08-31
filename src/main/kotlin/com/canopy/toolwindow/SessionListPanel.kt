@@ -513,15 +513,11 @@ class SessionListPanel(
      * the ones still running. Everything here is already in memory, so it costs no extra work.
      */
     private fun sessionDetail(session: SessionDisplay): String {
-        val repos = com.canopy.util.repoLabelsFor(
-            session.touchedRoots,
-            com.canopy.services.RepoScopeService.getInstance(project).cachedScopes()
-        )
         val live = com.canopy.services.ClaudeStatusService.getInstance(project).getStatus(session.sessionId)
         val context = live?.contextUsedPercent?.let { "${it.toInt()}%" }
         val cost = live?.costUsd?.takeIf { it > 0 }?.let { String.format("$%.2f", it) }
 
-        return listOfNotNull(repos.joinToString(", ").ifEmpty { null }, context, cost).joinToString("  ")
+        return listOfNotNull(context, cost).joinToString("  ")
     }
 
     private fun sessionAttention(session: SessionDisplay) = com.canopy.model.sessionAttentionFor(
