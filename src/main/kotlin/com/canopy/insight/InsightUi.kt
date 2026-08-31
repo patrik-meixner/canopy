@@ -15,17 +15,28 @@ object InsightUi {
     val ARC: Int get() = JBUI.scale(10)
     val GAP: Int get() = JBUI.scale(6)
 
-    fun cardBackground(selected: Boolean): Color =
-        if (selected) JBUI.CurrentTheme.List.Selection.background(true) else islandBackground()
+    private const val SELECTED_TINT = 0.34
+    private const val HOVER_TINT = 0.16
 
-    /** Hover is the theme's own unfocused selection, so it follows the IDE accent rather than a guess. */
-    fun hoverBackground(): Color = JBUI.CurrentTheme.List.Selection.background(false)
+    /** The card carries the accent; the strip behind it stays the list, so nothing frames the card. */
+    fun cardBackground(selected: Boolean): Color = if (selected) accentTint(SELECTED_TINT) else islandBackground()
+
+    fun hoverBackground(): Color = accentTint(HOVER_TINT)
+
+    /** The IDE's own accent, mixed into the list background rather than replacing it. */
+    fun accentTint(strength: Double): Color = JBColor.lazy { blend(UIUtil.getListBackground(), accent(), strength) }
 
     fun cardForeground(selected: Boolean): Color =
-        if (selected) JBUI.CurrentTheme.List.Selection.foreground(true) else UIUtil.getLabelForeground()
+        if (selected) UIUtil.getLabelForeground() else UIUtil.getLabelForeground()
 
     fun mutedForeground(selected: Boolean): Color =
-        if (selected) JBUI.CurrentTheme.List.Selection.foreground(true) else JBColor.GRAY
+        if (selected) UIUtil.getLabelForeground() else JBColor.GRAY
+
+    private fun blend(base: Color, accent: Color, strength: Double): Color = Color(
+        (base.red + (accent.red - base.red) * strength).toInt().coerceIn(0, 255),
+        (base.green + (accent.green - base.green) * strength).toInt().coerceIn(0, 255),
+        (base.blue + (accent.blue - base.blue) * strength).toInt().coerceIn(0, 255)
+    )
 
     /** The accent the IDE is themed with; there is no reason for the plugin to invent one. */
     fun accent(): Color = JBUI.CurrentTheme.Focus.focusColor()

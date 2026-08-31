@@ -23,7 +23,12 @@ import javax.swing.ListCellRenderer
  */
 class OrphanCardRenderer : ListCellRenderer<OrphanWorktree> {
 
-    private val outer = JPanel(BorderLayout())
+    private val outer = object : JPanel(BorderLayout()) {
+        override fun paintComponent(graphics: java.awt.Graphics) {
+            graphics.color = UIUtil.getListBackground()
+            graphics.fillRect(0, 0, width, height)
+        }
+    }
     private val island = IslandPanel(BorderLayout(JBUI.scale(8), 0))
     private val icon = JLabel(ClaudeSessionIconProvider.TREE_ICON)
     private val title = JLabel()
@@ -56,7 +61,6 @@ class OrphanCardRenderer : ListCellRenderer<OrphanWorktree> {
     ): Component {
         if (value == null) return outer
 
-        outer.background = list.background
         island.islandColor = InsightUi.cardBackground(selected)
         title.text = value.name
         title.foreground = InsightUi.cardForeground(selected)

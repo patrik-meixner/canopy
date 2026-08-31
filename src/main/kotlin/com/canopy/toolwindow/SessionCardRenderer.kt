@@ -30,7 +30,14 @@ class SessionCardRenderer(
     private val getDetail: (SessionDisplay) -> String
 ) : TableCellRenderer {
 
-    private val outer = JPanel(BorderLayout())
+    /** TableView repaints the returned component's background with its selection colour, which drew
+     *  a frame around the card; painting the strip explicitly is what keeps the accent on the card. */
+    private val outer = object : JPanel(BorderLayout()) {
+        override fun paintComponent(graphics: java.awt.Graphics) {
+            graphics.color = UIUtil.getListBackground()
+            graphics.fillRect(0, 0, width, height)
+        }
+    }
     private val island = IslandPanel(BorderLayout(JBUI.scale(10), 0))
     private val glyph = JLabel("", SwingConstants.CENTER)
     private val title = JLabel()
@@ -65,7 +72,6 @@ class SessionCardRenderer(
         val session = value as? SessionDisplay ?: return outer
         val attention = getAttention(session)
 
-        outer.background = table.background
         island.islandColor = InsightUi.cardBackground(selected)
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)
