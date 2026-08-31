@@ -153,15 +153,13 @@ class ClaudeTerminalService(private val project: Project) {
 
         // Run through the login shell: as the pty's own process the agent renders inline, with no
         // alternate screen and therefore no mouse, so selection and its clickable parts are dead.
-        val spawned = if (isShell || !com.canopy.settings.CanopySettings.getInstance().state.runAgentThroughShell) {
-            fullCommand
-        } else {
-            val shell = env["SHELL"] ?: "/bin/zsh"
-            // -i as well as -l: without an interactive shell there is no job control, so the agent
-            // stays in the shell's own process group and is still the session leader, which is the
-            // arrangement it refuses to draw a full-screen interface in.
-            arrayOf(shell, "-l", "-i", "-c", shellCommandLine(fullCommand.toList()))
-        }
+        val throughShell = !isShell && com.canopy.settings.CanopySettings.getInstance().state.runAgentThroughShell
+        val shell = env["SHELL"] ?: "/bin/zsh"
+        // Typed into an interactive shell rather than passed to one: -c runs without job control,
+        // and every arrangement short of the shell actually reading the line has left the agent
+        // drawing inline, with no alternate screen and so no mouse.
+        val spawned = if (throughShell) arrayOf(shell, "-l", "-i") else fullCommand
+        val typed = if (throughShell) shellCommandLine(fullCommand.toList()) + "\n" else null
 
         log.info("Canopy: createWidget — spawned=${spawned.toList()}, PATH=${env["PATH"]?.take(200)}")
 
@@ -202,7 +200,10 @@ class ClaudeTerminalService(private val project: Project) {
         // The tool window's terminal installs these; a widget built directly gets none, which is
         // why a URL printed by a status line was plain text rather than something to click.
         widget.addMessageFilter(com.intellij.execution.filters.UrlFilter(project))
-        startOnceWide(widget) { widget.start(connector) }
+        startOnceWide(widget) {
+            widget.start(connector)
+            typed?.let { sendInput(ptyProcess, it) }
+        }
         ClipboardImagePaste.install(widget.terminalPanel) { sendInput(ptyProcess, it) }
 
         Disposer.register(parent, Disposable {

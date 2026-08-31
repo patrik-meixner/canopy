@@ -134,8 +134,8 @@ class SectionedChangesBrowser(
      * Show Diff stays first because reviewing is why the tree exists, but reading a change usually
      * ends in wanting the file itself.
      */
-    override fun createPopupMenuActions(): List<com.intellij.openapi.actionSystem.AnAction> =
-        listOf(
+    override fun createPopupMenuActions(): List<com.intellij.openapi.actionSystem.AnAction> {
+        val ours = listOf(
             diffAction,
             openSourceAction(),
             com.intellij.openapi.actionSystem.Separator.getInstance(),
@@ -144,7 +144,11 @@ class SectionedChangesBrowser(
             com.intellij.openapi.actionSystem.Separator.getInstance(),
             revealAction(),
             copyPathAction()
-        ) + super.createPopupMenuActions()
+        )
+
+        // Show Diff is the platform's own action and it is in both lists; adding it twice throws.
+        return ours + super.createPopupMenuActions().filterNot { it in ours }
+    }
 
     /**
      * A directory row stands for the files under it, so committing one commits those and nothing
