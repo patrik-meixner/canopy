@@ -36,12 +36,18 @@ data class SessionChangeSet(
      * what is on screen instead lets an unchanged result leave the tree, its scroll and its
      * selection alone.
      */
-    fun signature(): String = buildString {
-        for (section in SessionChangeSection.entries) {
-            changes[section]?.forEach { append(section.name).append(it.virtualFile?.path ?: it.toString()).append('\n') }
+    fun signature(): Long = pathSignature(
+        sequence {
+            for (section in SessionChangeSection.entries) {
+                changes[section]?.forEach { yield("${'$'}{section.ordinal}:${'$'}{pathOf(it)}") }
+            }
+            unversioned.forEach { yield("U:${'$'}{it.path}") }
         }
-        unversioned.forEach { append("U").append(it.path).append('\n') }
-    }
+    )
+
+    /** Never Change.toString(): it formats both revisions, for every file, on every comparison. */
+    private fun pathOf(change: Change): String =
+        change.afterRevision?.file?.path ?: change.beforeRevision?.file?.path.orEmpty()
 }
 
 object SessionChanges {

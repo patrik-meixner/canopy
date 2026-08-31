@@ -193,7 +193,7 @@ internal fun relativeAge(atMillis: Long, nowMillis: Long): String {
 
 private const val GLYPH_SCALE = 1.35f
 
-private const val META_BUCKET_MS = 20_000L
+private const val META_BUCKET_MS = 5_000L
 private const val META_CACHE_LIMIT = 400
 private val DAY_AND_MONTH: java.time.format.DateTimeFormatter =
     java.time.format.DateTimeFormatter.ofPattern("d MMM").withZone(java.time.ZoneId.systemDefault())

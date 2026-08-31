@@ -9,7 +9,7 @@ object ClaudeProcessDetector {
 
     private val SPARE_PROCESS = Regex("""\bclaude\b.*\b(daemon|bg-pty-host|bg-spare)\b""")
     private val WHITESPACE = Regex("\\s+")
-    private const val EXCLUDED_PIDS_TTL_MS = 30_000L
+    private const val EXCLUDED_PIDS_TTL_MS = 10_000L
 
     @Volatile private var excludedPids: Set<Int>? = null
     @Volatile private var excludedPidsAt = 0L

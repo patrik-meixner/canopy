@@ -148,7 +148,6 @@ class SessionListPanel(
             if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) {
                 return@addHierarchyListener
             }
-            sessionService.watched = rootPanel.isShowing
             if (rootPanel.isShowing) spinner.start() else spinner.stop()
         }
         spinner.isCoalesce = true

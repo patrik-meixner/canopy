@@ -29,10 +29,9 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     private val log = Logger.getInstance(ClaudeSessionService::class.java)
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val pollAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
-    private val refreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    private val pendingTranscripts = java.util.concurrent.ConcurrentHashMap.newKeySet<Path>()
+    private val incrementalInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
-    /** Set by the session list as it appears and disappears, so an unwatched project polls rarely. */
-    @Volatile var watched = false
 
     @Volatile
     private var cachedSessions: List<SessionDisplay>? = null
@@ -190,18 +189,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
      * Overlapping requests coalesce — a call arriving mid-pass sets a flag that schedules
      * exactly one more pass afterwards, rather than queueing a pass per event.
      */
-    /**
-     * An agent writing produces a VFS event per write, and answering each one as it lands meant the
-     * scan ran back to back for as long as the agent worked. A burst is one pass.
-     */
     fun refresh() {
-        if (refreshAlarm.isDisposed) return
-
-        refreshAlarm.cancelAllRequests()
-        refreshAlarm.addRequest(::refreshNow, REFRESH_DEBOUNCE_MS)
-    }
-
-    private fun refreshNow() {
         if (!refreshInFlight.compareAndSet(false, true)) {
             refreshQueued.set(true)
             return
@@ -216,9 +204,62 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             } finally {
                 refreshInFlight.set(false)
                 // State changed while we were working: run once more, not once per event.
-                if (refreshQueued.compareAndSet(true, false)) refreshNow()
+                if (refreshQueued.compareAndSet(true, false)) refresh()
             }
         }
+    }
+
+    /**
+     * Re-reads the transcripts that actually changed, rather than every transcript in the project.
+     *
+     * An agent writing touches one file; rebuilding the whole list meant stat-ing sixty of them for
+     * each write. Bursts coalesce without waiting: a path arriving mid-pass joins the next round of
+     * the same task, so nothing is delayed and nothing is done twice.
+     */
+    fun refreshTranscripts(paths: Set<Path>) {
+        pendingTranscripts.addAll(paths)
+        if (!incrementalInFlight.compareAndSet(false, true)) return
+
+        CanopyExecutor.submit {
+            try {
+                while (true) {
+                    val batch = pendingTranscripts.toSet()
+                    if (batch.isEmpty()) break
+
+                    pendingTranscripts.removeAll(batch)
+                    applyTranscripts(batch)
+                }
+            } finally {
+                incrementalInFlight.set(false)
+            }
+        }
+    }
+
+    private fun applyTranscripts(paths: Set<Path>) {
+        val basePath = project.basePath ?: return
+        val current = cachedSessions ?: loadSessions().also { cachedSessions = it }
+        val reparsed = paths.mapNotNull { path ->
+            runCatching { parseJsonlSession(path, worktreeNameOf(path, basePath)) }.getOrNull()
+        }
+        if (reparsed.isEmpty()) return
+
+        val byId = reparsed.associateBy { it.sessionId }
+        cachedSessions = (current.filterNot { it.sessionId in byId } + reparsed).sortedByDescending { it.modified }
+
+        ApplicationManager.getApplication().invokeLater {
+            listeners.forEach { it() }
+        }
+    }
+
+    /** A transcript's directory says which worktree it belongs to; nothing else has to be read. */
+    private fun worktreeNameOf(path: Path, basePath: String): String? {
+        val directory = path.parent ?: return null
+
+        return runCatching {
+            ClaudePathEncoder.worktreeNames(basePath).firstOrNull {
+                ClaudePathEncoder.worktreeProjectDir(basePath, it) == directory
+            }
+        }.getOrNull()
     }
 
     fun startWatching() {
@@ -230,16 +271,21 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 override fun after(events: MutableList<out VFileEvent>) {
                     val projectDirStrs = projectDirs.map { it.toString() }
                     val sessionsDirStr = ClaudePathEncoder.sessionsDir().toString()
-                    val relevant = events.any { event ->
+                    val transcripts = events.mapNotNullTo(HashSet()) { event ->
                         val path = event.path
-                        (projectDirStrs.any { path.startsWith(it) } && path.endsWith(".jsonl")) ||
-                            ((event is VFileContentChangeEvent || event is VFileCreateEvent) &&
-                                path.startsWith(sessionsDirStr) &&
-                                path.endsWith(".json"))
+                        if (!path.endsWith(".jsonl") || projectDirStrs.none { path.startsWith(it) }) {
+                            return@mapNotNullTo null
+                        }
+                        Path.of(path)
                     }
-                    if (relevant) {
-                        refresh()
+                    val externals = events.any { event ->
+                        (event is VFileContentChangeEvent || event is VFileCreateEvent) &&
+                            event.path.startsWith(sessionsDirStr) &&
+                            event.path.endsWith(".json")
                     }
+
+                    if (transcripts.isNotEmpty()) refreshTranscripts(transcripts)
+                    if (externals) refresh()
                 }
             })
 
@@ -294,10 +340,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             }
         }
 
-        // The VFS listener catches everything while someone is looking; this poll is the safety net
-        // for changes it misses, and a safety net does not need to run every five seconds unwatched.
         if (!pollAlarm.isDisposed) {
-            pollAlarm.addRequest(::checkForChanges, if (watched) WATCHED_POLL_MS else IDLE_POLL_MS)
+            pollAlarm.addRequest(::checkForChanges, POLL_MS)
         }
     }
 
@@ -501,7 +545,4 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     }
 }
 
-private const val REFRESH_DEBOUNCE_MS = 400
-
-private const val WATCHED_POLL_MS = 5_000
-private const val IDLE_POLL_MS = 30_000
+private const val POLL_MS = 5_000

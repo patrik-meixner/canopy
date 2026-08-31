@@ -56,7 +56,7 @@ class SessionDetailPanel(
     private val log = com.intellij.openapi.diagnostic.Logger.getInstance(SessionDetailPanel::class.java)
 
     @Volatile private var shownSessionId: String? = null
-    @Volatile private var shownSignature: String? = null
+    @Volatile private var shownSignature: Long? = null
     @Volatile private var lastRevalidatedAt = 0L
     @Volatile private var pendingWhileHidden = false
 
