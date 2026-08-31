@@ -1,6 +1,6 @@
 package com.canopy.toolwindow
 
-import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
+import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -34,11 +34,25 @@ object TouchedFileProblems {
         return runCatching { highlightsIn(project, document, path) }.getOrDefault(emptyList())
     }
 
-    private fun highlightsIn(project: Project, document: Document, path: String): List<FileProblem> =
-        DaemonCodeAnalyzerImpl.getHighlights(document, HighlightSeverity.WARNING, project)
-            .filter { !it.description.isNullOrBlank() }
-            .take(PER_FILE_LIMIT)
-            .map { FileProblem(path, document.getLineNumber(it.startOffset) + 1, it.description) }
+    private fun highlightsIn(project: Project, document: Document, path: String): List<FileProblem> {
+        val found = mutableListOf<FileProblem>()
+
+        DaemonCodeAnalyzerEx.processHighlights(
+            document,
+            project,
+            HighlightSeverity.WARNING,
+            0,
+            document.textLength
+        ) { info ->
+            val description = info.description
+            if (!description.isNullOrBlank()) {
+                found.add(FileProblem(path, document.getLineNumber(info.startOffset) + 1, description))
+            }
+            found.size < PER_FILE_LIMIT
+        }
+
+        return found
+    }
 }
 
 private const val MAX_LISTED = 25

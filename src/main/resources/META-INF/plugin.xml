@@ -56,6 +56,8 @@
     <depends>org.jetbrains.plugins.terminal</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="com.canopy.toolwindow.RestoreOpenSessionsActivity"/>
+
         <toolWindow
             id="Canopy"
             anchor="left"

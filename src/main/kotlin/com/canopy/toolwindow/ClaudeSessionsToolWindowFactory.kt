@@ -4,15 +4,12 @@ import com.canopy.editor.ClaudeSessionVirtualFile
 import com.canopy.model.SessionDisplay
 import com.canopy.model.SessionStatus
 import com.canopy.services.ClaudeSessionService
-import com.canopy.services.OpenSessionsPersistence
 import com.canopy.util.ClaudePathEncoder
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupManager
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VirtualFile
@@ -37,7 +34,7 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         val callbacks = SessionCallbacks(
-            onSessionSelected = { session -> openSession(project, session) },
+            onSessionSelected = { session -> openClaudeSession(project, session) },
             onNewSession = { name -> openNewSession(project, name) },
             onForkSession = { session -> forkSession(project, session) }
         )
@@ -109,7 +106,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
             FileEditorManagerListener.FILE_EDITOR_MANAGER, editorListener
         )
 
-        restoreOpenSessions(project, sessionService)
     }
 
     private data class SessionCallbacks(
@@ -124,25 +120,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
             .any { it.sessionId == sessionId }
     }
 
-    private fun openSession(project: Project, session: SessionDisplay) {
-        val manager = FileEditorManager.getInstance(project)
-
-        // Focus existing tab if already open
-        val existing = manager.openFiles.filterIsInstance<ClaudeSessionVirtualFile>()
-            .find { it.sessionId == session.sessionId }
-        if (existing != null) {
-            manager.openFile(existing, true)
-            return
-        }
-
-        val file = ClaudeSessionVirtualFile(session.tabTitle, session.sessionId).apply {
-            if (session.worktreeName != null && project.basePath != null) {
-                workingDir = ClaudePathEncoder.worktreeAbsolutePath(project.basePath!!, session.worktreeName)
-                isWorktreeSession = true
-            }
-        }
-        manager.openFile(file, true)
-    }
 
     private fun openNewSession(project: Project, name: String) {
         val file = ClaudeSessionVirtualFile(name)
@@ -172,7 +149,7 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
                 if (chosen == newSessionLabel) {
                     openSessionInDirectory(project, name, worktree.entry.path)
                 } else {
-                    existing.firstOrNull { it.displayName == chosen }?.let { openSession(project, it) }
+                    existing.firstOrNull { it.displayName == chosen }?.let { openClaudeSession(project, it) }
                 }
             }
             .createPopup()
@@ -211,24 +188,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
             }
         }
         FileEditorManager.getInstance(project).openFile(file, true)
-    }
-
-    private fun restoreOpenSessions(project: Project, sessionService: ClaudeSessionService) {
-        val persistence = OpenSessionsPersistence.getInstance(project)
-        val savedIds = persistence.getAll()
-        if (savedIds.isEmpty()) return
-
-        // Opening editors while the platform is still restoring its own makes project loading fail
-        // on 2024.3+ with "Tab count expected to be zero".
-        StartupManager.getInstance(project).runAfterOpened {
-            ApplicationManager.getApplication().invokeLater {
-                val sessions = sessionService.getSessions().associateBy { it.sessionId }
-                for (sessionId in savedIds) {
-                    val session = sessions[sessionId] ?: continue
-                    openSession(project, session)
-                }
-            }
-        }
     }
 
     override fun shouldBeAvailable(project: Project): Boolean = project.basePath != null
