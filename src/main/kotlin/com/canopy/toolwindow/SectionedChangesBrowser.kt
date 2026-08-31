@@ -125,6 +125,73 @@ class SectionedChangesBrowser(
         return (changed.toList() + untracked.toList()).distinct()
     }
 
+    /**
+     * The same menu the Commit and Log windows have: a row here is a file, and a file opens.
+     *
+     * Show Diff stays first because reviewing is why the tree exists, but reading a change usually
+     * ends in wanting the file itself.
+     */
+    override fun createPopupMenuActions(): List<com.intellij.openapi.actionSystem.AnAction> =
+        listOf(diffAction, openSourceAction(), revealAction(), copyPathAction()) + super.createPopupMenuActions()
+
+    private fun openSourceAction() = object : com.intellij.openapi.actionSystem.AnAction(
+        "Edit Source",
+        "Open the file in the editor",
+        com.intellij.icons.AllIcons.Actions.EditSource
+    ), com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            selectedPaths().firstNotNullOfOrNull(::virtualFileAt)?.let {
+                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(myProject).openFile(it, true)
+            }
+        }
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            event.presentation.isEnabled = selectedPaths().any { virtualFileAt(it) != null }
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }.also { it.registerCustomShortcutSet(com.intellij.openapi.actionSystem.CommonShortcuts.getEditSource(), this) }
+
+    private fun revealAction() = object : com.intellij.openapi.actionSystem.AnAction(
+        com.intellij.ide.actions.RevealFileAction.getActionName(),
+        "Show the file in the file manager",
+        com.intellij.icons.AllIcons.Actions.MenuOpen
+    ), com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            selectedPaths().firstOrNull()?.let { com.intellij.ide.actions.RevealFileAction.openFile(java.io.File(it)) }
+        }
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            event.presentation.isEnabled = selectedPaths().isNotEmpty()
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }
+
+    private fun copyPathAction() = object : com.intellij.openapi.actionSystem.AnAction(
+        "Copy Path",
+        "Copy the paths of the selected files",
+        com.intellij.icons.AllIcons.Actions.Copy
+    ), com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            val paths = selectedPaths()
+            if (paths.isEmpty()) return
+
+            com.intellij.openapi.ide.CopyPasteManager.getInstance()
+                .setContents(java.awt.datatransfer.StringSelection(paths.joinToString("\n")))
+        }
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            event.presentation.isEnabled = selectedPaths().isNotEmpty()
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }
+
+    /** A deleted file has a path in the tree and nothing on disk, so Edit Source has to stay off. */
+    private fun virtualFileAt(path: String): com.intellij.openapi.vfs.VirtualFile? =
+        com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(java.nio.file.Path.of(path))
+
     fun setSections(changeSet: SessionChangeSet) {
         sections = changeSet.changes
         unversioned = changeSet.unversioned
