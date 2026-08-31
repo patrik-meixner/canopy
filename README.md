@@ -64,6 +64,8 @@ The **Detail** tab is IntelliJ's Commit window, except it spans the superproject
 and their worktrees at once. Changes are sectioned by how far they have travelled: uncommitted,
 committed but unpushed, pushed, untracked.
 
+<img src="docs/screenshots/03-commits-across-a-session.png" alt="The Detail tab beside the commits of one session, and the union of a selected range of them">
+
 - **Commit everywhere at once**, including the submodule pointer bump in the parent, which is the
   step that makes a submodule change visible to anyone who clones.
 - **Push from the same place**, submodules first, because a pointer commit references revisions
