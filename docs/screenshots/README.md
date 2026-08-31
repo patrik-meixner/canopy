@@ -1,7 +1,7 @@
 # Screenshots
 
-Framed by `tools/demo/shot.py`: the IDE window alone, rounded, on a ground of
-its own. Nothing here is cropped by hand.
+Framed by `tools/demo/shot.py`: the IDE window alone, rounded, standing on a
+blurred blow-up of itself. Nothing here is cropped by hand.
 
 ```
 python3 -m venv /tmp/shotenv && /tmp/shotenv/bin/pip install Pillow pyobjc-framework-Quartz

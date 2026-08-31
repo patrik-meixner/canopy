@@ -16,15 +16,14 @@ from PIL import Image, ImageDraw, ImageFilter
 
 OUT = Path(__file__).resolve().parents[2] / "docs" / "screenshots"
 
-# A ground that is neither white nor black: the IDE keeps its own contrast either way.
-GROUND_TOP = (26, 24, 38)
-GROUND_BOTTOM = (12, 12, 18)
-# The IDE's own accent, thrown faintly on the wall behind it.
-GLOW = (224, 68, 123)
-GLOW_ALPHA = 46
+# The ground is the window itself, blown up, blurred and darkened.
+BACKDROP_ZOOM = 1.35
+BACKDROP_BLUR = 0.045
+BACKDROP_SHADE = (10, 9, 14)
+BACKDROP_DARKEN = 0.62
 RADIUS = 22
 SHADOW_BLUR = 52
-SHADOW_ALPHA = 165
+SHADOW_ALPHA = 175
 
 
 def window_id(match: str) -> tuple[int, str]:
@@ -72,26 +71,18 @@ def rounded(image: Image.Image, radius: int) -> Image.Image:
     return out
 
 
-def ground(size: tuple[int, int]) -> Image.Image:
+def ground(shot: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """The window itself, blown up and blurred, so the ground is made of what stands on it."""
     width, height = size
-    column = Image.new("RGB", (1, height))
-    for y in range(height):
-        ratio = y / max(height - 1, 1)
-        column.putpixel((0, y), tuple(
-            int(GROUND_TOP[channel] + (GROUND_BOTTOM[channel] - GROUND_TOP[channel]) * ratio)
-            for channel in range(3)
-        ))
-    base = column.resize((width, height)).convert("RGBA")
+    scale = max(width / shot.width, height / shot.height) * BACKDROP_ZOOM
+    blown = shot.resize((round(shot.width * scale), round(shot.height * scale)), Image.LANCZOS)
+    left = (blown.width - width) // 2
+    top = (blown.height - height) // 2
+    backdrop = blown.crop((left, top, left + width, top + height))
+    backdrop = backdrop.filter(ImageFilter.GaussianBlur(round(width * BACKDROP_BLUR)))
 
-    # One soft light above the window, so the ground is not a flat field.
-    glow = Image.new("RGBA", size, (0, 0, 0, 0))
-    radius = int(width * 0.42)
-    ImageDraw.Draw(glow).ellipse(
-        [width // 2 - radius, -radius, width // 2 + radius, radius],
-        fill=(*GLOW, GLOW_ALPHA),
-    )
-
-    return Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(radius // 2)))
+    # Darkened, or the window would sit on something as bright as itself.
+    return Image.blend(backdrop, Image.new("RGB", size, BACKDROP_SHADE), BACKDROP_DARKEN).convert("RGBA")
 
 
 def present(shot: Image.Image, pad: int, scale_to: int) -> Image.Image:
@@ -102,7 +93,7 @@ def present(shot: Image.Image, pad: int, scale_to: int) -> Image.Image:
     radius = round(RADIUS * shot.width / 1600)
     card = rounded(shot, radius)
     canvas_size = (shot.width + pad * 2, shot.height + pad * 2)
-    canvas = ground(canvas_size)
+    canvas = ground(shot, canvas_size)
 
     shadow = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow).rounded_rectangle(

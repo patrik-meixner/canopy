@@ -520,7 +520,9 @@ def main() -> int:
     arguments = parser.parse_args()
 
     root = Path(arguments.root).expanduser().resolve()
-    transcripts = Path.home() / ".claude" / "projects" / str(root).replace("/", "-")
+    # The CLI encodes both separators and dots, and writes only there; matching it keeps the
+    # seeded sessions and any real one in the same directory.
+    transcripts = Path.home() / ".claude" / "projects" / str(root).replace("/", "-").replace(".", "-")
 
     if arguments.transcripts_only:
         random.seed(7)
