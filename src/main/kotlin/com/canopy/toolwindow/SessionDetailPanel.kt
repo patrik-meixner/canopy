@@ -58,6 +58,7 @@ class SessionDetailPanel(
     @Volatile private var shownSessionId: String? = null
     @Volatile private var shownSignature: String? = null
     @Volatile private var lastRevalidatedAt = 0L
+    @Volatile private var pendingWhileHidden = false
 
     /**
      * [JBLoadingPanel] delegates `add` to an inner panel but inherits `removeAll`, so swapping its
@@ -104,7 +105,7 @@ class SessionDetailPanel(
             }
             if (!isShowing) return@addHierarchyListener
 
-            refresh(force = false)
+            refresh(force = pendingWhileHidden)
         }
     }
 
@@ -124,11 +125,26 @@ class SessionDetailPanel(
     }
 
     /**
+     * Reading six working trees costs the same whether or not anyone is looking at the result, so
+     * a closed review window does none of it and catches up the moment it is opened.
+     */
+    private fun hidden(): Boolean {
+        if (isShowing) return false
+
+        pendingWhileHidden = true
+
+        return true
+    }
+
+    /**
      * Cached results show immediately and are then confirmed against git in the background, so the
      * panel is never blank waiting and never quietly stale. Only a changed result redraws.
      */
     fun refresh(force: Boolean) {
         val sessionId = shownSessionId ?: return
+        if (hidden()) return
+
+        pendingWhileHidden = false
         val now = System.currentTimeMillis()
         if (!force && now - lastRevalidatedAt < com.canopy.settings.CanopySettings.getInstance().state.detailRevalidateSeconds * 1000L) return
 
