@@ -39,7 +39,7 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
     }
 
     override fun render(insight: SessionInsight) {
-        messages = insight.messages
+        messages = com.canopy.toolwindow.withoutRepeats(insight.messages)
         rebuild()
     }
 

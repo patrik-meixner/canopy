@@ -58,6 +58,20 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
         bindToSelection()
     }
 
+    /**
+     * A tab built while its tool window is already open receives no SHOWING_CHANGED, so the
+     * hierarchy listener alone left the first-opened tab watching nothing and never refreshing.
+     */
+    override fun addNotify() {
+        super.addNotify()
+        if (isShowing) startWatching()
+    }
+
+    override fun removeNotify() {
+        stopWatching()
+        super.removeNotify()
+    }
+
     protected abstract fun render(insight: SessionInsight)
 
     protected fun selectedSession(): ClaudeSessionVirtualFile? =

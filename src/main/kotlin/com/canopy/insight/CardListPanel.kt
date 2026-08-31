@@ -55,6 +55,7 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
         val keptValue = bar.value
         val wasAtBottom = bar.value + bar.visibleAmount >= bar.maximum - JBUI.scale(BOTTOM_SLACK)
         val grew = cards.size > shown
+        val first = shown == 0 && cards.isNotEmpty()
 
         shown = cards.size
         stack.removeAll()
@@ -70,7 +71,12 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
 
         // The new height only exists after layout, so the decision runs once the stack has one.
         SwingUtilities.invokeLater {
-            if (grew && wasAtBottom) glideTo(bar.maximum - bar.visibleAmount) else bar.value = keptValue
+            val bottom = bar.maximum - bar.visibleAmount
+            when {
+                first -> bar.value = bottom
+                grew && wasAtBottom -> glideTo(bottom)
+                else -> bar.value = keptValue
+            }
         }
     }
 

@@ -54,3 +54,12 @@ fun humanMessageIn(record: JsonObject, ordinal: Int): SessionMessage? {
 
     return SessionMessage(ordinal, trimmed, images)
 }
+
+/**
+ * Interrupting a turn makes Claude Code record the message again when it is resent, so the same
+ * text lands in the transcript twice in a row and the panel showed two identical cards.
+ */
+fun withoutRepeats(messages: List<SessionMessage>): List<SessionMessage> =
+    messages.filterIndexed { index, message ->
+        index == 0 || messages[index - 1].text != message.text || message.images.isNotEmpty()
+    }
