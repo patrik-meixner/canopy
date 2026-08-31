@@ -72,6 +72,7 @@ class ClaudeSessionEditor(
     private var focusComponent: JComponent? = null
     private var ptyProcess: PtyProcess? = null
     private var terminalWidget: JBTerminalWidget? = null
+    private var endedBanner: JPanel? = null
     private var terminalArea: JPanel? = null
     @Volatile private var lastTitle: String? = null
     private var maxEffortButton: javax.swing.JButton? = null
@@ -326,6 +327,7 @@ class ClaudeSessionEditor(
                     file.isThinking = false
                     file.notifyState = null
                     refreshTabTitle()
+                    showProcessEnded(code)
                 }
             }
         }
@@ -1370,6 +1372,39 @@ class ClaudeSessionEditor(
                 }
             }
         })
+    }
+
+    /**
+     * A terminal whose process is gone still accepts keystrokes and does nothing with them, which
+     * reads as the tab having frozen. Saying so, and offering the way back, is the difference.
+     */
+    private fun showProcessEnded(code: Int) {
+        if (endedBanner != null) return
+        val reason = if (code == 143) "The agent was stopped." else "The agent exited with code $code."
+
+        val restart = javax.swing.JButton("Restart Session").apply {
+            addActionListener {
+                val manager = FileEditorManager.getInstance(project)
+                // A fresh file, because the old one is bound to a terminal that has already gone.
+                val reopened = ClaudeSessionVirtualFile(file.baseName, sessionId = file.sessionId).also {
+                    it.workingDir = file.workingDir
+                    it.isWorktreeSession = file.isWorktreeSession
+                }
+                manager.closeFile(file)
+                manager.openFile(reopened, true)
+            }
+        }
+        val banner = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, JBUI.scale(10), JBUI.scale(6))).apply {
+            background = com.intellij.util.ui.UIUtil.getPanelBackground()
+            border = JBUI.Borders.customLine(com.canopy.insight.InsightUi.needsAttention(), 0, 0, 1, 0)
+            add(com.intellij.ui.components.JBLabel("$reason This terminal no longer accepts input."))
+            add(restart)
+        }
+
+        endedBanner = banner
+        currentContent?.add(banner, BorderLayout.NORTH)
+        currentContent?.revalidate()
+        currentContent?.repaint()
     }
 
     /** The Messages tab searches this buffer to jump back to a message. */
