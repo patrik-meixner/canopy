@@ -7,3 +7,6 @@ build/
 out/
 .claude/worktrees/
 .DS_Store
+
+# Working notes, not part of the plugin
+work/
