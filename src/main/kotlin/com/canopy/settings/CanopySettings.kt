@@ -69,7 +69,7 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         @JvmField var recentSessionDays: Int = 14
 
         /** Blocked agents sort above the rest, instead of ordering purely by recency. */
-        @JvmField var sortAttentionFirst: Boolean = true
+        @JvmField var sortAttentionFirst: Boolean = false
 
         /** Include untracked files as their own section in the Detail tree. */
         @JvmField var showUnversionedInDetail: Boolean = true

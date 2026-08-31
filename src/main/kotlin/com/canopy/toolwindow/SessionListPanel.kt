@@ -583,8 +583,8 @@ class SessionListPanel(
     private fun applyDiscovered(discovered: List<SessionDisplay>) {
         com.canopy.services.RepoScopeService.getInstance(project).refreshIfStale { table.repaint() }
         loadingPanel.stopLoading()
-        // Blocked agents first, then most recent: with several running, finding the one that
-        // stopped and is waiting is the whole job.
+        // Most recent by default: a row that moves as its agent changes state means the list
+        // reorders itself under the pointer, and the glyph already says what is blocked.
         allSessions = if (com.canopy.settings.CanopySettings.getInstance().state.sortAttentionFirst) {
             discovered.sortedWith(compareBy<SessionDisplay> { sessionAttention(it).rank }.thenByDescending { it.modified })
         } else {

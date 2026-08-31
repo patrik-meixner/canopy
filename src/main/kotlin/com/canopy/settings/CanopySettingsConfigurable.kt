@@ -29,8 +29,8 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
             }.rowComment("Off by default: an agent pauses between every batch of tool calls, so this fires while it is plainly still working.")
 
             row {
-                checkBox("Show blocked agents first").bindSelected(state::sortAttentionFirst)
-            }.rowComment("Sessions waiting for permission or for your reply sort above the rest, rather than ordering purely by recency.")
+                checkBox("Sort blocked agents to the top").bindSelected(state::sortAttentionFirst)
+            }.rowComment("Off by default: a row that moves as its agent changes state reorders the list under the pointer, and the glyph already says what is blocked. Cmd+Shift+J jumps to the next session waiting for you.")
 
             row("Show sessions from the last") {
                 intTextField(1..3650).bindIntText(state::recentSessionDays).columns(4)
