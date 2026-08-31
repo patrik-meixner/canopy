@@ -92,21 +92,20 @@ class SessionListPanel(
     private var transcriptQuery = ""
     private var transcriptScan: java.util.concurrent.atomic.AtomicBoolean? = null
     private var transcriptScanning = ""
-    private val olderToggle = com.intellij.ui.components.ActionLink("") {
-        showsOlder = !showsOlder
+    private val moreRow = com.canopy.insight.MoreRow {
+        limit += SESSION_PAGE
         applyFilter()
     }.apply {
-        border = JBUI.Borders.empty(6, 10)
         isOpaque = true
         background = com.canopy.insight.InsightUi.panelBackground()
     }
+    private var limit = SESSION_PAGE
 
     private var allSessions: List<SessionDisplay> = emptyList()
 
     /** On-screen state and sweep floor for the orphaned-worktree scan (worktree mode only). */
     @Volatile private var panelVisible = false
     @Volatile private var lastOrphanSweep = 0L
-    private var showsOlder = false
     private val spinner = javax.swing.Timer(SPINNER_FRAME_MS.toInt()) { repaintWorkingRows() }
     private val changeListener: () -> Unit = { reloadData() }
 
@@ -303,7 +302,7 @@ class SessionListPanel(
         }
         loadingPanel.add(tableScroll, BorderLayout.CENTER)
         // The link belongs where the list runs out, not in a toolbar above rows it says nothing about.
-        loadingPanel.add(olderToggle, BorderLayout.SOUTH)
+        loadingPanel.add(moreRow, BorderLayout.SOUTH)
     }
 
     private fun setupOrphanSection() {
@@ -655,7 +654,7 @@ class SessionListPanel(
     private fun applyFilter() {
         val query = searchField.text.orEmpty().lowercase().trim()
         searchTranscripts(query)
-        val visible = if (showsOlder || query.isNotEmpty()) allSessions else allSessions.filter(::isRecent)
+        val visible = allSessions
         val filtered = if (query.isEmpty()) {
             visible
         } else {
@@ -667,18 +666,14 @@ class SessionListPanel(
                     session.worktreeName?.lowercase()?.contains(query) == true
             }
         }
-        tableModel.items = filtered
+        val page = com.canopy.insight.pageful(filtered, limit)
+        moreRow.show(page.remaining, SESSION_PAGE)
+        tableModel.items = page.shown
         // Replacing the rows drops the selection, and the rows are replaced whenever an agent
         // writes, so the session being reviewed has to be put back on every reload.
         restoreSelection()
-        updateOlderToggle()
     }
 
-    private fun isRecent(session: SessionDisplay): Boolean {
-        val days = com.canopy.settings.CanopySettings.getInstance().state.recentSessionDays.toLong()
-
-        return session.modified.isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(days)))
-    }
 
     /**
      * Only the rows that are spinning repaint, and only while the list is on screen, so an idle
@@ -695,12 +690,6 @@ class SessionListPanel(
         if (spinning.isEmpty()) return
 
         spinning.forEach { table.repaint(table.getCellRect(it, 0, true)) }
-    }
-
-    private fun updateOlderToggle() {
-        val hidden = allSessions.count { !isRecent(it) }
-        olderToggle.isVisible = hidden > 0 && searchField.text.orEmpty().isBlank()
-        olderToggle.text = if (showsOlder) "Show recent only" else "Show $hidden older"
     }
 
     fun refreshStatuses() {
@@ -976,3 +965,5 @@ private class PurgeDialog(
 }
 
 private const val MIN_TRANSCRIPT_QUERY = 2
+
+private const val SESSION_PAGE = 30

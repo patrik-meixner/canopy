@@ -32,6 +32,12 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     private val files = SimpleChangesBrowser(project, false, true)
     private var loadedFor: String? = null
     private var loadedRoots: List<Pair<String, String>> = emptyList()
+    private var collected: List<CommitEntry> = emptyList()
+    private var limit = COMMIT_PAGE
+    private val more = MoreRow {
+        limit += COMMIT_PAGE
+        showPage()
+    }
 
     init {
         background = InsightUi.panelBackground()
@@ -48,7 +54,7 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         }
 
         add(JBSplitter(true, "canopy.commits.split", 0.45f).apply {
-            firstComponent = ScrollPaneFactory.createScrollPane(commits, true)
+            firstComponent = JPanelWithMore(ScrollPaneFactory.createScrollPane(commits, true), more)
             secondComponent = files
         }, BorderLayout.CENTER)
     }
@@ -62,6 +68,16 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         loadedRoots = roots
 
         reload(roots)
+    }
+
+    private fun showPage() {
+        val kept = commits.selectedValue?.sha
+        val page = pageful(collected, limit)
+
+        more.show(page.remaining, COMMIT_PAGE)
+        model.clear()
+        page.shown.forEach { model.addElement(it) }
+        (0 until model.size()).firstOrNull { model[it].sha == kept }?.let(commits::setSelectedIndex)
     }
 
     /** One git log per repository the session wrote to, off the EDT, newest commit first. */
@@ -78,10 +94,8 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
 
-                val kept = commits.selectedValue?.sha
-                model.clear()
-                collected.forEach { model.addElement(it) }
-                (0 until model.size()).firstOrNull { model[it].sha == kept }?.let(commits::setSelectedIndex)
+                this.collected = collected
+                showPage()
             }
         }
     }
@@ -133,3 +147,5 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         }
     }
 }
+
+private const val COMMIT_PAGE = 50

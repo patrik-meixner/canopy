@@ -22,12 +22,16 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
     private val cards = CardListPanel("No messages in this session yet")
     private val search = SearchTextField(false)
     private var messages: List<SessionMessage> = emptyList()
+    private var limit = MESSAGE_PAGE
 
     init {
         background = InsightUi.panelBackground()
         search.textEditor.emptyText.text = "Filter messages"
         search.addDocumentListener(object : DocumentAdapter() {
-            override fun textChanged(event: DocumentEvent) = rebuild()
+            override fun textChanged(event: DocumentEvent) {
+                limit = MESSAGE_PAGE
+                rebuild()
+            }
         })
 
         add(JPanel(BorderLayout()).apply {
@@ -45,7 +49,15 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
 
     private fun rebuild() {
         val query = search.text.trim()
-        val shown = messages.filter { it.text.contains(query, ignoreCase = true) }
+        val matching = messages.filter { it.text.contains(query, ignoreCase = true) }
+        // The newest are the ones being read, so a page is taken from the end.
+        val page = pageful(matching.asReversed(), limit)
+        val shown = page.shown.asReversed()
+
+        cards.onMore(page.remaining, MESSAGE_PAGE, atTop = true) {
+            limit += MESSAGE_PAGE
+            rebuild()
+        }
 
         cards.setCards(
             shown.map { message ->
@@ -87,3 +99,5 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
         com.intellij.openapi.ui.Messages.showInfoMessage(project, reason, "Cannot Scroll There")
     }
 }
+
+private const val MESSAGE_PAGE = 40

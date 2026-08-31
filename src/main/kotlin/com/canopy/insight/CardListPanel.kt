@@ -51,6 +51,20 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
         add(scroll, BorderLayout.CENTER)
     }
 
+    private var more: MoreRow? = null
+    private var moreAtTop = false
+
+    /**
+     * The row that reveals the rest of the list, at whichever end the rest actually lies: older
+     * messages are above the newest, older sessions below them.
+     */
+    fun onMore(remaining: Int, step: Int, atTop: Boolean = false, reveal: () -> Unit) {
+        val row = more ?: MoreRow(reveal).also { more = it }
+
+        moreAtTop = atTop
+        row.show(remaining, step)
+    }
+
     fun setCards(cards: List<JComponent>) = setCards(cards, cards.indices.map(Int::toString))
 
     /**
@@ -70,12 +84,14 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
 
         shown = cards.size
         stack.removeAll()
+        if (moreAtTop) more?.let { stack.add(it.alignedToWidth()) }
         if (cards.isEmpty()) {
             stack.add(Box.createVerticalStrut(JBUI.scale(40)))
             stack.add(empty.alignedToWidth())
         } else {
             cards.forEach { stack.add(it.alignedToWidth()) }
         }
+        if (!moreAtTop) more?.let { stack.add(it.alignedToWidth()) }
         stack.add(Box.createVerticalGlue())
         stack.revalidate()
         stack.repaint()
