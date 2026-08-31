@@ -38,10 +38,7 @@ class ClaudeSessionVirtualFile(
     var modelId: String? = null
     var modelName: String? = null
     var contextPercent: Double? = null
-    var isThinking: Boolean = false
     var isUnresponsive: Boolean = false
-    var notifyState: String? = null
-    var isExternallyOpen: Boolean = false
 
     init {
         isWritable = false
@@ -67,16 +64,26 @@ class ClaudeSessionVirtualFile(
     // it resized the tab and reflowed the whole strip. Returning null means "idle": the
     // badge slot is reserved but drawn empty, so the tab width is identical in every state.
     /** The same vocabulary the session list uses, so a tab and its row never disagree. */
-    fun statusGlyph(): String? {
+    /**
+     * The same state the session list shows, read from the same services.
+     *
+     * This used to read fields on the file that nothing ever wrote, so the tab silently showed
+     * no state at all while the row beside it showed the truth.
+     */
+    fun statusGlyph(project: com.intellij.openapi.project.Project): String? {
+        val id = sessionId ?: return null
+        val sessions = com.canopy.services.ClaudeSessionService.getInstance(project)
+        val session = sessions.getSessions().firstOrNull { it.sessionId == id }
+        val attention = com.canopy.model.sessionAttentionFor(
+            notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(id),
+            isRunning = true,
+            lastEntryRole = session?.lastEntryRole,
+            idleForMillis = session?.let { System.currentTimeMillis() - it.modified.toEpochMilli() } ?: 0
+        )
         val presence = when {
             isUnresponsive -> com.canopy.model.SessionPresence.Unresponsive
-            isExternallyOpen -> com.canopy.model.SessionPresence.OpenElsewhere
+            sessions.isExternallyOpen(id) -> com.canopy.model.SessionPresence.OpenElsewhere
             else -> com.canopy.model.SessionPresence.OpenHere
-        }
-        val attention = when {
-            notifyState != null -> com.canopy.model.sessionAttentionOf(notifyState)
-            isThinking -> com.canopy.model.SessionAttention.Working
-            else -> com.canopy.model.SessionAttention.None
         }
 
         return com.canopy.model.sessionGlyph(attention, presence, System.currentTimeMillis())

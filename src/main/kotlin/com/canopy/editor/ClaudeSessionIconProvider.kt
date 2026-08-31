@@ -20,7 +20,7 @@ class ClaudeSessionIconProvider : FileIconProvider {
         // Status lives in a fixed-size badge appended to the tab icon (never in the title
         // text) so the tab keeps a constant width as Claude's state cycles. The badge box
         // is always present — idle paints nothing — so even the badge column never resizes.
-        val badge = badgeFor(file.statusGlyph())
+        val badge = badgeFor(project?.let { file.statusGlyph(it) })
         val agent = if (file.isShellSession) SHELL_ICON else CLAUDE_ICON
 
         return if (file.isWorktreeSession) RowIcon(agent, TREE_ICON, badge) else RowIcon(agent, badge)

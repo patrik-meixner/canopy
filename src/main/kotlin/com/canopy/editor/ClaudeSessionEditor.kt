@@ -182,7 +182,6 @@ class ClaudeSessionEditor(
                 ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
                     if (isExternal) {
-                        file.isExternallyOpen = true
                         refreshTabTitle()
                         showExternalPanel()
                     } else {
@@ -271,8 +270,9 @@ class ClaudeSessionEditor(
         val statusFile = statusService.createStatusFilePath(monitoringId)
         val notifyFile = statusService.createNotifyFilePath(monitoringId)
 
+        // Deliberately not a tab badge: the terminal is "active" whenever anything reaches it,
+        // including the status line redrawing itself, which lit every tab at once for no reason.
         val onActiveChanged: (Boolean) -> Unit = { active ->
-            file.isThinking = active
             if (active) {
                 stopLoading()
                 if (file.isUnresponsive) {
@@ -287,11 +287,8 @@ class ClaudeSessionEditor(
         }
 
         val onUserInput: () -> Unit = {
-            if (file.notifyState != null) {
-                file.notifyState = null
-                statusService.clearNotifyState(file.sessionId ?: monitoringId)
-                refreshTabTitle()
-            }
+            statusService.clearNotifyState(file.sessionId ?: monitoringId)
+            refreshTabTitle()
             maxEffortButton?.let { if (!it.isEnabled) it.isEnabled = true }
         }
 
@@ -324,8 +321,6 @@ class ClaudeSessionEditor(
                     FileEditorManager.getInstance(project).closeFile(file)
                 } else {
                     log.warn("Claude process exited with code $code for session ${file.sessionId}")
-                    file.isThinking = false
-                    file.notifyState = null
                     refreshTabTitle()
                     showProcessEnded(code)
                 }
@@ -395,15 +390,10 @@ class ClaudeSessionEditor(
                 file.modelId = status?.modelId
                 file.modelName = status?.modelName
                 file.contextPercent = status?.contextRemainingPercent
-                val prevNotify = file.notifyState
-                val newNotify = statusService.getNotifyState(sid)
-                // Suppress idle indicator on the active tab — user can already see it
+                // Waiting for you is not news on the tab you are already looking at.
                 val selectedFile = FileEditorManager.getInstance(project).selectedEditor?.file
-                if (newNotify == "idle_prompt" && selectedFile == file) {
+                if (statusService.getNotifyState(sid) == "idle_prompt" && selectedFile == file) {
                     statusService.clearNotifyState(file.sessionId ?: monitoringId)
-                    file.notifyState = null
-                } else {
-                    file.notifyState = newNotify
                 }
                 refreshTabTitle()
                 updateContextBar(status)
@@ -421,9 +411,9 @@ class ClaudeSessionEditor(
         // Clear idle indicator when user switches to this tab
         val selectionListener = object : FileEditorManagerListener {
             override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
-                if (event.newFile == file && file.notifyState == "idle_prompt") {
-                    file.notifyState = null
-                    statusService.clearNotifyState(file.sessionId ?: monitoringId)
+                val id = file.sessionId ?: monitoringId
+                if (event.newFile == file && statusService.getNotifyState(id) == "idle_prompt") {
+                    statusService.clearNotifyState(id)
                     refreshTabTitle()
                 }
             }
@@ -1580,10 +1570,7 @@ class ClaudeSessionEditor(
         currentContent?.let { loadingPanel.contentPanel.remove(it) }
         currentContent = null
 
-        file.isThinking = false
-        file.notifyState = null
         file.isUnresponsive = false
-        file.isExternallyOpen = false
         refreshTabTitle()
 
         loadingStopped.set(false)
@@ -1608,7 +1595,7 @@ class ClaudeSessionEditor(
         // The status glyph now lives in the tab icon, not the title text, so the name alone
         // no longer changes when Claude's state cycles. Key the dedup on glyph + name so a
         // pure status change still triggers updateFilePresentation (which refreshes the icon).
-        val signature = "${file.statusGlyph()} ${file.computeTabTitle()}"
+        val signature = "${file.statusGlyph(project)} ${file.computeTabTitle()}"
         if (!force && signature == lastTitle) return
         lastTitle = signature
         ApplicationManager.getApplication().invokeLater {

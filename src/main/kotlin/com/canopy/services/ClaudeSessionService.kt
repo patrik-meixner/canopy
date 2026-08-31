@@ -153,6 +153,10 @@ class ClaudeSessionService(private val project: Project) : Disposable {
 
         val jsonlPath = projectDir.resolve("$sessionId.jsonl")
 
+        // Before the file goes: whatever is holding its parsed contents would otherwise be able
+        // to answer for it afterwards.
+        accumulators.remove(jsonlPath)
+
         try {
             Files.deleteIfExists(jsonlPath)
         } catch (e: Exception) {
@@ -242,13 +246,21 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     private fun applyTranscripts(paths: Set<Path>) {
         val basePath = project.basePath ?: return
         val current = cachedSessions ?: loadSessions().also { cachedSessions = it }
-        val reparsed = paths.mapNotNull { path ->
+        val (present, gone) = paths.partition { Files.exists(it) }
+
+        // A deleted transcript still has an accumulator holding everything it ever said, so
+        // reparsing it would put the session straight back into the list.
+        gone.forEach { accumulators.remove(it) }
+        val removedIds = gone.mapTo(HashSet()) { it.fileName.toString().removeSuffix(".jsonl") }
+
+        val reparsed = present.mapNotNull { path ->
             runCatching { parseJsonlSession(path, worktreeNameOf(path, basePath)) }.getOrNull()
         }
-        if (reparsed.isEmpty()) return
+        if (reparsed.isEmpty() && removedIds.isEmpty()) return
 
         val byId = reparsed.associateBy { it.sessionId }
-        cachedSessions = (current.filterNot { it.sessionId in byId } + reparsed).sortedByDescending { it.modified }
+        cachedSessions = (current.filterNot { it.sessionId in byId || it.sessionId in removedIds } + reparsed)
+            .sortedByDescending { it.lastPromptAt ?: it.modified }
 
         ApplicationManager.getApplication().invokeLater {
             listeners.forEach { it() }
