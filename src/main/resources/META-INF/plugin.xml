@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>com.canopy</id>
+    <id>com.patrikmeixner.canopy</id>
     <name>Canopy</name>
     <vendor url="https://github.com/patrik-meixner/canopy">Patrik Meixner</vendor>
 

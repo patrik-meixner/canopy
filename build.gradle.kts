@@ -53,8 +53,23 @@ intellijPlatform {
         }
     }
 
+    // Marketplace accepts unsigned uploads, but a signed one is verifiably ours; CI sets these.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
     publishing {
         token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
+
+    pluginVerification {
+        // Pinned to what the plugin is built against: `recommended()` reaches for an IDE build that
+        // has no downloadable artifact for this architecture and fails before verifying anything.
+        ides {
+            ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+        }
     }
 
     buildSearchableOptions = false

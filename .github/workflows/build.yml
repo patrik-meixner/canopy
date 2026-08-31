@@ -19,7 +19,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - run: ./gradlew buildPlugin
+      - run: ./gradlew buildPlugin test
+
+      # Compatibility is what moderation checks; better to hear it here than from them.
+      - run: ./gradlew verifyPlugin
 
       - uses: actions/upload-artifact@v6
         with:
