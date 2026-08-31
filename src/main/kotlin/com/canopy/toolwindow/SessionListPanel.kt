@@ -689,7 +689,11 @@ class SessionListPanel(
         }
         if (spinning.isEmpty()) return
 
-        spinning.forEach { table.repaint(table.getCellRect(it, 0, true)) }
+        // Only the strip the glyph occupies: the rest of the card has not changed.
+        spinning.forEach { row ->
+            val cell = table.getCellRect(row, 0, true)
+            table.repaint(cell.x, cell.y, GLYPH_STRIP_WIDTH, cell.height)
+        }
     }
 
     fun refreshStatuses() {
@@ -967,3 +971,5 @@ private class PurgeDialog(
 private const val MIN_TRANSCRIPT_QUERY = 2
 
 private const val SESSION_PAGE = 30
+
+private val GLYPH_STRIP_WIDTH = JBUI.scale(44)

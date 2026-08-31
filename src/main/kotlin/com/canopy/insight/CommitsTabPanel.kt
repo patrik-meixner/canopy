@@ -85,10 +85,16 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         val since = insightStart()
 
         CanopyExecutor.submit {
-            val collected = roots
+            // One git log per repository, and they wait on the disk rather than on each other.
+            val logs = roots
                 .mapNotNull { (repository, path) -> repositoryRootOf(path)?.let { repository to it } }
                 .distinctBy { it.second }
-                .flatMap { (repository, root) -> SessionCommits.list(root, repository, since) }
+                .map { (repository, root) ->
+                    java.util.concurrent.Callable { SessionCommits.list(root, repository, since) }
+                }
+            val collected = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
+                .invokeAll(logs)
+                .flatMap { it.get() }
                 .sortedByDescending { it.atMillis }
 
             ApplicationManager.getApplication().invokeLater {

@@ -19,6 +19,14 @@ object InsightUi {
     private const val SELECTED_HOVER_TINT = 0.46
     private const val HOVER_TINT = 0.16
 
+    private val tints = java.util.concurrent.ConcurrentHashMap<Double, Color>()
+
+    private val ISLAND: Color = JBColor.lazy { JBUI.CurrentTheme.ToolWindow.background() }
+
+    private val PANEL: Color = JBColor.lazy {
+        com.intellij.openapi.editor.colors.EditorColorsManager.getInstance().globalScheme.defaultBackground
+    }
+
     /** The card carries the accent; the strip behind it stays the list, so nothing frames the card. */
     fun cardBackground(selected: Boolean, hovered: Boolean = false): Color = when {
         selected && hovered -> accentTint(SELECTED_HOVER_TINT)
@@ -29,8 +37,14 @@ object InsightUi {
 
     fun hoverBackground(): Color = accentTint(HOVER_TINT)
 
-    /** The IDE's own accent, mixed into the list background rather than replacing it. */
-    fun accentTint(strength: Double): Color = JBColor.lazy { blend(islandBackground(), accent(), strength) }
+    /**
+     * The IDE's own accent, mixed into the list background rather than replacing it.
+     *
+     * One [JBColor] per strength, held: a lazy colour already re-reads the theme whenever it is
+     * painted, so building a new one per row per repaint allocated for nothing.
+     */
+    fun accentTint(strength: Double): Color =
+        tints.getOrPut(strength) { JBColor.lazy { blend(islandBackground(), accent(), strength) } }
 
     fun cardForeground(selected: Boolean): Color =
         if (selected) UIUtil.getLabelForeground() else UIUtil.getLabelForeground()
@@ -52,12 +66,10 @@ object InsightUi {
     fun waiting(): Color = JBUI.CurrentTheme.Focus.warningColor(true)
 
     /** The tone the tool window's own toolbar has, so a card belongs to the panel it sits in. */
-    fun islandBackground(): Color = JBColor.lazy { JBUI.CurrentTheme.ToolWindow.background() }
+    fun islandBackground(): Color = ISLAND
 
     /** The strip behind the cards is the editor's ground, which is what the panel opens onto. */
-    fun panelBackground(): Color = JBColor.lazy {
-        com.intellij.openapi.editor.colors.EditorColorsManager.getInstance().globalScheme.defaultBackground
-    }
+    fun panelBackground(): Color = PANEL
 
 }
 
