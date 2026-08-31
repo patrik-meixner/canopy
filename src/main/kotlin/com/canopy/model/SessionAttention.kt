@@ -25,12 +25,25 @@ enum class SessionAttention(val rank: Int, val glyph: String) {
  * the session is actually running — otherwise every finished session from months ago would look
  * like it were waiting.
  */
-fun sessionAttentionFor(notifyState: String?, isRunning: Boolean, lastEntryRole: String?): SessionAttention {
-    if (notifyState != null) return sessionAttentionOf(notifyState)
+fun sessionAttentionFor(
+    notifyState: String?,
+    isRunning: Boolean,
+    lastEntryRole: String?,
+    idleForMillis: Long = 0
+): SessionAttention {
+    val reported = notifyState?.let(::sessionAttentionOf)
+    // A turn interrupted mid-tool never runs the hook that would clear the state, so the session
+    // reads as working for as long as it exists. Its transcript standing still says otherwise.
+    if (reported != null && !(reported == SessionAttention.Working && idleForMillis > WORKING_GOES_STALE_MS)) {
+        return reported
+    }
     if (!isRunning) return SessionAttention.None
 
     return if (lastEntryRole == "assistant") SessionAttention.WaitingForInput else SessionAttention.Working
 }
+
+/** Long enough that a genuinely long tool run is never mistaken for an abandoned one. */
+const val WORKING_GOES_STALE_MS = 300_000L
 
 fun sessionAttentionOf(notifyState: String?): SessionAttention = when {
     notifyState == null -> SessionAttention.None

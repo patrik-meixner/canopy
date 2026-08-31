@@ -36,6 +36,9 @@ class ClaudeSessionIconProvider : FileIconProvider {
         // time, so instances are safe to reuse across tabs). Empty string = idle placeholder.
         private val badgeCache = HashMap<String, StatusGlyphIcon>()
 
+        /** Matches the weight the same glyph has in the session list, so the two read as one thing. */
+        private const val GLYPH_TO_BOX = 0.9f
+
         @Synchronized
         private fun badgeFor(glyph: String?): StatusGlyphIcon =
             badgeCache.getOrPut(glyph ?: "") { StatusGlyphIcon(glyph ?: "") }
@@ -44,22 +47,28 @@ class ClaudeSessionIconProvider : FileIconProvider {
     /** Paints a status glyph centered in a fixed 16px box; an empty glyph reserves the box but draws nothing. */
     private class StatusGlyphIcon(private val glyph: String) : Icon {
         private val size = JBUIScale.scale(16)
+        private val spins = glyph == com.canopy.model.SessionAttention.Working.glyph
 
         override fun getIconWidth(): Int = size
         override fun getIconHeight(): Int = size
 
         override fun paintIcon(c: Component?, g: Graphics, x: Int, y: Int) {
             if (glyph.isEmpty()) return
+            // A working session spins in the tab as it does in the list. Asking for the next repaint
+            // from the paint itself keeps it to the tabs that are on screen and showing a spinner.
+            val drawn = if (spins) com.canopy.toolwindow.spinnerFrame(System.currentTimeMillis()) else glyph
+            if (spins) c?.repaint(com.canopy.toolwindow.SPINNER_FRAME_MS)
+
             val g2 = g.create() as Graphics2D
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
                 g2.color = c?.foreground ?: UIUtil.getLabelForeground()
-                g2.font = (c?.font ?: UIUtil.getLabelFont()).deriveFont(size * 0.72f)
+                g2.font = (c?.font ?: UIUtil.getLabelFont()).deriveFont(size * GLYPH_TO_BOX)
                 val fm = g2.fontMetrics
-                val tx = x + (size - fm.stringWidth(glyph)) / 2f
+                val tx = x + (size - fm.stringWidth(drawn)) / 2f
                 val ty = y + (size - fm.height) / 2f + fm.ascent
-                g2.drawString(glyph, tx, ty)
+                g2.drawString(drawn, tx, ty)
             } finally {
                 g2.dispose()
             }

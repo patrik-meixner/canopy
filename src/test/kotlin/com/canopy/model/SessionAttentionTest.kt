@@ -1,72 +1,52 @@
 package com.canopy.model
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class SessionAttentionTest {
 
     @Test
-    fun `a permission prompt outranks everything else`() {
-        val ranks = listOf(
-            sessionAttentionOf("permission_prompt"),
-            sessionAttentionOf("idle_prompt"),
-            sessionAttentionOf("tool:Bash"),
-            sessionAttentionOf(null)
-        ).map { it.rank }
+    fun `a tool running right now is working`() {
+        val attention = sessionAttentionFor("tool:Bash", isRunning = true, lastEntryRole = "user", idleForMillis = 1_000)
 
-        assertEquals(ranks.sorted(), ranks)
+        assertEquals(SessionAttention.Working, attention)
     }
 
     @Test
-    fun `any tool counts as working`() {
-        assertEquals(SessionAttention.Working, sessionAttentionOf("tool:Edit"))
-        assertEquals(SessionAttention.Working, sessionAttentionOf("tool:WebSearch"))
-    }
-
-    @Test
-    fun `only prompts block you`() {
-        assertTrue(sessionAttentionOf("permission_prompt").isBlocking)
-        assertTrue(sessionAttentionOf("idle_prompt").isBlocking)
-        assertFalse(sessionAttentionOf("tool:Bash").isBlocking)
-        assertFalse(sessionAttentionOf("compact").isBlocking)
-    }
-
-    @Test
-    fun `a finished session that is not running never asks for attention`() {
-        assertEquals(
-            SessionAttention.None,
-            sessionAttentionFor(notifyState = null, isRunning = false, lastEntryRole = "assistant")
+    fun `a tool state left behind by an interrupted turn stops claiming to be working`() {
+        val attention = sessionAttentionFor(
+            "tool:Bash",
+            isRunning = true,
+            lastEntryRole = "assistant",
+            idleForMillis = LONG_AFTER_ANY_TOOL
         )
+
+        assertEquals(SessionAttention.WaitingForInput, attention)
     }
 
     @Test
-    fun `an external session whose last word was the agent's is waiting for you`() {
-        assertEquals(
-            SessionAttention.WaitingForInput,
-            sessionAttentionFor(notifyState = null, isRunning = true, lastEntryRole = "assistant")
+    fun `a permission prompt never goes stale, because nothing else will clear it`() {
+        val attention = sessionAttentionFor(
+            "permission_prompt",
+            isRunning = true,
+            lastEntryRole = "assistant",
+            idleForMillis = LONG_AFTER_ANY_TOOL
         )
+
+        assertEquals(SessionAttention.NeedsPermission, attention)
     }
 
     @Test
-    fun `an external session still answering counts as working`() {
-        assertEquals(
-            SessionAttention.Working,
-            sessionAttentionFor(notifyState = null, isRunning = true, lastEntryRole = "user")
+    fun `a stale tool state on a session that is not running at all is simply idle`() {
+        val attention = sessionAttentionFor(
+            "tool:Bash",
+            isRunning = false,
+            lastEntryRole = "assistant",
+            idleForMillis = LONG_AFTER_ANY_TOOL
         )
-    }
 
-    @Test
-    fun `the notify state wins over the transcript guess`() {
-        assertEquals(
-            SessionAttention.NeedsPermission,
-            sessionAttentionFor(notifyState = "permission_prompt", isRunning = true, lastEntryRole = "user")
-        )
-    }
-
-    @Test
-    fun `an unknown state is not treated as attention`() {
-        assertEquals(SessionAttention.None, sessionAttentionOf("something_new"))
+        assertEquals(SessionAttention.None, attention)
     }
 }
+
+private const val LONG_AFTER_ANY_TOOL = 24L * 60 * 60 * 1000

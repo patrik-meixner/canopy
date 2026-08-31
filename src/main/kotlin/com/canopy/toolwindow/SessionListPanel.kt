@@ -554,7 +554,8 @@ class SessionListPanel(
         notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(session.sessionId),
         isRunning = sessionService.isExternallyOpen(session.sessionId) ||
             getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN,
-        lastEntryRole = session.lastEntryRole
+        lastEntryRole = session.lastEntryRole,
+        idleForMillis = System.currentTimeMillis() - session.modified.toEpochMilli()
     )
 
     private fun selectedSession(): SessionDisplay? {

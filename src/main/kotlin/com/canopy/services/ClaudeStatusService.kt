@@ -118,6 +118,9 @@ class ClaudeStatusService(private val project: Project) : Disposable {
             appendLine("    PostCompact)")
             appendLine("      state=\"clear\"")
             appendLine("      ;;")
+            appendLine("    Stop|SubagentStop|SessionEnd)")
+            appendLine("      state=\"clear\"")
+            appendLine("      ;;")
             appendLine("  esac")
             appendLine("  if [ -n \"\$state\" ]; then")
             appendLine("    echo \"\$state\" > \"\${CANOPY_NOTIFY_FILE}.\$\$\"")
@@ -187,6 +190,11 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         }
         hooks.add("PreCompact", compactRule)
         hooks.add("PostCompact", compactRule.deepCopy())
+
+        // A turn interrupted between PreToolUse and PostToolUse never clears the tool state, and
+        // the session then reads as working forever. The end of the turn says it plainly.
+        hooks.add("Stop", compactRule.deepCopy())
+        hooks.add("SessionEnd", compactRule.deepCopy())
 
         root.add("hooks", hooks)
 

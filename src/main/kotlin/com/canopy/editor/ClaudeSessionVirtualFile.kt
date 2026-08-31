@@ -66,15 +66,15 @@ class ClaudeSessionVirtualFile(
     // baked into the title text — a text glyph has a variable advance width, so toggling
     // it resized the tab and reflowed the whole strip. Returning null means "idle": the
     // badge slot is reserved but drawn empty, so the tab width is identical in every state.
+    /** The same vocabulary the session list uses, so a tab and its row never disagree. */
     fun statusGlyph(): String? = when {
-        isExternallyOpen -> "↗"                      // ↗ external session
-        isUnresponsive -> "⊘"                        // ⊘ unresponsive
-        notifyState == "permission_prompt" -> "⚠"    // ⚠ needs permission
-        notifyState == "idle_prompt" -> "○"          // ○ waiting for input
-        notifyState?.startsWith("tool:") == true -> "⚙" // ⚙ tool in use
-        notifyState == "compact" -> "↻"              // ↻ compacting
-        isThinking -> "●"                            // ● thinking
-        else -> null                                 // idle — no badge, slot stays reserved and empty
+        isExternallyOpen -> "↗"
+        isUnresponsive -> "⊘"
+        notifyState != null -> com.canopy.model.sessionAttentionOf(notifyState)
+            .takeIf { it != com.canopy.model.SessionAttention.None }
+            ?.glyph
+        isThinking -> com.canopy.model.SessionAttention.Working.glyph
+        else -> null
     }
 
     fun computeTabTitle(): String = baseName
