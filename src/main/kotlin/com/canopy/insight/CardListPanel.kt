@@ -43,6 +43,7 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
     }
 
     private var shown = 0
+    private var keys: List<String> = emptyList()
     private var glide: Timer? = null
 
     init {
@@ -50,7 +51,17 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
         add(scroll, BorderLayout.CENTER)
     }
 
-    fun setCards(cards: List<JComponent>) {
+    fun setCards(cards: List<JComponent>) = setCards(cards, cards.indices.map(Int::toString))
+
+    /**
+     * Rebuilding an unchanged list is what made the view jump: the stack is torn down and laid out
+     * again on every tick, and a scroll position restored as a raw pixel offset lands somewhere else
+     * once the new heights settle. Identical keys mean identical cards, so nothing is touched.
+     */
+    fun setCards(cards: List<JComponent>, cardKeys: List<String>) {
+        if (cardKeys == keys && cards.size == shown) return
+
+        keys = cardKeys
         val bar = scroll.verticalScrollBar
         val keptValue = bar.value
         val wasAtBottom = bar.value + bar.visibleAmount >= bar.maximum - JBUI.scale(BOTTOM_SLACK)

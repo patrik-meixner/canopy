@@ -10,34 +10,30 @@ import javax.swing.JScrollBar
  */
 object TerminalScroll {
 
-    private const val KEY_LENGTH = 40
+    private const val KEY_LENGTH = 24
 
     fun scrollTo(widget: JBTerminalWidget, text: String): Boolean {
         val key = text.take(KEY_LENGTH).trim()
         if (key.isEmpty()) return false
 
         val buffer = widget.terminalTextBuffer
-        var target: Int? = null
-        var history = 0
+        val history: Int
+        val lines: List<String>
 
         buffer.lock()
         try {
             history = buffer.historyLinesCount
-            for (row in -history until buffer.screenLinesCount) {
-                if (buffer.getLine(row).getText().contains(key)) {
-                    target = row
-                    break
-                }
-            }
+            lines = (-history until buffer.screenLinesCount).map { buffer.getLine(it).getText() }
         } catch (_: Exception) {
             return false
         } finally {
             buffer.unlock()
         }
 
-        val row = target ?: return false
-        val lines = history
-        ApplicationManager.getApplication().invokeLater { scrollBarOf(widget)?.let { it.value = (row + lines).coerceIn(it.minimum, it.maximum - it.visibleAmount) } }
+        val row = findScrollbackRow(lines, key)?.minus(history) ?: return false
+        ApplicationManager.getApplication().invokeLater {
+            scrollBarOf(widget)?.let { it.value = (row + history).coerceIn(it.minimum, it.maximum - it.visibleAmount) }
+        }
 
         return true
     }

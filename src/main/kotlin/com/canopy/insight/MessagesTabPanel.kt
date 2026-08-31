@@ -45,11 +45,17 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
 
     private fun rebuild() {
         val query = search.text.trim()
+        val shown = messages.filter { it.text.contains(query, ignoreCase = true) }
 
         cards.setCards(
-            messages
-                .filter { it.text.contains(query, ignoreCase = true) }
-                .map { message -> MessageCard(message) { card, event -> open(card, event, message) } }
+            shown.map { message ->
+                MessageCard(
+                    message,
+                    onOpen = { card, event -> open(card, event, message) },
+                    onJump = { jumpTo(message) }
+                )
+            },
+            shown.map { "${it.ordinal}:${it.text.length}" }
         )
     }
 
@@ -57,15 +63,27 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
         MessagePreview.show(card, event.point, message) { jumpTo(message) }
     }
 
-    /** Scrolling the terminal is best effort: a message older than the scrollback is simply gone. */
+    /** A message older than the scrollback is genuinely gone, which is worth saying rather than
+     *  looking like the click did nothing. */
     private fun jumpTo(message: SessionMessage) {
         val terminal = selectedSession()
             ?.let { session -> FileEditorManager.getInstance(project).getEditors(session) }
             ?.filterIsInstance<ClaudeSessionEditor>()
             ?.firstOrNull()
             ?.terminal()
-            ?: return
+            ?: return notFound("This session has no open terminal tab.")
 
-        ApplicationManager.getApplication().executeOnPooledThread { TerminalScroll.scrollTo(terminal, message.headline) }
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val found = TerminalScroll.scrollTo(terminal, message.headline)
+            if (found) return@executeOnPooledThread
+
+            ApplicationManager.getApplication().invokeLater {
+                notFound("That message is no longer in the terminal's scrollback.")
+            }
+        }
+    }
+
+    private fun notFound(reason: String) {
+        com.intellij.openapi.ui.Messages.showInfoMessage(project, reason, "Cannot Scroll There")
     }
 }

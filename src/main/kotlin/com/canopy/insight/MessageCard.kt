@@ -22,7 +22,8 @@ private const val PREVIEW_LINES = 4
  */
 class MessageCard(
     private val message: SessionMessage,
-    private val onOpen: (MessageCard, MouseEvent) -> Unit
+    private val onOpen: (MessageCard, MouseEvent) -> Unit,
+    private val onJump: () -> Unit
 ) : JPanel(BorderLayout()) {
 
     private val island = IslandPanel(BorderLayout(JBUI.scale(8), JBUI.scale(6)))
@@ -38,7 +39,17 @@ class MessageCard(
         add(island, BorderLayout.CENTER)
 
         val opener = object : MouseAdapter() {
-            override fun mouseClicked(event: MouseEvent) = onOpen(this@MessageCard, event)
+            override fun mouseClicked(event: MouseEvent) {
+                if (event.isPopupTrigger || javax.swing.SwingUtilities.isRightMouseButton(event)) {
+                    return menu().show(event.component, event.x, event.y)
+                }
+
+                onOpen(this@MessageCard, event)
+            }
+
+            override fun mousePressed(event: MouseEvent) {
+                if (event.isPopupTrigger) menu().show(event.component, event.x, event.y)
+            }
 
             override fun mouseEntered(event: MouseEvent) = highlight(true)
 
@@ -46,6 +57,16 @@ class MessageCard(
         }
         addMouseListener(opener)
         island.addMouseListener(opener)
+    }
+
+    private fun menu() = javax.swing.JPopupMenu().apply {
+        add(javax.swing.JMenuItem("Scroll Terminal to This Message").apply { addActionListener { onJump() } })
+        add(javax.swing.JMenuItem("Copy Text").apply {
+            addActionListener {
+                com.intellij.openapi.ide.CopyPasteManager.getInstance()
+                    .setContents(java.awt.datatransfer.StringSelection(message.text))
+            }
+        })
     }
 
     /** Only the tone changes on hover: touching size or insets is what made rows jump. */
