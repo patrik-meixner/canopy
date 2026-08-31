@@ -116,7 +116,7 @@ class SessionDetailPanel(
             // Without this the spinner would outlive any git failure, since the render that
             // clears it only runs on the success path.
             val changeSet = try {
-                resolveSession(sessionId)?.let(::collectChanges) ?: EMPTY_CHANGES
+                collectChanges(resolveSession(sessionId))
             } catch (e: Exception) {
                 log.warn("Failed to collect changes for session $sessionId", e)
                 EMPTY_CHANGES
@@ -136,9 +136,9 @@ class SessionDetailPanel(
      * refinement rather than a source of truth: with none recorded, every repo in the workspace is
      * reviewed instead of claiming the session changed nothing.
      */
-    private fun collectChanges(session: SessionDisplay): SessionChangeSet {
-        val roots = session.touchedRoots.keys.ifEmpty { workspaceRoots() }
-        val collected = roots.map { SessionChanges.collect(it, session.startedAt) }
+    private fun collectChanges(session: SessionDisplay?): SessionChangeSet {
+        val scope = changeScopeFor(session, workspaceRoots())
+        val collected = scope.roots.map { SessionChanges.collect(it, scope.since) }
 
         return SessionChangeSet(
             changes = SessionChangeSection.entries.associateWith { section ->
@@ -236,7 +236,7 @@ class SessionDetailPanel(
     }
 
     private fun rootsOf(sessionId: String): Set<String> =
-        resolveSession(sessionId)?.touchedRoots?.keys?.ifEmpty { workspaceRoots() } ?: workspaceRoots()
+        changeScopeFor(resolveSession(sessionId), workspaceRoots()).roots
 
     private fun workspaceRoots(): Set<String> {
         val scopes = com.canopy.services.RepoScopeService.getInstance(project).cachedScopes()
@@ -268,4 +268,20 @@ class SessionDetailPanel(
         const val BROWSER_CARD = "browser"
         val EMPTY_CHANGES = SessionChangeSet(emptyMap(), emptyList())
     }
+}
+
+data class ChangeScope(val roots: Set<String>, val since: java.time.Instant?)
+
+/**
+ * What a Detail tab reviews.
+ *
+ * A session with no transcript yet cannot be resolved, and reviewing nothing was wrong: uncommitted
+ * work exists before the first message and is the reason the session was started. Without a session
+ * the whole workspace is in scope and nothing is bounded by time, since there is no start to bound
+ * it by.
+ */
+internal fun changeScopeFor(session: com.canopy.model.SessionDisplay?, workspaceRoots: Set<String>): ChangeScope {
+    if (session == null) return ChangeScope(workspaceRoots, null)
+
+    return ChangeScope(session.touchedRoots.keys.ifEmpty { workspaceRoots }, session.startedAt)
 }
