@@ -165,7 +165,8 @@ class SessionDetailPanel(
             changes = SessionChangeSection.entries.associateWith { section ->
                 collected.flatMap { it.changes[section].orEmpty() }
             }.filterValues { it.isNotEmpty() },
-            unversioned = if (com.canopy.settings.CanopySettings.getInstance().state.showUnversionedInDetail) collected.flatMap { it.unversioned } else emptyList()
+            unversioned = if (com.canopy.settings.CanopySettings.getInstance().state.showUnversionedInDetail) collected.flatMap { it.unversioned } else emptyList(),
+            pushedCommits = collected.flatMap { it.pushedCommits }.sortedByDescending { it.commit.atMillis }
         )
     }
 

@@ -4,6 +4,8 @@ import com.canopy.util.ProcessHelper
 import com.intellij.openapi.vcs.changes.Change
 import java.time.Instant
 
+data class CommitWithChanges(val commit: CommitEntry, val changes: List<Change>)
+
 data class CommitEntry(
     val root: String,
     val repository: String,
@@ -32,6 +34,39 @@ object SessionCommits {
         val output = git(root, *args.toTypedArray()) ?: return emptyList()
 
         return parseCommits(output, root, repository)
+    }
+
+    /**
+     * Commits in a range together with the files each touched, in one pass.
+     *
+     * One `git show` per commit would be a hundred processes to draw a hundred rows; `--name-status`
+     * on the log itself answers both in a single call, and the file contents stay lazy.
+     */
+    fun withChanges(root: String, repository: String, range: String): List<CommitWithChanges> {
+        val output = git(
+            root,
+            "log",
+            "--format=%x01%H%x1f%s%x1f%an%x1f%at",
+            "--name-status",
+            "-M",
+            "--no-merges",
+            "--max-count=$LIMIT",
+            range
+        ) ?: return emptyList()
+
+        return parseCommitsWithFiles(output, root, repository).map { (commit, files) ->
+            CommitWithChanges(
+                commit,
+                files.map { (status, oldPath, newPath) -> changeFor(root, commit.sha, status, oldPath, newPath) }
+            )
+        }
+    }
+
+    internal fun changeFor(root: String, sha: String, status: Char, oldPath: String, newPath: String): Change {
+        val before = if (status == 'A') null else GitContentRevision(root, oldPath, "$sha^", localPathIn(root, oldPath))
+        val after = if (status == 'D') null else GitContentRevision(root, newPath, sha, localPathIn(root, newPath))
+
+        return Change(before, after)
     }
 
     /** A commit's own diff against its parent, which is what the file tree under it shows. */
@@ -90,3 +125,32 @@ internal fun parseNameStatusLines(output: String): List<Triple<Char, String, Str
             else -> if (parts.size >= 2) Triple(code, parts[1], parts[1]) else null
         }
     }
+
+private const val COMMIT_MARKER = '\u0001'
+
+/**
+ * Commit headers are marked, so a name-status line can never be mistaken for one.
+ *
+ * A commit subject can contain anything, including something that looks like a status line.
+ */
+internal fun parseCommitsWithFiles(
+    output: String,
+    root: String,
+    repository: String
+): List<Pair<CommitEntry, List<Triple<Char, String, String>>>> {
+    val result = mutableListOf<Pair<CommitEntry, MutableList<Triple<Char, String, String>>>>()
+
+    for (line in output.lineSequence()) {
+        if (line.isBlank()) continue
+        if (line.first() == COMMIT_MARKER) {
+            val commit = parseCommits(line.drop(1), root, repository).firstOrNull() ?: continue
+            result.add(commit to mutableListOf())
+            continue
+        }
+
+        val current = result.lastOrNull() ?: continue
+        parseNameStatusLines(line).firstOrNull()?.let { current.second.add(it) }
+    }
+
+    return result.map { (commit, files) -> commit to files.toList() }
+}

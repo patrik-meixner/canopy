@@ -25,6 +25,7 @@ class SectionedChangesBrowser(
 
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
     private var unversioned: List<FilePath> = emptyList()
+    private var pushedCommits: List<CommitWithChanges> = emptyList()
 
     init {
         init()
@@ -195,6 +196,7 @@ class SectionedChangesBrowser(
     fun setSections(changeSet: SessionChangeSet) {
         sections = changeSet.changes
         unversioned = changeSet.unversioned
+        pushedCommits = changeSet.pushedCommits
         // Keeping the state stops a tab switch from throwing away what was expanded and collapsed.
         viewer.rebuildTree(com.intellij.openapi.vcs.changes.ui.ChangesTree.ALWAYS_KEEP)
         collapsePushedOnce()
@@ -223,12 +225,28 @@ class SectionedChangesBrowser(
             val changes = sections[section].orEmpty()
             if (changes.isEmpty()) continue
 
-            builder.insertChanges(changes, tagNode(builder, section))
+            val tag = tagNode(builder, section)
+            // A hundred pushed files are a handful of commits, and the commit is what they mean.
+            if (section == SessionChangeSection.Pushed && pushedCommits.isNotEmpty()) {
+                insertByCommit(builder, tag)
+                continue
+            }
+
+            builder.insertChanges(changes, tag)
         }
 
         if (unversioned.isNotEmpty()) builder.setUnversioned(unversioned)
 
         return builder.build()
+    }
+
+    private fun insertByCommit(builder: TreeModelBuilder, parent: ChangesBrowserNode<*>) {
+        for (entry in pushedCommits) {
+            if (entry.changes.isEmpty()) continue
+            val node = CommitBrowserNode(entry)
+            builder.insertSubtreeRoot(node, parent)
+            builder.insertChanges(entry.changes, node)
+        }
     }
 
     private fun tagNode(builder: TreeModelBuilder, section: SessionChangeSection): ChangesBrowserNode<*> {

@@ -25,7 +25,9 @@ enum class SessionChangeSection(val title: String, val hint: String, val isYours
  */
 data class SessionChangeSet(
     val changes: Map<SessionChangeSection, List<Change>>,
-    val unversioned: List<FilePath>
+    val unversioned: List<FilePath>,
+    /** Pushed work grouped the way it was made: a hundred files are a handful of commits. */
+    val pushedCommits: List<CommitWithChanges> = emptyList()
 ) {
     val isEmpty: Boolean get() = changes.isEmpty() && unversioned.isEmpty()
 
@@ -59,7 +61,8 @@ object SessionChanges {
                 SessionChangeSection.Committed to unpushedRange(root, sharedTip),
                 SessionChangeSection.Pushed to pushedRange(root, sharedTip, since)
             ).filterValues { it.isNotEmpty() },
-            unversioned = untracked(root)
+            unversioned = untracked(root),
+            pushedCommits = pushedCommits(root, sharedTip, since)
         )
     }
 
@@ -81,6 +84,19 @@ object SessionChanges {
      * base branch — a branch that was never pushed has all of its commits unshared.
      */
     internal fun commitRangeStart(sharedTip: String?, base: String?): String? = sharedTip ?: base
+
+    /** The same range as [pushedRange], read per commit so the section can be grouped by them. */
+    private fun pushedCommits(
+        root: String,
+        sharedTip: String?,
+        since: java.time.Instant?
+    ): List<CommitWithChanges> {
+        if (sharedTip == null) return emptyList()
+        val from = sessionStartPoint(root, since) ?: return emptyList()
+        val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
+
+        return SessionCommits.withChanges(root, repository, "$from..$sharedTip")
+    }
 
     private fun pushedRange(root: String, sharedTip: String?, since: java.time.Instant?): List<Change> {
         if (sharedTip == null) return emptyList()
