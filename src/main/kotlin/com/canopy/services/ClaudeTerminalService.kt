@@ -157,6 +157,8 @@ class ClaudeTerminalService(private val project: Project) {
             PtyProcessBuilder(fullCommand)
                 .setEnvironment(env)
                 .setDirectory(effectiveWorkingDir)
+                .setInitialColumns(INITIAL_COLUMNS)
+                .setInitialRows(INITIAL_ROWS)
                 .start()
         } catch (e: Exception) {
             log.error("Canopy: createWidget — failed to start PTY process: ${fullCommand.toList()}", e)
@@ -187,7 +189,7 @@ class ClaudeTerminalService(private val project: Project) {
         // The tool window's terminal installs these; a widget built directly gets none, which is
         // why a URL printed by a status line was plain text rather than something to click.
         widget.addMessageFilter(com.intellij.execution.filters.UrlFilter(project))
-        widget.start(connector)
+        startOnceWide(widget) { widget.start(connector) }
         ClipboardImagePaste.install(widget.terminalPanel) { sendInput(ptyProcess, it) }
 
         Disposer.register(parent, Disposable {
@@ -203,6 +205,28 @@ class ClaudeTerminalService(private val project: Project) {
         return TerminalSession(widget, ptyProcess)
     }
 
+    /**
+     * A terminal started before its panel has been laid out reports a handful of columns, and the
+     * agent wraps its whole transcript to that width. The wrapping is baked into the scrollback, so
+     * the later resize widens new output and leaves everything above it in a narrow ribbon.
+     */
+    private fun startOnceWide(widget: JBTerminalWidget, start: () -> Unit) {
+        val panel = widget.terminalPanel
+        if (panel.width >= MIN_START_WIDTH) return start()
+
+        val started = java.util.concurrent.atomic.AtomicBoolean(false)
+        val begin = { if (!started.getAndSet(true)) start() }
+
+        panel.addComponentListener(object : java.awt.event.ComponentAdapter() {
+            override fun componentResized(event: java.awt.event.ComponentEvent) {
+                if (panel.width >= MIN_START_WIDTH) begin()
+            }
+        })
+
+        // Waiting forever on a width that never arrives would be a tab that does nothing at all.
+        javax.swing.Timer(START_FALLBACK_MS) { begin() }.apply { isRepeats = false }.start()
+    }
+
     private fun sendInput(process: PtyProcess, text: String) {
         if (!process.isAlive) return
         try {
@@ -214,6 +238,11 @@ class ClaudeTerminalService(private val project: Project) {
     }
 
     companion object {
+        private const val INITIAL_COLUMNS = 120
+        private const val INITIAL_ROWS = 40
+        private const val MIN_START_WIDTH = 200
+        private const val START_FALLBACK_MS = 1500
+
         fun getInstance(project: Project): ClaudeTerminalService =
             project.getService(ClaudeTerminalService::class.java)
     }
