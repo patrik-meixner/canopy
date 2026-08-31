@@ -42,10 +42,10 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     init {
         background = InsightUi.panelBackground()
         commits.cellRenderer = CommitRenderer()
-        commits.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        commits.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
         commits.emptyText.text = "This session has committed nothing yet"
         commits.border = JBUI.Borders.empty(InsightUi.GAP, InsightUi.GAP)
-        commits.addListSelectionListener { if (!it.valueIsAdjusting) showFilesOf(commits.selectedValue) }
+        commits.addListSelectionListener { if (!it.valueIsAdjusting) showFilesOf(commits.selectedValuesList) }
 
         files.hideViewerBorder()
 
@@ -71,13 +71,15 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     }
 
     private fun showPage() {
-        val kept = commits.selectedValue?.sha
+        val kept = commits.selectedValuesList.mapTo(HashSet()) { it.sha }
         val page = pageful(collected, limit)
 
         more.show(page.remaining, COMMIT_PAGE)
         model.clear()
         page.shown.forEach { model.addElement(it) }
-        (0 until model.size()).firstOrNull { model[it].sha == kept }?.let(commits::setSelectedIndex)
+        // Every commit that was selected and is still listed, so a reload keeps a whole range.
+        val rows = (0 until model.size()).filter { model[it].sha in kept }
+        if (rows.isNotEmpty()) commits.selectedIndices = rows.toIntArray()
     }
 
     /** One git log per repository the session wrote to, off the EDT, newest commit first. */
@@ -122,14 +124,20 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         return null
     }
 
-    private fun showFilesOf(commit: CommitEntry?) {
-        if (commit == null) return files.setChangesToDisplay(emptyList())
+    /** Several commits answer as one set of files, which is what a range of them means. */
+    private fun showFilesOf(selected: List<CommitEntry>) {
+        if (selected.isEmpty()) return files.setChangesToDisplay(emptyList())
+
+        val shas = selected.map { it.sha }
 
         CanopyExecutor.submit {
-            val changes: List<Change> = SessionCommits.changesIn(commit.root, commit.sha)
+            val perCommit = selected.flatMap { com.canopy.toolwindow.SessionCommits.changesIn(it.root, it.sha) }
+            val changes = com.canopy.toolwindow.unionByPath(perCommit) {
+                it.afterRevision?.file?.path ?: it.beforeRevision?.file?.path
+            }
 
             ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed || commits.selectedValue?.sha != commit.sha) return@invokeLater
+                if (project.isDisposed || commits.selectedValuesList.map { it.sha } != shas) return@invokeLater
 
                 files.setChangesToDisplay(changes)
             }
