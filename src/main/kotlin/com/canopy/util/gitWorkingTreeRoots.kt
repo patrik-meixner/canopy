@@ -28,14 +28,20 @@ fun gitWorkingTreeRoots(paths: Set<String>): Map<String, Int> {
     val counts = LinkedHashMap<String, Int>()
 
     for (path in paths) {
-        val directory = Path.of(path).parent ?: continue
-        val root = GitRootCache.rootOf(directory) ?: continue
+        val root = GitRootCache.rootOf(directoryOf(Path.of(path))) ?: continue
 
         counts[root] = (counts[root] ?: 0) + 1
     }
 
     return counts
 }
+
+/**
+ * A shell command names directories as often as files - `cd` into a submodule, then write relative
+ * paths - and taking the parent of a directory attributes its work to the repository above it.
+ */
+internal fun directoryOf(path: Path): Path =
+    if (java.nio.file.Files.isDirectory(path)) path else path.parent ?: path
 
 private fun findRoot(start: Path, hasGitEntry: (Path) -> Boolean): String? {
     var current: Path? = start

@@ -127,10 +127,16 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
         }.also { it.start() }
     }
 
-    /** BoxLayout hands a component its preferred width unless the maximum says otherwise. */
+    /**
+     * Full width, but never taller than the card needs.
+     *
+     * A component's default maximum height is effectively unbounded, and BoxLayout shares whatever
+     * space is left among everything that will take it - so a handful of cards spread themselves
+     * down the panel with a gap between each.
+     */
     private fun <T : JComponent> T.alignedToWidth(): T = apply {
         alignmentX = Component.LEFT_ALIGNMENT
-        maximumSize = Dimension(Int.MAX_VALUE, maximumSize.height)
+        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
     }
 }
 

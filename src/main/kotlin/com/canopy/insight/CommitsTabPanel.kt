@@ -143,15 +143,8 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         return com.canopy.services.ClaudeSessionService.getInstance(project).cachedStartedAt(sessionId)
     }
 
-    private fun repositoryRootOf(path: String): String? {
-        var current: java.nio.file.Path? = java.nio.file.Path.of(path).parent
-        while (current != null) {
-            if (java.nio.file.Files.exists(current.resolve(".git"))) return current.toString()
-            current = current.parent
-        }
-
-        return null
-    }
+    private fun repositoryRootOf(path: String): String? =
+        com.canopy.util.GitRootCache.rootOf(com.canopy.util.directoryOf(java.nio.file.Path.of(path)))
 
     /** Several commits answer as one set of files, which is what a range of them means. */
     private fun showFilesOf(selected: List<CommitEntry>) {
