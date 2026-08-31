@@ -9,6 +9,8 @@
 Run Claude Code sessions inside your JetBrains IDE, then review what they changed across the
 project, its submodules and every git worktree, in a single diff tree.
 
+<img src="docs/screenshots/01-a-session-and-its-review.png" alt="A session running, and its review across four repositories">
+
 </div>
 
 ## Why
@@ -73,13 +75,17 @@ committed but unpushed, pushed, untracked.
 
 ### Know which agent wants you
 
-Sessions sort by what they need, not just by recency: waiting for permission first, then waiting
-for your reply, then working. A blocked session can be answered **without opening its tab** —
-approve a permission prompt or type a reply straight from the list.
+Sessions are ordered by when you last said something in one, so the list holds still while four
+agents write. What each one wants is in its glyph instead: waiting for permission, waiting for your
+reply, or working, which spins. A blocked session can be answered **without opening its tab** —
+approve a permission prompt or type a reply straight from the list. Sorting blocked agents to the
+top is a setting for anyone who prefers it.
 
 `Cmd+Shift+J` jumps to the next session that is blocked on you. `Cmd+Shift+O` opens the palette.
 
 ### Worktrees and submodules, properly
+
+<img src="docs/screenshots/02-worktrees-and-branches.png" alt="Worktrees grouped under the repository that owns them, with the sessions that ran in each">
 
 - Worktrees grouped under the repository that owns them, including each submodule's own, alongside
   a **branch tree** saying which worktree holds a branch, how far it has drifted, and whether its
