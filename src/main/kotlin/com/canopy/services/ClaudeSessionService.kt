@@ -100,6 +100,11 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     fun cachedDisplayName(sessionId: String): String? =
         cachedSessions?.firstOrNull { it.sessionId == sessionId }?.displayName
 
+    /** From the cache only: a checkpoint must not trigger a transcript sweep. */
+    fun cachedWorkingDir(sessionId: String): String? =
+        cachedSessions?.firstOrNull { it.sessionId == sessionId }
+            ?.let { session -> session.worktreeName?.let { com.canopy.util.ClaudePathEncoder.worktreeAbsolutePath(project.basePath ?: return null, it) } ?: session.projectPath }
+
     fun getSessions(): List<SessionDisplay> {
         var result = cachedSessions
         if (result == null) {

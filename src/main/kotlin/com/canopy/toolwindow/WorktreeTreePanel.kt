@@ -185,6 +185,19 @@ class WorktreeTreePanel(
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
             addSeparator()
+            add(object : AnAction("Run in Several Worktrees\u2026", "Start one prompt in several worktrees at once", AllIcons.Actions.RunAll) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val scope = selectedRepo()?.scope ?: selectedWorktree()?.scope ?: return
+
+                    fanOut(scope)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedRepo() != null || selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
             add(object : AnAction("New Worktree from Branch", "Check this branch out in its own worktree", AllIcons.General.Add) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val branch = selectedBranch() ?: return
@@ -249,6 +262,19 @@ class WorktreeTreePanel(
         return (0 until node.childCount)
             .mapNotNull { (node.getChildAt(it) as? DefaultMutableTreeNode)?.userObject as? WorktreeTreeNode.Worktree }
             .map { (it.status?.name ?: Path.of(it.entry.path).fileName.toString()) to it.entry.path }
+    }
+
+    /** Each worktree gets its own session, and each session gets the same prompt once it is up. */
+    private fun fanOut(scope: com.canopy.model.RepoScope) {
+        val existing = WorktreeInspector.list(scope.root)
+            .mapNotNull { Path.of(it.path).fileName?.toString() }
+            .toSet()
+        val dialog = FanOutDialog(project, scope, existing)
+        if (!dialog.showAndGet()) return
+        val plan = dialog.plan() ?: return
+
+        plan.names.forEach { onNewWorktree(scope, it) }
+        com.canopy.services.FanOutPrompts.getInstance(project).expect(plan.names, plan.prompt)
     }
 
     private fun provision(scope: com.canopy.model.RepoScope, targetPath: String) {

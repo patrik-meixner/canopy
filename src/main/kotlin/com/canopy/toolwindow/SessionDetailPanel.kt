@@ -40,7 +40,10 @@ class SessionDetailPanel(
         onRefreshRequested = { refresh(force = true) },
         onCommitRequested = ::commitEverything,
         onPushRequested = ::pushEverything,
-        onOverlapsRequested = ::showOverlaps
+        onOverlapsRequested = ::showOverlaps,
+        onNoteRequested = ::sendNote,
+        onProblemsRequested = ::sendProblems,
+        onRestoreRequested = ::restoreCheckpoint
     ).apply { border = JBUI.Borders.empty() }
 
     /** Recomputing on every tab switch made going back and forth re-run git each time. */
@@ -233,6 +236,87 @@ class SessionDetailPanel(
             .getNotificationGroup("Canopy")
             .createNotification(message, com.intellij.notification.NotificationType.INFORMATION)
             .notify(project)
+    }
+
+    /** Restoring writes over the working tree, so it names what it will do and asks first. */
+    private fun restoreCheckpoint() {
+        val sessionId = shownSessionId ?: return
+        val checkpoints = com.canopy.services.SessionCheckpoints.getInstance(project).list(sessionId)
+        if (checkpoints.isEmpty()) {
+            return com.intellij.openapi.ui.Messages.showInfoMessage(
+                project,
+                "This session has no checkpoints yet. One is taken each time it finishes a turn.",
+                "No Checkpoints"
+            )
+        }
+
+        val chosen = com.intellij.openapi.ui.Messages.showEditableChooseDialog(
+            "Put the working tree back as it stood at:",
+            "Restore a Checkpoint",
+            null,
+            checkpoints.map { it.label }.toTypedArray(),
+            checkpoints.first().label,
+            null
+        ) ?: return
+        val checkpoint = checkpoints.firstOrNull { it.label == chosen } ?: return
+
+        val confirmed = com.intellij.openapi.ui.Messages.showYesNoDialog(
+            project,
+            "Files as they were at ${checkpoint.label} will overwrite what is on disk now. " +
+                "Files created since are left alone.",
+            "Restore Checkpoint",
+            null
+        )
+        if (confirmed != com.intellij.openapi.ui.Messages.YES) return
+
+        CanopyExecutor.submit {
+            val (ok, output) = com.canopy.services.SessionCheckpoints.getInstance(project).restore(sessionId, checkpoint)
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                if (!ok) com.intellij.openapi.ui.Messages.showErrorDialog(project, output.take(400), "Restore Failed")
+                com.intellij.openapi.vfs.VirtualFileManager.getInstance().asyncRefresh(null)
+                refresh(force = true)
+            }
+        }
+    }
+
+    /** The agent cannot see the IDE's analysis, so it ships code the editor is already underlining. */
+    private fun sendProblems() {
+        val sessionId = shownSessionId ?: return
+        val roots = rootsOf(sessionId)
+        val paths = browser.selectedPaths().ifEmpty { browser.allPaths() }
+        val problems = TouchedFileProblems.collect(project, paths)
+        val prompt = problemPrompt(problems, roots)
+        if (prompt == null) {
+            return com.intellij.openapi.ui.Messages.showInfoMessage(
+                project,
+                "The IDE reports nothing in these files. Note that only files with an open editor have been analysed.",
+                "No Problems Found"
+            )
+        }
+
+        com.canopy.editor.SessionInput.send(project, sessionId, prompt)
+    }
+
+    /** The note goes to the session this tab is reviewing, so the diff never has to be left. */
+    private fun sendNote() {
+        val sessionId = shownSessionId ?: return
+        val roots = rootsOf(sessionId)
+        val paths = browser.selectedPaths()
+        if (paths.isEmpty()) {
+            return com.intellij.openapi.ui.Messages.showInfoMessage(
+                project,
+                "Select the files the note is about.",
+                "Nothing Selected"
+            )
+        }
+
+        val dialog = ReviewNoteDialog(project, paths, null, roots)
+        if (!dialog.showAndGet()) return
+        val prompt = dialog.prompt() ?: return
+
+        com.canopy.editor.SessionInput.send(project, sessionId, prompt)
     }
 
     private fun rootsOf(sessionId: String): Set<String> =

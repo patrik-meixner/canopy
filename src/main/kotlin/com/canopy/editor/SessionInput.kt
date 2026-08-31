@@ -17,6 +17,20 @@ object SessionInput {
 
     fun canSend(project: Project, sessionId: String): Boolean = editorFor(project, sessionId) != null
 
+    /** Text composed elsewhere, typed into the session as if you had typed it. */
+    fun send(project: Project, sessionId: String, text: String) {
+        val editor = editorFor(project, sessionId)
+        if (editor == null) {
+            return Messages.showInfoMessage(
+                project,
+                "Open the session's tab first: a note is typed into its terminal.",
+                "Session Is Not Open"
+            )
+        }
+
+        editor.sendToTerminal(text)
+    }
+
     fun approve(project: Project, sessionId: String) {
         editorFor(project, sessionId)?.sendToTerminal(ACCEPT_DEFAULT)
     }

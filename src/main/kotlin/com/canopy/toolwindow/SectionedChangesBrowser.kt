@@ -17,7 +17,10 @@ class SectionedChangesBrowser(
     private val onRefreshRequested: () -> Unit,
     private val onCommitRequested: () -> Unit,
     private val onPushRequested: () -> Unit,
-    private val onOverlapsRequested: () -> Unit
+    private val onOverlapsRequested: () -> Unit,
+    private val onNoteRequested: () -> Unit,
+    private val onProblemsRequested: () -> Unit,
+    private val onRestoreRequested: () -> Unit
 ) : ChangesBrowserBase(project, false, false) {
 
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
@@ -69,7 +72,57 @@ class SectionedChangesBrowser(
             override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
         }
 
-        return listOf(refresh, commit, push, overlaps) + super.createToolbarActions()
+        val note = object : com.intellij.openapi.actionSystem.AnAction(
+            "Send a Note",
+            "Ask the session about the selected files, without leaving the diff",
+            com.intellij.icons.AllIcons.Actions.AddMulticaret
+        ), com.intellij.openapi.project.DumbAware {
+            override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) = onNoteRequested()
+
+            override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
+        }
+
+        val problems = object : com.intellij.openapi.actionSystem.AnAction(
+            "Send Problems",
+            "Send the IDE's errors and warnings in these files back to the session",
+            com.intellij.icons.AllIcons.General.InspectionsError
+        ), com.intellij.openapi.project.DumbAware {
+            override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) = onProblemsRequested()
+
+            override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
+        }
+
+        val restore = object : com.intellij.openapi.actionSystem.AnAction(
+            "Restore a Checkpoint",
+            "Put the working tree back as it stood at the end of an earlier turn",
+            com.intellij.icons.AllIcons.Actions.Rollback
+        ), com.intellij.openapi.project.DumbAware {
+            override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) = onRestoreRequested()
+
+            override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
+        }
+
+        return listOf(refresh, commit, push, note, problems, restore, overlaps) + super.createToolbarActions()
+    }
+
+    /** What a note is about: the selected rows, and their untracked files as well as their changes. */
+    fun selectedPaths(): List<String> {
+        val data = com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.selected(viewer)
+        val changed = data.iterateUserObjects(Change::class.java)
+            .mapNotNull { it.afterRevision?.file?.path ?: it.beforeRevision?.file?.path }
+        val untracked = data.iterateUserObjects(FilePath::class.java).map { it.path }
+
+        return (changed.toList() + untracked.toList()).distinct()
+    }
+
+    /** Every file in the tree, for the checks that are about the change as a whole. */
+    fun allPaths(): List<String> {
+        val data = com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.all(viewer)
+        val changed = data.iterateUserObjects(Change::class.java)
+            .mapNotNull { it.afterRevision?.file?.path ?: it.beforeRevision?.file?.path }
+        val untracked = data.iterateUserObjects(FilePath::class.java).map { it.path }
+
+        return (changed.toList() + untracked.toList()).distinct()
     }
 
     fun setSections(changeSet: SessionChangeSet) {

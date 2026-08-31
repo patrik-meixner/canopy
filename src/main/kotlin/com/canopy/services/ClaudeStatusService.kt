@@ -313,6 +313,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
                     } else if (type.isNotEmpty() && notifyState.put(sessionId, type) != type) {
                         listeners.forEach { it(sessionId, currentStatus[sessionId]) }
                         SessionAttentionNotifier.onNotifyStateChanged(project, sessionId, type)
+                        SessionCheckpoints.getInstance(project).onTurnEnded(sessionId, type)
                     }
                 }
             } catch (_: Exception) {}

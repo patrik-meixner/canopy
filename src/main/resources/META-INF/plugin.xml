@@ -130,6 +130,7 @@
             <reference id="ActivateCanopyToolWindow"/>
             <reference id="ActivateSessionToolWindow"/>
             <separator/>
+            <action id="Canopy.SearchSessions" class="com.canopy.editor.SearchSessionsAction"/>
             <action id="Canopy.SessionPalette" class="com.canopy.editor.SessionPaletteAction">
                 <keyboard-shortcut keymap="$default" first-keystroke="meta shift O"/>
             </action>
