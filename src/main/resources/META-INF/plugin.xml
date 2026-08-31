@@ -7,8 +7,8 @@
     <p>One view over every tree an agent works in.</p>
 
     <p>Canopy runs Claude Code sessions inside your JetBrains IDE and, when they are done, lets you
-    review what they changed — across the project, its submodules and every git worktree — in a
-    single diff tree.</p>
+    review what they changed in one diff tree that spans the project, its submodules and every
+    git worktree.</p>
 
     <p><b>Review</b></p>
     <ul>
@@ -46,7 +46,9 @@
     ]]></description>
 
     <change-notes><![CDATA[
-    <p>See <a href="https://github.com/patrik-meixner/canopy/releases">GitHub releases</a> for per-version notes. The JetBrains Marketplace "What's New" section is populated automatically by CI from git log between tags.</p>
+    <p>First public release.</p>
+    <p>Per-version notes for every release after this one are listed on
+    <a href="https://github.com/patrik-meixner/canopy/releases">GitHub</a>.</p>
     ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>

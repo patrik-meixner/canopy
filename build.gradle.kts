@@ -41,7 +41,6 @@ intellijPlatform {
         name = providers.gradleProperty("pluginName")
         version = providers.gradleProperty("pluginVersion")
 
-        // Change notes from CHANGELOG env var (set by CI), or fallback to plugin.xml static content
         val changelogEnv = providers.environmentVariable("CHANGELOG")
         if (changelogEnv.isPresent && changelogEnv.get().isNotBlank()) {
             changeNotes = changelogEnv
