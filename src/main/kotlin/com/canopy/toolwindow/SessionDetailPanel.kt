@@ -61,6 +61,23 @@ class SessionDetailPanel(
      * [JBLoadingPanel] delegates `add` to an inner panel but inherits `removeAll`, so swapping its
      * children directly tears out the loading layer itself. One card stack added once avoids that.
      */
+    /**
+     * The tree says which files are in which state; the header says whether anything needs doing,
+     * and which session is being reviewed, without expanding four sections to find out.
+     */
+    private val headline = com.intellij.ui.components.JBLabel().apply {
+        font = font.deriveFont(java.awt.Font.BOLD)
+    }
+    private val outstanding = com.intellij.ui.components.JBLabel().apply {
+        foreground = com.intellij.util.ui.UIUtil.getLabelDisabledForeground()
+        font = com.intellij.util.ui.UIUtil.getLabelFont(com.intellij.util.ui.UIUtil.FontSize.SMALL)
+    }
+    private val header = com.canopy.insight.IslandPanel(BorderLayout(0, JBUI.scale(3))).apply {
+        border = JBUI.Borders.empty(8, 12)
+        add(headline, BorderLayout.NORTH)
+        add(outstanding, BorderLayout.SOUTH)
+    }
+
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
         add(placeholder, PLACEHOLDER_CARD)
@@ -72,6 +89,7 @@ class SessionDetailPanel(
 
         loadingPanel.setLoadingText("Collecting changes")
         loadingPanel.add(cards, BorderLayout.CENTER)
+        add(header, BorderLayout.NORTH)
         add(loadingPanel, BorderLayout.CENTER)
 
         addHierarchyListener { event ->
@@ -338,7 +356,22 @@ class SessionDetailPanel(
         if (signature == shownSignature) return
 
         shownSignature = signature
+        updateHeader(changeSet)
         browser.setSections(changeSet)
+    }
+
+    private fun updateHeader(changeSet: SessionChangeSet) {
+        val session = shownSessionId?.let(resolveSession)
+        val repositories = shownSessionId?.let { rootsOf(it).size } ?: 0
+
+        headline.text = sessionHeadline(session)
+        outstanding.text = outstandingSummary(
+            uncommitted = changeSet.changes[SessionChangeSection.Uncommitted].orEmpty().size,
+            untracked = changeSet.unversioned.size,
+            unpushed = changeSet.changes[SessionChangeSection.Committed].orEmpty().size,
+            pushed = changeSet.changes[SessionChangeSection.Pushed].orEmpty().size,
+            repositories = repositories
+        )
     }
 
     private fun showCard(name: String) {
