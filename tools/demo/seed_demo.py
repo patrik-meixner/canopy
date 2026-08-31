@@ -284,9 +284,13 @@ def build_transcripts(root: Path, repos: dict, transcripts: Path) -> list:
     written = []
 
     for index, conversation in enumerate(CONVERSATIONS):
-        session_id = f"{index:08d}-demo-4a1b-9c2d-{index:012d}"
+        # Keyed on the content: rewriting a transcript under the same name would leave the IDE
+        # tailing a file it had already read past.
+        digest = abs(hash(conversation["name"] + str(now.timestamp()))) % (10 ** 12)
+        session_id = f"{index:08d}-demo-4a1b-9c2d-{digest:012d}"
         started = now - timedelta(minutes=conversation["minutes_ago"] + 12 * len(conversation["turns"]))
-        lines = []
+        # /rename writes one of these; without it the list is captioned with whole sentences.
+        lines = [json.dumps({"type": "custom-title", "customTitle": conversation["name"]})]
         at = started
 
         for kind, text, touched in conversation["turns"]:
@@ -307,9 +311,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=str(Path.home() / "CanopyDemo"))
     parser.add_argument("--force", action="store_true", help="replace an existing demo root")
+    parser.add_argument("--transcripts-only", action="store_true",
+                        help="rewrite the transcripts of an existing workspace")
     arguments = parser.parse_args()
 
     root = Path(arguments.root).expanduser().resolve()
+    transcripts = Path.home() / ".claude" / "projects" / str(root).replace("/", "-")
+
+    if arguments.transcripts_only:
+        random.seed(7)
+        repos = {name: root / name for name in ("billing", "storefront", "infra")}
+        for name, session_id in build_transcripts(root, repos, transcripts):
+            print(f"  {name}")
+        return 0
+
     if root.exists():
         if not arguments.force:
             print(f"{root} exists. Pass --force to replace it.", file=sys.stderr)
@@ -320,7 +335,6 @@ def main() -> int:
     root.mkdir(parents=True)
     repos = build_workspace(root)
 
-    transcripts = Path.home() / ".claude" / "projects" / str(root).replace("/", "-")
     written = build_transcripts(root, repos, transcripts)
 
     print(f"Workspace:   {root}")
