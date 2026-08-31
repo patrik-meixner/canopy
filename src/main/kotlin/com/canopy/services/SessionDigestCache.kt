@@ -34,6 +34,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         @JvmField var startedAtMillis: Long = 0
         @JvmField var touchedRoots: MutableMap<String, Int> = mutableMapOf()
         @JvmField var lastEntryRole: String? = null
+        @JvmField var lastPromptAtMillis: Long = 0
     }
 
     class State {
@@ -66,7 +67,8 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
             worktreeName = entry.worktreeName,
             touchedRoots = entry.touchedRoots,
             startedAt = entry.startedAtMillis.takeIf { it > 0 }?.let(Instant::ofEpochMilli),
-            lastEntryRole = entry.lastEntryRole
+            lastEntryRole = entry.lastEntryRole,
+            lastPromptAt = entry.lastPromptAtMillis.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         )
     }
 
@@ -86,6 +88,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         entry.startedAtMillis = session.startedAt?.toEpochMilli() ?: 0
         entry.touchedRoots = LinkedHashMap(session.touchedRoots)
         entry.lastEntryRole = session.lastEntryRole
+        entry.lastPromptAtMillis = session.lastPromptAt?.toEpochMilli() ?: 0
     }
 
     /** Drops entries for transcripts that no longer exist, so the file cannot grow without bound. */

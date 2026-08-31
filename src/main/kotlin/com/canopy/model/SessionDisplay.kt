@@ -13,7 +13,9 @@ data class SessionDisplay(
     val worktreeName: String? = null,
     val touchedRoots: Map<String, Int> = emptyMap(),
     val startedAt: Instant? = null,
-    val lastEntryRole: String? = null
+    val lastEntryRole: String? = null,
+    /** When you last said something here. The list orders on this so an agent writing cannot move it. */
+    val lastPromptAt: Instant? = null
 ) {
     val displayName: String
         get() = name

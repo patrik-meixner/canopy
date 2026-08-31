@@ -58,6 +58,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         var lastTimestamp: Instant = Instant.EPOCH
         var firstTimestamp: Instant? = null
         var lastEntryRole: String? = null
+        var lastPromptLine = 0
+        var lastPromptAt: Instant? = null
         /** Capped: a long session can touch thousands of files and this list only feeds a summary. */
         val touchedPaths = LinkedHashSet<String>()
 
@@ -83,6 +85,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             lastTimestamp = Instant.EPOCH
             firstTimestamp = null
             lastEntryRole = null
+            lastPromptLine = 0
+            lastPromptAt = null
             touchedPaths.clear()
             roots = emptyMap()
             rootsFor = -1
@@ -453,7 +457,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 worktreeName = worktreeName,
                 touchedRoots = acc.rootsOfTouched(),
                 startedAt = acc.firstTimestamp,
-                lastEntryRole = acc.lastEntryRole
+                lastEntryRole = acc.lastEntryRole,
+                lastPromptAt = acc.lastPromptAt
             )
             SessionFileIndex.getInstance(project).record(sessionId, acc.touchedPaths)
             digests.put(path.toString(), size, modifiedAt, session)
@@ -471,6 +476,9 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             if (type == "user" || type == "assistant") {
                 acc.messageCount++
                 acc.lastEntryRole = type
+            }
+            if (type == "user" && !obj.has("toolUseResult") && obj.get("isMeta")?.asBoolean != true) {
+                acc.lastPromptLine = acc.messageCount
             }
 
             if (type == "assistant" && acc.touchedPaths.size < MAX_TOUCHED_PATHS) {
@@ -513,6 +521,9 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 }
                 if (instant != null && instant > acc.lastTimestamp) {
                     acc.lastTimestamp = instant
+                }
+                if (instant != null && acc.lastPromptLine == acc.messageCount) {
+                    acc.lastPromptAt = instant
                 }
                 if (instant != null && (acc.firstTimestamp == null || instant < acc.firstTimestamp)) {
                     acc.firstTimestamp = instant

@@ -285,7 +285,19 @@ class SectionedChangesBrowser(
             builder.insertChanges(changes, tag)
         }
 
-        if (unversioned.isNotEmpty()) builder.setUnversioned(unversioned)
+        // Its own tag rather than setUnversioned, which the platform always places first: what the
+        // session actually changed reads before a heap of untracked output it never wrote.
+        if (unversioned.isNotEmpty()) {
+            val tag = com.intellij.openapi.vcs.changes.ui.TagChangesBrowserNode(
+                object : ChangesBrowserNode.Tag {
+                    override fun toString(): String = "Unversioned Files  \u00b7  not tracked by git"
+                },
+                com.intellij.ui.SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES,
+                true
+            )
+            builder.insertSubtreeRoot(tag)
+            unversioned.forEach { builder.insertChangeNode(it, tag, ChangesBrowserNode.createFilePath(it)) }
+        }
 
         return builder.build()
     }

@@ -588,7 +588,7 @@ class SessionListPanel(
         allSessions = if (com.canopy.settings.CanopySettings.getInstance().state.sortAttentionFirst) {
             discovered.sortedWith(compareBy<SessionDisplay> { sessionAttention(it).rank }.thenByDescending { it.modified })
         } else {
-            discovered.sortedByDescending { it.modified }
+            discovered.sortedByDescending { it.lastPromptAt ?: it.modified }
         }
         applyFilter()
         if (worktreeMode) {
