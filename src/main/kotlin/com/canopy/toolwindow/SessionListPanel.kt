@@ -107,6 +107,7 @@ class SessionListPanel(
     @Volatile private var panelVisible = false
     @Volatile private var lastOrphanSweep = 0L
     private var showsOlder = false
+    private val spinner = javax.swing.Timer(SPINNER_FRAME_MS.toInt()) { repaintWorkingRows() }
     private val changeListener: () -> Unit = { reloadData() }
 
     // Orphaned-worktree section (worktree mode only): dirs under .claude/worktrees/ with no session.
@@ -144,6 +145,14 @@ class SessionListPanel(
                 if (became) refreshOrphans(force = true)
             }
         }
+        rootPanel.addHierarchyListener { event ->
+            if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) {
+                return@addHierarchyListener
+            }
+            if (rootPanel.isShowing) spinner.start() else spinner.stop()
+        }
+        spinner.isCoalesce = true
+
         setupTable()
         setupLayout()
         setupClickToOpen()
@@ -669,6 +678,23 @@ class SessionListPanel(
         val days = com.canopy.settings.CanopySettings.getInstance().state.recentSessionDays.toLong()
 
         return session.modified.isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(days)))
+    }
+
+    /**
+     * Only the rows that are spinning repaint, and only while the list is on screen, so an idle
+     * project pays nothing for the animation.
+     */
+    private fun repaintWorkingRows() {
+        if (!table.isShowing) return
+
+        val spinning = (0 until tableModel.rowCount).filter { row ->
+            val attention = sessionAttention(tableModel.getItem(row))
+            attention == com.canopy.model.SessionAttention.Working ||
+                attention == com.canopy.model.SessionAttention.Compacting
+        }
+        if (spinning.isEmpty()) return
+
+        spinning.forEach { table.repaint(table.getCellRect(it, 0, true)) }
     }
 
     private fun updateOlderToggle() {

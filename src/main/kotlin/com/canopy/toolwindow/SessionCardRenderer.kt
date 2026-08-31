@@ -48,7 +48,8 @@ class SessionCardRenderer(
         outer.isOpaque = true
         outer.border = JBUI.Borders.empty(2, InsightUi.GAP, 2, InsightUi.GAP)
         island.border = JBUI.Borders.empty(6, 10)
-        glyph.preferredSize = Dimension(JBUI.scale(16), 0)
+        glyph.preferredSize = Dimension(JBUI.scale(20), 0)
+        glyph.font = glyph.font.deriveFont(glyph.font.size2D * GLYPH_SCALE)
         meta.font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
 
         val text = JPanel().apply {
@@ -87,6 +88,10 @@ class SessionCardRenderer(
     }
 
     private fun glyphFor(session: SessionDisplay, attention: SessionAttention): String {
+        // A spinner is the difference between an agent that is running and one that has stopped.
+        if (attention == SessionAttention.Working || attention == SessionAttention.Compacting) {
+            return spinnerFrame(System.currentTimeMillis())
+        }
         if (attention != SessionAttention.None) return attention.glyph
 
         return when (getStatus(session.sessionId)) {
@@ -170,3 +175,5 @@ internal fun relativeAge(atMillis: Long, nowMillis: Long): String {
             .format(java.time.Instant.ofEpochMilli(atMillis))
     }
 }
+
+private const val GLYPH_SCALE = 1.35f

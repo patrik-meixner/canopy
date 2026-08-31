@@ -28,21 +28,14 @@ open class FilteringPtyConnector(
         super.write(string)
     }
 
-    override fun read(buf: CharArray, offset: Int, length: Int): Int {
-        val count = super.read(buf, offset, length)
-        if (count <= 0) return count
-
-        val raw = String(buf, offset, count)
-        trace?.output(raw)
-        val filtered = UNSUPPORTED.replace(raw, "")
-
-        if (filtered.length == count) return count  // nothing stripped
-
-        if (filtered.isEmpty()) return 0
-
-        filtered.toCharArray(buf, offset)
-        return filtered.length
-    }
+    override fun read(buf: CharArray, offset: Int, length: Int): Int = readFiltered(
+        buf,
+        offset,
+        length,
+        readOnce = { target, from, size -> super.read(target, from, size) },
+        filter = { UNSUPPORTED.replace(it, "") },
+        onRaw = { trace?.output(it) }
+    )
 }
 
 /**
