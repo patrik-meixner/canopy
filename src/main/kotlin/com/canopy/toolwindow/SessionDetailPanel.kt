@@ -94,6 +94,10 @@ class SessionDetailPanel(
         add(header, BorderLayout.NORTH)
         add(loadingPanel, BorderLayout.CENTER)
 
+        com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(this) {
+            if (isShowing) refresh(force = true)
+        }
+
         addHierarchyListener { event ->
             if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) {
                 return@addHierarchyListener

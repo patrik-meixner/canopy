@@ -31,6 +31,7 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     private val commits = ViewportWidthList(model)
     private val files = SimpleChangesBrowser(project, false, true)
     private var loadedFor: String? = null
+    private var loadedRoots: List<Pair<String, String>> = emptyList()
 
     init {
         background = InsightUi.panelBackground()
@@ -41,6 +42,10 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         commits.addListSelectionListener { if (!it.valueIsAdjusting) showFilesOf(commits.selectedValue) }
 
         files.hideViewerBorder()
+
+        com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(parent) {
+            if (isShowing && loadedRoots.isNotEmpty()) reload(loadedRoots)
+        }
 
         add(JBSplitter(true, "canopy.commits.split", 0.45f).apply {
             firstComponent = ScrollPaneFactory.createScrollPane(commits, true)
@@ -54,6 +59,7 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         val signature = "$session:${insight.revision}"
         if (signature == loadedFor) return
         loadedFor = signature
+        loadedRoots = roots
 
         reload(roots)
     }
