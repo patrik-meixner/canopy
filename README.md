@@ -23,6 +23,37 @@ means opening three IDE windows.
 
 Canopy is the missing half of that workflow: it keeps the sessions, and it keeps the review.
 
+## Why not a terminal, or another agent workspace
+
+Canopy is not competing with the tools below. It sits in a different place in the same workflow,
+and it is worth being explicit about which one you actually need.
+
+**Modern terminals and multiplexers** — Warp, Termic, tmux — make the place an agent runs in
+better: blocks, history, panes, sharing. Canopy's question starts a moment later. When the agent
+stops, a terminal cannot tell you which repositories it wrote to, whether the submodule pointer
+still needs bumping, or which of your four sessions is blocked on a permission prompt. If your
+agents run in one repository and you review with `git diff`, a good terminal may be all you need.
+
+**Agent workspaces and orchestrators** — Orca, Superset — are built to run many agents, often in
+their own environment, with their own conventions for isolation. Canopy deliberately does not own
+the environment. It runs agents in the IDE you already have the project open in, with your run
+configurations, your debugger, your diff viewer and your VCS setup, and it treats a git worktree as
+the isolation primitive rather than inventing one.
+
+**Editors with an agent built in** — Zed, and the assistant panes in most IDEs — put the agent
+beside the code, which is the right instinct. The difference is the unit of work. Those panes are
+scoped to one project root; Canopy's unit is a session, and a session's changes routinely land in a
+superproject, two submodules and a worktree of one of them. Reviewing that as one changeset, and
+committing it in the right order, is the thing Canopy exists for.
+
+**Claude Code itself** is not being replaced. Canopy drives the real `claude` binary, so hooks,
+MCP servers, skills, permissions and settings apply exactly as they do in your terminal. There is
+no second agent loop to keep in sync, and nothing to migrate if you stop using the plugin.
+
+> [!NOTE]
+> The claims above are about categories, not feature checklists. Those tools move quickly and any
+> list of what they cannot do would be wrong within a month.
+
 ## What it does
 
 ### Review across every repository a session touched
