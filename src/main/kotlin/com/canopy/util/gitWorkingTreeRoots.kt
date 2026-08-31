@@ -23,6 +23,20 @@ fun gitWorkingTreeRoots(paths: Set<String>, hasGitEntry: (Path) -> Boolean): Map
     return counts
 }
 
+/** The same answer, asking the filesystem only about directories nobody has asked about before. */
+fun gitWorkingTreeRoots(paths: Set<String>): Map<String, Int> {
+    val counts = LinkedHashMap<String, Int>()
+
+    for (path in paths) {
+        val directory = Path.of(path).parent ?: continue
+        val root = GitRootCache.rootOf(directory) ?: continue
+
+        counts[root] = (counts[root] ?: 0) + 1
+    }
+
+    return counts
+}
+
 private fun findRoot(start: Path, hasGitEntry: (Path) -> Boolean): String? {
     var current: Path? = start
     while (current != null) {

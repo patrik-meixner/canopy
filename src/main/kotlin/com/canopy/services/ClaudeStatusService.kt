@@ -21,6 +21,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     private val log = com.intellij.openapi.diagnostic.Logger.getInstance(ClaudeStatusService::class.java)
     private val gson = Gson()
     private val pollAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    private val seenModifications = java.util.concurrent.ConcurrentHashMap<Path, String>()
     private val monitoredSessions = ConcurrentHashMap<String, Path>()
     private val notifyFiles = ConcurrentHashMap<String, Path>()
     private val notifyState = ConcurrentHashMap<String, String>()
@@ -304,10 +305,30 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         pollAlarm.addRequest(::poll, 500)
     }
 
+    /**
+     * Twice a second across every open session: reading and parsing files that have not changed is
+     * the bulk of it, and a modification time answers that for the price of one stat.
+     */
+    private fun changedSince(file: Path): Boolean {
+        // Size as well as time: a millisecond is coarse enough that two writes can share one, and a
+        // missed notification is a session that looks like it is still working.
+        val stamp = try {
+            val attributes = Files.readAttributes(file, java.nio.file.attribute.BasicFileAttributes::class.java)
+            "${attributes.lastModifiedTime().toMillis()}:${attributes.size()}"
+        } catch (_: Exception) {
+            return false
+        }
+        if (seenModifications[file] == stamp) return false
+
+        seenModifications[file] = stamp
+
+        return true
+    }
+
     private fun poll() {
         for ((sessionId, statusFile) in monitoredSessions) {
             try {
-                if (Files.exists(statusFile)) {
+                if (changedSince(statusFile)) {
                     val json = Files.readString(statusFile)
                     val status = parseStatus(json)
                     if (status != null && status != currentStatus[sessionId]) {
@@ -320,7 +341,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         }
         for ((sessionId, notifyFile) in notifyFiles) {
             try {
-                if (Files.exists(notifyFile)) {
+                if (changedSince(notifyFile)) {
                     val type = Files.readString(notifyFile).trim()
                     if (type == "clear") {
                         Files.deleteIfExists(notifyFile)

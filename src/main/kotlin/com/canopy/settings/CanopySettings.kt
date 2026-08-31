@@ -21,7 +21,7 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         @JvmField var detectAgentActivity: Boolean = true
 
         /** Starts the agent as a child of the login shell, which is the only arrangement where its mouse works. */
-        @JvmField var runAgentThroughShell: Boolean = true
+        @JvmField var runAgentThroughShell: Boolean = false
 
         /** Keeps the CLI's fullscreen boot canary from striking, which several sessions at once falsely trip. */
         @JvmField var disableFullscreenCanary: Boolean = true

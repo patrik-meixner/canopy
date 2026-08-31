@@ -29,6 +29,10 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     private val log = Logger.getInstance(ClaudeSessionService::class.java)
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val pollAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    private val refreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+
+    /** Set by the session list as it appears and disappears, so an unwatched project polls rarely. */
+    @Volatile var watched = false
 
     @Volatile
     private var cachedSessions: List<SessionDisplay>? = null
@@ -58,6 +62,19 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         /** Capped: a long session can touch thousands of files and this list only feeds a summary. */
         val touchedPaths = LinkedHashSet<String>()
 
+        /** Derived from [touchedPaths], recomputed only when that set has actually grown. */
+        var roots: Map<String, Int> = emptyMap()
+        var rootsFor = -1
+
+        fun rootsOfTouched(): Map<String, Int> {
+            if (rootsFor == touchedPaths.size) return roots
+
+            rootsFor = touchedPaths.size
+            roots = com.canopy.util.gitWorkingTreeRoots(touchedPaths)
+
+            return roots
+        }
+
         /** Drop everything: the file was rewritten, so accumulated totals no longer apply. */
         fun reset() {
             firstPrompt = null
@@ -68,6 +85,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             firstTimestamp = null
             lastEntryRole = null
             touchedPaths.clear()
+            roots = emptyMap()
+            rootsFor = -1
         }
     }
 
@@ -171,7 +190,18 @@ class ClaudeSessionService(private val project: Project) : Disposable {
      * Overlapping requests coalesce — a call arriving mid-pass sets a flag that schedules
      * exactly one more pass afterwards, rather than queueing a pass per event.
      */
+    /**
+     * An agent writing produces a VFS event per write, and answering each one as it lands meant the
+     * scan ran back to back for as long as the agent worked. A burst is one pass.
+     */
     fun refresh() {
+        if (refreshAlarm.isDisposed) return
+
+        refreshAlarm.cancelAllRequests()
+        refreshAlarm.addRequest(::refreshNow, REFRESH_DEBOUNCE_MS)
+    }
+
+    private fun refreshNow() {
         if (!refreshInFlight.compareAndSet(false, true)) {
             refreshQueued.set(true)
             return
@@ -186,7 +216,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             } finally {
                 refreshInFlight.set(false)
                 // State changed while we were working: run once more, not once per event.
-                if (refreshQueued.compareAndSet(true, false)) refresh()
+                if (refreshQueued.compareAndSet(true, false)) refreshNow()
             }
         }
     }
@@ -264,8 +294,10 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             }
         }
 
+        // The VFS listener catches everything while someone is looking; this poll is the safety net
+        // for changes it misses, and a safety net does not need to run every five seconds unwatched.
         if (!pollAlarm.isDisposed) {
-            pollAlarm.addRequest(::checkForChanges, 5000)
+            pollAlarm.addRequest(::checkForChanges, if (watched) WATCHED_POLL_MS else IDLE_POLL_MS)
         }
     }
 
@@ -292,7 +324,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             return emptyList()
         }
         val candidateDirs = ClaudePathEncoder.projectDirCandidates(basePath)
-        log.info("Canopy session discovery: basePath=$basePath candidates=$candidateDirs")
         val seen = java.util.HashSet<Path>()
         val mainSessions = candidateDirs.flatMap { loadSessionsFromDir(it, null, seen) }
         val wtSessions = try {
@@ -376,7 +407,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 gitBranch = acc.gitBranch,
                 projectPath = project.basePath ?: "",
                 worktreeName = worktreeName,
-                touchedRoots = com.canopy.util.gitWorkingTreeRoots(acc.touchedPaths) { Files.exists(it) },
+                touchedRoots = acc.rootsOfTouched(),
                 startedAt = acc.firstTimestamp,
                 lastEntryRole = acc.lastEntryRole
             )
@@ -469,3 +500,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             project.getService(ClaudeSessionService::class.java)
     }
 }
+
+private const val REFRESH_DEBOUNCE_MS = 400
+
+private const val WATCHED_POLL_MS = 5_000
+private const val IDLE_POLL_MS = 30_000
