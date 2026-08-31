@@ -21,6 +21,21 @@ object MessageThumbnails {
 
     fun of(base64: String): Icon? = cache.getOrPut(key(base64)) { decode(base64, THUMBNAIL) ?: EMPTY }.takeIf { it != EMPTY }
 
+    /** What is already decoded, for the thread that must not decode. */
+    fun cached(base64: String): Icon? = cache[key(base64)]?.takeIf { it != EMPTY }
+
+    /**
+     * A screenshot is hundreds of kilobytes of base64 and ImageIO is not fast on it. Decoding while
+     * building the cards froze the IDE for seconds at a time on a session full of them.
+     */
+    fun decodeInBackground(base64: String, onReady: (Icon) -> Unit) {
+        com.canopy.util.CanopyExecutor.submit {
+            val icon = of(base64) ?: return@submit
+
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater { onReady(icon) }
+        }
+    }
+
     /** Only what a popup is showing right now, so a full-size decode is never cached. */
     fun full(base64: String): Icon? = decode(base64, JBUI.scale(560))
 

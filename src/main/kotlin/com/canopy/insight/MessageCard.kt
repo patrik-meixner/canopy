@@ -99,14 +99,21 @@ class MessageCard(
         return JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(4))).apply {
             isOpaque = false
             message.images.forEach { image ->
-                val icon = MessageThumbnails.of(image) ?: return@forEach
-                add(JLabel(icon).apply {
+                val label = JLabel(MessageThumbnails.cached(image)).apply {
+                    preferredSize = Dimension(JBUI.scale(72), JBUI.scale(72))
                     toolTipText = "Click to enlarge"
                     addMouseListener(object : MouseAdapter() {
                         override fun mouseClicked(event: MouseEvent) =
                             ImagePreview.show(this@apply, event.point, image)
                     })
-                })
+                }
+                add(label)
+                if (label.icon != null) return@forEach
+
+                MessageThumbnails.decodeInBackground(image) {
+                    label.icon = it
+                    label.revalidate()
+                }
             }
         }
     }
