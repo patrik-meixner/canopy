@@ -45,7 +45,8 @@ class SessionDetailPanel(
         onProblemsRequested = ::sendProblems,
         onRestoreRequested = ::restoreCheckpoint,
         onCommitSelectionRequested = ::commitSelection,
-        onPushSelectionRequested = ::pushSelection
+        onPushSelectionRequested = ::pushSelection,
+        onRevertSelectionRequested = ::revertSelection
     ).apply { border = JBUI.Borders.empty() }
 
     /** Recomputing on every tab switch made going back and forth re-run git each time. */
@@ -268,6 +269,57 @@ class SessionDetailPanel(
                 refresh(force = true)
             }
         }
+    }
+
+    /**
+     * Throwing work away is the one action here that cannot be re-run, so it says exactly what it
+     * will destroy and leaves a checkpoint behind that puts it back.
+     */
+    private fun revertSelection() {
+        val sessionId = shownSessionId ?: return
+        val (tracked, untracked) = browser.revertablePaths()
+        if (tracked.isEmpty() && untracked.isEmpty()) return
+
+        val summary = listOfNotNull(
+            tracked.size.takeIf { it > 0 }?.let { "$it file(s) back to HEAD" },
+            untracked.size.takeIf { it > 0 }?.let { "$it untracked file(s) deleted" },
+        ).joinToString(", ")
+
+        val confirmed = com.intellij.openapi.ui.Messages.showYesNoDialog(
+            project,
+            "$summary.\n\nA checkpoint is taken first, so this can be undone from Restore a Checkpoint.",
+            "Revert Selected Files",
+            null,
+        )
+        if (confirmed != com.intellij.openapi.ui.Messages.YES) return
+
+        CanopyExecutor.submit {
+            val byRoot = groupPathsByRoot(tracked + untracked, rootsOf(sessionId))
+            val untrackedSet = untracked.toSet()
+            val outcomes = byRoot.map { (root, paths) ->
+                SessionRevert.revert(
+                    root = root,
+                    tracked = paths.filterNot { it in untrackedSet },
+                    untracked = paths.filter { it in untrackedSet },
+                    sessionId = sessionId,
+                )
+            }
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                reportRevert(outcomes)
+                com.intellij.openapi.vfs.VirtualFileManager.getInstance().asyncRefresh(null)
+                refresh(force = true)
+            }
+        }
+    }
+
+    private fun reportRevert(outcomes: List<RevertOutcome>) {
+        val failed = outcomes.mapNotNull { outcome -> outcome.failure?.let { "${outcome.root}:\n$it" } }
+        if (failed.isEmpty()) return
+
+        com.intellij.openapi.ui.Messages.showErrorDialog(project, failed.joinToString("\n\n"), "Revert Failed")
     }
 
     private fun pushSelection() {

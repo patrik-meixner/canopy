@@ -22,7 +22,8 @@ class SectionedChangesBrowser(
     private val onProblemsRequested: () -> Unit,
     private val onRestoreRequested: () -> Unit,
     private val onCommitSelectionRequested: () -> Unit,
-    private val onPushSelectionRequested: () -> Unit
+    private val onPushSelectionRequested: () -> Unit,
+    private val onRevertSelectionRequested: () -> Unit
 ) : ChangesBrowserBase(project, false, false) {
 
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
@@ -118,6 +119,22 @@ class SectionedChangesBrowser(
         return (changed.toList() + untracked.toList()).distinct()
     }
 
+    /**
+     * What a revert can act on: work that has not been committed anywhere.
+     *
+     * A committed or pushed file is a different question with a different answer - undoing one
+     * means a commit, not a checkout - so it is left out rather than quietly reverted.
+     */
+    fun revertablePaths(): Pair<List<String>, List<String>> {
+        val selected = selectedPaths().toSet()
+        val uncommitted = sections[SessionChangeSection.Uncommitted].orEmpty()
+            .mapNotNull { it.afterRevision?.file?.path ?: it.beforeRevision?.file?.path }
+            .filter { it in selected }
+        val untracked = unversioned.map { it.path }.filter { it in selected }
+
+        return uncommitted to untracked
+    }
+
     /** Every file in the tree, for the checks that are about the change as a whole. */
     fun allPaths(): List<String> {
         val data = com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.all(viewer)
@@ -141,6 +158,7 @@ class SectionedChangesBrowser(
             com.intellij.openapi.actionSystem.Separator.getInstance(),
             commitSelectionAction(),
             pushSelectionAction(),
+            revertSelectionAction(),
             com.intellij.openapi.actionSystem.Separator.getInstance(),
             revealAction(),
             copyPathAction()
@@ -165,6 +183,22 @@ class SectionedChangesBrowser(
 
         override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
             event.presentation.isEnabled = selectedPaths().isNotEmpty()
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }
+
+    private fun revertSelectionAction() = object : com.intellij.openapi.actionSystem.AnAction(
+        "Revert Selected Files\u2026",
+        "Put the files under the selection back as HEAD has them",
+        com.intellij.icons.AllIcons.Actions.Rollback
+    ), com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) =
+            onRevertSelectionRequested()
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            val (tracked, untracked) = revertablePaths()
+            event.presentation.isEnabled = tracked.isNotEmpty() || untracked.isNotEmpty()
         }
 
         override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
