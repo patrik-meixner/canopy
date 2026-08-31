@@ -456,6 +456,8 @@ class WorktreeTreePanel(
 
 }
 
+private const val BRANCHES = "Branches"
+
 private class WorktreeTreeCellRenderer : ColoredTreeCellRenderer() {
 
     override fun customizeCellRenderer(
@@ -468,10 +470,28 @@ private class WorktreeTreeCellRenderer : ColoredTreeCellRenderer() {
         hasFocus: Boolean
     ) {
         when (val node = (value as? DefaultMutableTreeNode)?.userObject) {
+            is WorktreeTreeNode.Section -> renderSection(node)
             is WorktreeTreeNode.Repo -> renderRepo(node)
             is WorktreeTreeNode.Worktree -> renderWorktree(node)
+            is WorktreeTreeNode.Branch -> renderBranch(node)
             is WorktreeTreeNode.Session -> renderSession(node)
         }
+    }
+
+    private fun renderSection(node: WorktreeTreeNode.Section) {
+        icon = if (node.title == BRANCHES) AllIcons.Vcs.Branch else AllIcons.Nodes.Folder
+        append(node.title, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+        append("  ${node.count}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+    }
+
+    private fun renderBranch(node: WorktreeTreeNode.Branch) {
+        icon = AllIcons.Vcs.Branch
+        append(
+            node.entry.name,
+            if (node.entry.isCurrent) SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES
+            else SimpleTextAttributes.REGULAR_ATTRIBUTES
+        )
+        append("   ${branchNote(node.entry)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
     }
 
     private fun renderRepo(node: WorktreeTreeNode.Repo) {
