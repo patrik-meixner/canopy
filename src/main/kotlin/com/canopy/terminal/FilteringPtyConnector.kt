@@ -12,8 +12,20 @@ open class FilteringPtyConnector(
     charset: Charset
 ) : PtyProcessTtyConnector(process, charset) {
 
+    private val trace = PtyTrace.of(process)
+
     companion object {
         private val UNSUPPORTED = unsupportedSequences
+    }
+
+    override fun write(bytes: ByteArray) {
+        trace?.input(String(bytes, Charsets.UTF_8))
+        super.write(bytes)
+    }
+
+    override fun write(string: String) {
+        trace?.input(string)
+        super.write(string)
     }
 
     override fun read(buf: CharArray, offset: Int, length: Int): Int {
@@ -21,6 +33,7 @@ open class FilteringPtyConnector(
         if (count <= 0) return count
 
         val raw = String(buf, offset, count)
+        trace?.output(raw)
         val filtered = UNSUPPORTED.replace(raw, "")
 
         if (filtered.length == count) return count  // nothing stripped
