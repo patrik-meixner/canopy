@@ -53,10 +53,39 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             if (isShowing && loadedRoots.isNotEmpty()) reload(loadedRoots)
         }
 
+        add(toolbar().component, BorderLayout.NORTH)
         add(JBSplitter(true, "canopy.commits.split", 0.45f).apply {
             firstComponent = JPanelWithMore(ScrollPaneFactory.createScrollPane(commits, true), more)
             secondComponent = files
         }, BorderLayout.CENTER)
+    }
+
+    /** The tab follows the working trees on its own; this is for a commit made outside them. */
+    private fun toolbar(): com.intellij.openapi.actionSystem.ActionToolbar {
+        val refresh = object : com.intellij.openapi.actionSystem.AnAction(
+            "Refresh",
+            "Re-read the commits of this session",
+            com.intellij.icons.AllIcons.Actions.Refresh
+        ), com.intellij.openapi.project.DumbAware {
+            override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+                loadedFor = null
+                if (loadedRoots.isNotEmpty()) reload(loadedRoots)
+            }
+
+            override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+                event.presentation.isEnabled = loadedRoots.isNotEmpty()
+            }
+
+            override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+        }
+
+        return com.intellij.openapi.actionSystem.ActionManager.getInstance()
+            .createActionToolbar(
+                "CanopyCommitsToolbar",
+                com.intellij.openapi.actionSystem.DefaultActionGroup(refresh),
+                true
+            )
+            .also { it.targetComponent = this }
     }
 
     override fun render(insight: SessionInsight) {
