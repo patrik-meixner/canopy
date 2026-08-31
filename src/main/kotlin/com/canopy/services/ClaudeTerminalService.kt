@@ -184,6 +184,9 @@ class ClaudeTerminalService(private val project: Project) {
 
         val settingsProvider = JBTerminalSystemSettingsProvider()
         val widget = JBTerminalWidget(project, settingsProvider, parent)
+        // The tool window's terminal installs these; a widget built directly gets none, which is
+        // why a URL printed by a status line was plain text rather than something to click.
+        widget.addMessageFilter(com.intellij.execution.filters.UrlFilter(project))
         widget.start(connector)
         ClipboardImagePaste.install(widget.terminalPanel) { sendInput(ptyProcess, it) }
 
