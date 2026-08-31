@@ -105,9 +105,19 @@ class SessionDetailPanel(
             }
             if (!isShowing) return@addHierarchyListener
 
+            // Opened after a session already was: nothing told the panel which one, because the
+            // selection changed while this window did not exist.
+            if (shownSessionId == null) showSession(selectedSessionId())
+
             refresh(force = pendingWhileHidden)
         }
     }
+
+    private fun selectedSessionId(): String? = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+        .selectedFiles
+        .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+        .firstOrNull()
+        ?.sessionId
 
     /** Resolution reads every transcript, so even finding the session has to stay off the EDT. */
     fun showSession(sessionId: String?) {

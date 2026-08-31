@@ -23,6 +23,9 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         /** Starts the agent as a child of the login shell, which is the only arrangement where its mouse works. */
         @JvmField var runAgentThroughShell: Boolean = true
 
+        /** Keeps the CLI's fullscreen boot canary from striking, which several sessions at once falsely trip. */
+        @JvmField var disableFullscreenCanary: Boolean = true
+
         /** Manual override for the claude binary path. Empty string means auto-detect. */
         @JvmField var claudeBinaryPath: String = ""
 
@@ -129,6 +132,7 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
     fun environmentOverrides(): Map<String, String> {
         val env = mutableMapOf<String, String>()
         if (myState.envColorterm) env["COLORTERM"] = "truecolor"
+        if (myState.disableFullscreenCanary) env["CLAUDE_CODE_NO_FLICKER"] = "1"
         if (myState.envDisableNonessentialTraffic) env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
         if (myState.envSkipUpdateCheck) env["CLAUDE_CODE_SKIP_UPDATE_CHECK"] = "1"
         if (myState.envDisablePromptCaching) env["DISABLE_PROMPT_CACHING"] = "1"

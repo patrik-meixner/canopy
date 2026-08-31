@@ -47,6 +47,10 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
         group("Review") {
             row {
+                checkBox("Keep the agent's fullscreen renderer enabled").bindSelected(state::disableFullscreenCanary)
+            }.rowComment("Sets CLAUDE_CODE_NO_FLICKER=1. Several sessions at once make the CLI's own boot check count false failures and turn its fullscreen renderer off for the whole machine, which takes mouse selection with it.")
+
+            row {
                 checkBox("Start the agent through the login shell").bindSelected(state::runAgentThroughShell)
             }.rowComment("As the terminal's own process the agent renders inline, so its mouse selection and clickable rows do not work. Costs whatever your shell profile costs at startup.")
 
