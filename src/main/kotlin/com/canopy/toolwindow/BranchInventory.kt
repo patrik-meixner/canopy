@@ -68,3 +68,16 @@ internal fun parseBranches(output: String): List<BranchEntry> =
             )
         }
         .toList()
+
+/** What decides the next action: where it is checked out, how far it has drifted, whether it is dead. */
+internal fun branchNote(branch: BranchEntry): String {
+    val parts = mutableListOf<String>()
+    branch.worktreePath?.let { parts.add("in " + it.substringAfterLast('/')) }
+    if (branch.ahead > 0) parts.add("↑${branch.ahead}")
+    if (branch.behind > 0) parts.add("↓${branch.behind}")
+    if (branch.isGone) parts.add("remote gone")
+    if (branch.upstream == null && !branch.isGone) parts.add("never pushed")
+    parts.add(relativeAge(branch.committedAtMillis, System.currentTimeMillis()))
+
+    return parts.joinToString("  ")
+}

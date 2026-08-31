@@ -56,7 +56,8 @@ class SessionListPanel(
         getDetail = ::sessionDetail,
         getAttention = ::sessionAttention,
         showWorktreeColumn = worktreeMode,
-        getWorktreeStatus = if (worktreeMode) { name -> worktreeStatus?.get(name) } else null
+        getWorktreeStatus = if (worktreeMode) { name -> worktreeStatus?.get(name) } else null,
+        hoveredRow = { hoveredRow }
     )
     private val table = object : TableView<SessionDisplay>(tableModel) {
         override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): Component {
@@ -65,6 +66,8 @@ class SessionListPanel(
             // The Git column colours itself by git state (amber = uncommitted); the
             // session-status colouring below would flatten that back to the default.
             if (worktreeMode && convertColumnIndexToModel(column) == GIT_COLUMN_MODEL_INDEX) return c
+            // The card carries its own tooltip; a table-level one competes with it and goes stale.
+            if (!worktreeMode) return c
             when (getStatus(session.sessionId)) {
                 SessionStatus.OPEN_EXTERNALLY -> {
                     c.foreground = if (isRowSelected(row)) selectionForeground
@@ -143,7 +146,29 @@ class SessionListPanel(
 
     fun getComponent(): JComponent = rootPanel
 
+    /** JTable has no hover state of its own, so the row under the cursor is tracked here. */
+    private var hoveredRow: Int = -1
+
+    private fun trackHover() {
+        val motion = object : java.awt.event.MouseAdapter() {
+            override fun mouseMoved(event: java.awt.event.MouseEvent) = setHovered(table.rowAtPoint(event.point))
+
+            override fun mouseExited(event: java.awt.event.MouseEvent) = setHovered(-1)
+        }
+        table.addMouseMotionListener(motion)
+        table.addMouseListener(motion)
+    }
+
+    private fun setHovered(row: Int) {
+        if (row == hoveredRow) return
+        val previous = hoveredRow
+        hoveredRow = row
+
+        listOf(previous, row).filter { it >= 0 }.forEach { table.repaint(table.getCellRect(it, 0, true)) }
+    }
+
     private fun setupTable() {
+        trackHover()
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
         table.setShowGrid(false)
         table.intercellSpacing = java.awt.Dimension(0, 0)
@@ -334,6 +359,18 @@ class SessionListPanel(
                 return true
             }
         }.installOn(table)
+    }
+
+    /** The list is a map of what is open; the session on screen has to be findable on it. */
+    fun selectSession(sessionId: String?) {
+        if (sessionId == null) return
+        val row = (0 until table.rowCount)
+            .firstOrNull { tableModel.getItem(table.convertRowIndexToModel(it)).sessionId == sessionId }
+            ?: return
+        if (table.selectedRow == row) return
+
+        table.selectionModel.setSelectionInterval(row, row)
+        table.scrollRectToVisible(table.getCellRect(row, 0, true))
     }
 
     private fun setupContextMenu() {

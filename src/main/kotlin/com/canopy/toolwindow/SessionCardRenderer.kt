@@ -27,7 +27,8 @@ import javax.swing.table.TableCellRenderer
 class SessionCardRenderer(
     private val getStatus: (String) -> SessionStatus,
     private val getAttention: (SessionDisplay) -> SessionAttention,
-    private val getDetail: (SessionDisplay) -> String
+    private val getDetail: (SessionDisplay) -> String,
+    private val hoveredRow: () -> Int
 ) : TableCellRenderer {
 
     /** TableView repaints the returned component's background with its selection colour, which drew
@@ -72,7 +73,7 @@ class SessionCardRenderer(
         val session = value as? SessionDisplay ?: return outer
         val attention = getAttention(session)
 
-        island.islandColor = InsightUi.cardBackground(selected)
+        island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow())
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)
         glyph.toolTipText = attention.takeIf { it != SessionAttention.None }?.name
@@ -80,6 +81,7 @@ class SessionCardRenderer(
         title.foreground = InsightUi.cardForeground(selected)
         meta.text = metaLine(session, getDetail(session))
         meta.foreground = if (selected) InsightUi.cardForeground(true) else UIUtil.getLabelDisabledForeground()
+        outer.toolTipText = tooltipFor(session)
 
         return outer
     }
@@ -102,6 +104,21 @@ class SessionCardRenderer(
         else -> UIUtil.getLabelDisabledForeground()
     }
 }
+
+/**
+ * A name too long for the card is cut, and this is where the whole of it lives.
+ *
+ * An empty tooltip still opens a window, which is what put a blank grey box over the editor.
+ */
+internal fun tooltipFor(session: SessionDisplay): String {
+    val place = session.worktreeName ?: session.projectPath
+    val lines = listOfNotNull(session.displayName.takeIf { it.isNotBlank() }, place.takeIf { it.isNotBlank() })
+
+    return if (lines.isEmpty()) "" else "<html>" + lines.joinToString("<br>") { escape(it) } + "</html>"
+}
+
+private fun escape(text: String): String =
+    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 /** Where it ran, how long ago, and what it is costing, in that order of use. */
 internal fun metaLine(session: SessionDisplay, detail: String, nowMillis: Long = System.currentTimeMillis()): String {

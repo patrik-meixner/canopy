@@ -11,7 +11,8 @@ class SessionTableModel(
     getDetail: (SessionDisplay) -> String,
     getAttention: (SessionDisplay) -> com.canopy.model.SessionAttention,
     showWorktreeColumn: Boolean = false,
-    getWorktreeStatus: ((String) -> WorktreeStatus?)? = null
+    getWorktreeStatus: ((String) -> WorktreeStatus?)? = null,
+    hoveredRow: () -> Int = { -1 }
 ) : ListTableModel<SessionDisplay>() {
     init {
         // The worktree mode keeps real columns because it sorts by them; the session list has no
@@ -26,7 +27,7 @@ class SessionTableModel(
             if (getWorktreeStatus != null) cols.add(GitColumnInfo(getWorktreeStatus))
             cols.toTypedArray()
         } else {
-            arrayOf(CardColumnInfo(getStatus, getAttention, getDetail))
+            arrayOf(CardColumnInfo(getStatus, getAttention, getDetail, hoveredRow))
         }
     }
 }
@@ -34,10 +35,11 @@ class SessionTableModel(
 private class CardColumnInfo(
     getStatus: (String) -> SessionStatus,
     getAttention: (SessionDisplay) -> com.canopy.model.SessionAttention,
-    getDetail: (SessionDisplay) -> String
+    getDetail: (SessionDisplay) -> String,
+    hoveredRow: () -> Int
 ) : ColumnInfo<SessionDisplay, SessionDisplay>("Name") {
 
-    private val renderer = SessionCardRenderer(getStatus, getAttention, getDetail)
+    private val renderer = SessionCardRenderer(getStatus, getAttention, getDetail, hoveredRow)
 
     override fun valueOf(item: SessionDisplay): SessionDisplay = item
 

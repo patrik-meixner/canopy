@@ -79,26 +79,18 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
             onSessionActivated = openForReview,
             onNewWorktree = { scope, name -> openNewWorktreeSession(project, name, scope.root) }
         )
-        val repoTreeContent = ContentFactory.getInstance().createContent(repoTreePanel, "Worktrees", false)
+        val repoTreeContent = ContentFactory.getInstance().createContent(repoTreePanel, "Workspaces", false)
         repoTreeContent.icon = IconLoader.getIcon("/icons/worktree.svg", ClaudeSessionsToolWindowFactory::class.java)
         repoTreeContent.isCloseable = false
         toolWindow.contentManager.addContent(repoTreeContent)
 
-        val branchPanel = BranchTreePanel(project, toolWindow.disposable) { scope, branch ->
-            openNewWorktreeSession(project, branch, scope.root)
-        }
-        branchPanel.addHierarchyListener { event ->
-            if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) return@addHierarchyListener
-            if (branchPanel.isShowing) branchPanel.refresh()
-        }
-        val branchContent = ContentFactory.getInstance().createContent(branchPanel, "Branches", false)
-        branchContent.icon = IconLoader.getIcon("/icons/tab-branches.svg", ClaudeSessionsToolWindowFactory::class.java)
-        branchContent.isCloseable = false
-        toolWindow.contentManager.addContent(branchContent)
 
         sessionService.startWatching()
 
         val editorListener = object : FileEditorManagerListener {
+            override fun selectionChanged(event: FileEditorManagerEvent) {
+                sessionsPanel.selectSession((event.newFile as? ClaudeSessionVirtualFile)?.sessionId)
+            }
 
             override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
                 if (file is ClaudeSessionVirtualFile) {

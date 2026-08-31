@@ -31,6 +31,7 @@ import javax.swing.JPanel
 import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
 import javax.swing.tree.TreeSelectionModel
 
 /**
@@ -57,6 +58,9 @@ class WorktreeTreePanel(
 
     /** Its own cache: the tree is now the only place worktree git state is shown. */
     private val worktreeStatus = WorktreeStatusCache(project, this) { tree.repaint() }
+
+    /** Branches come from the same sweep: one pass over the repositories answers both sections. */
+    private var branches: Map<String, List<BranchEntry>> = emptyMap()
 
     @Volatile private var onScreen = false
     @Volatile private var lastRefreshAt = 0L
@@ -100,6 +104,8 @@ class WorktreeTreePanel(
     private fun selectedSession(): WorktreeTreeNode.Session? = selectedNode() as? WorktreeTreeNode.Session
 
     private fun selectedRepo(): WorktreeTreeNode.Repo? = selectedNode() as? WorktreeTreeNode.Repo
+
+    private fun selectedBranch(): WorktreeTreeNode.Branch? = selectedNode() as? WorktreeTreeNode.Branch
 
     private fun selectedNode(): WorktreeTreeNode? {
         val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return null
@@ -174,6 +180,21 @@ class WorktreeTreePanel(
 
                 override fun update(e: AnActionEvent) {
                     e.presentation.isEnabled = selectedRepo() != null || selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            addSeparator()
+            add(object : AnAction("New Worktree from Branch", "Check this branch out in its own worktree", AllIcons.General.Add) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val branch = selectedBranch() ?: return
+
+                    onNewWorktree(branch.scope, branch.entry.name)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    val branch = selectedBranch()
+                    e.presentation.isEnabled = branch != null && branch.entry.worktreePath == null
                 }
 
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -309,9 +330,13 @@ class WorktreeTreePanel(
         CanopyExecutor.submit {
             try {
                 val collected = scopeService.cachedScopes().map { WorktreeInspector.collect(it) }
+                val listed = collected.associate { it.scope.root to BranchInventory.list(it.scope.root, it.worktrees) }
                 val sessions = loadSessions()
                 lastRefreshAt = System.currentTimeMillis()
-                ApplicationManager.getApplication().invokeLater { rebuild(collected, sessions) }
+                ApplicationManager.getApplication().invokeLater {
+                    branches = listed
+                    rebuild(collected, sessions)
+                }
             } finally {
                 refreshInFlight.set(false)
             }
@@ -329,6 +354,9 @@ class WorktreeTreePanel(
         val placed = byWorktreeName.values.flatten().toSet()
         root.removeAllChildren()
 
+        val worktreeSection = DefaultMutableTreeNode(
+            WorktreeTreeNode.Section("Worktrees", collected.sumOf { it.worktrees.size })
+        )
         for (repo in collected) {
             val repoNode = DefaultMutableTreeNode(
                 WorktreeTreeNode.Repo(repo.scope, repo.branch, repo.worktrees.size)
@@ -342,10 +370,24 @@ class WorktreeTreePanel(
                 repoNode.add(worktreeNode)
             }
             sessionsInCheckout(sessions - placed, repo.scope.root).forEach { repoNode.add(sessionNode(it)) }
-            root.add(repoNode)
+            worktreeSection.add(repoNode)
         }
+        root.add(worktreeSection)
+
+        val branchSection = DefaultMutableTreeNode(
+            WorktreeTreeNode.Section("Branches", branches.values.sumOf { it.size })
+        )
+        for (repo in collected) {
+            val listed = branches[repo.scope.root].orEmpty()
+            if (listed.isEmpty()) continue
+            val repoNode = DefaultMutableTreeNode(WorktreeTreeNode.Repo(repo.scope, repo.branch, listed.size))
+            listed.forEach { repoNode.add(DefaultMutableTreeNode(WorktreeTreeNode.Branch(repo.scope, it))) }
+            branchSection.add(repoNode)
+        }
+        if (branchSection.childCount > 0) root.add(branchSection)
 
         treeModel.reload()
+        (0 until root.childCount).forEach { tree.expandPath(TreePath((root.getChildAt(it) as DefaultMutableTreeNode).path)) }
         expandRepos(expandedLabels)
 
         worktreeStatus.setTargets(collected.flatMap { it.worktrees }.map { worktreeNameOf(it.path) })

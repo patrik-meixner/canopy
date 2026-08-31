@@ -16,10 +16,16 @@ object InsightUi {
     val GAP: Int get() = JBUI.scale(6)
 
     private const val SELECTED_TINT = 0.34
+    private const val SELECTED_HOVER_TINT = 0.46
     private const val HOVER_TINT = 0.16
 
     /** The card carries the accent; the strip behind it stays the list, so nothing frames the card. */
-    fun cardBackground(selected: Boolean): Color = if (selected) accentTint(SELECTED_TINT) else islandBackground()
+    fun cardBackground(selected: Boolean, hovered: Boolean = false): Color = when {
+        selected && hovered -> accentTint(SELECTED_HOVER_TINT)
+        selected -> accentTint(SELECTED_TINT)
+        hovered -> accentTint(HOVER_TINT)
+        else -> islandBackground()
+    }
 
     fun hoverBackground(): Color = accentTint(HOVER_TINT)
 
