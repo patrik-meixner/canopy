@@ -13,11 +13,13 @@ import random
 import shutil
 import subprocess
 import sys
-import time
 from datetime import datetime, timedelta, timezone
+import uuid
 from pathlib import Path
 
 AUTHOR = ("Dana Reyes", "dana@example.com")
+CLI_VERSION = "2.1.251"
+MODEL = "claude-opus-5"
 
 
 def git(repo: Path, *args: str, quiet: bool = True) -> str:
@@ -193,17 +195,44 @@ def build_workspace(root: Path) -> dict:
 
 # ── the transcripts ──────────────────────────────────────────────────────────
 
-def entry(kind: str, text: str, when: datetime, branch: str = "main", tool: dict | None = None) -> str:
+def entry(
+    kind: str,
+    text: str,
+    when: datetime,
+    session_id: str,
+    cwd: str,
+    parent: str | None,
+    branch: str = "main",
+    tool: dict | None = None,
+) -> tuple[str, str]:
+    """One transcript line, in the shape the CLI writes and reads back."""
     message = {"role": kind, "content": [{"type": "text", "text": text}]}
+    if kind == "assistant":
+        message |= {"id": f"msg_{uuid.uuid4().hex[:24]}", "type": "message", "model": MODEL}
     if tool:
-        message["content"].append({"type": "tool_use", "name": tool["name"], "input": tool["input"]})
+        message["content"].append({
+            "type": "tool_use",
+            "id": f"toolu_{uuid.uuid4().hex[:24]}",
+            "name": tool["name"],
+            "input": tool["input"],
+        })
 
-    return json.dumps({
+    identifier = str(uuid.uuid4())
+    record = {
+        "parentUuid": parent,
+        "isSidechain": False,
+        "userType": "external",
+        "cwd": cwd,
+        "sessionId": session_id,
+        "version": CLI_VERSION,
+        "gitBranch": branch,
         "type": kind,
         "message": message,
+        "uuid": identifier,
         "timestamp": when.isoformat().replace("+00:00", "Z"),
-        "gitBranch": branch,
-    })
+    }
+
+    return json.dumps(record), identifier
 
 
 def edit(path: Path) -> dict:
@@ -284,21 +313,21 @@ def build_transcripts(root: Path, repos: dict, transcripts: Path) -> list:
     written = []
 
     for index, conversation in enumerate(CONVERSATIONS):
-        # Keyed on the content: rewriting a transcript under the same name would leave the IDE
-        # tailing a file it had already read past.
-        digest = abs(hash(conversation["name"] + str(now.timestamp()))) % (10 ** 12)
-        session_id = f"{index:08d}-demo-4a1b-9c2d-{digest:012d}"
+        session_id = str(uuid.uuid4())
         started = now - timedelta(minutes=conversation["minutes_ago"] + 12 * len(conversation["turns"]))
-        # /rename writes one of these; without it the list is captioned with whole sentences.
         lines = [json.dumps({"type": "custom-title", "customTitle": conversation["name"]})]
         at = started
+        parent = None
 
         for kind, text, touched in conversation["turns"]:
             tool = None
             if touched:
                 repo, relative = touched
                 tool = edit(repos[repo] / relative)
-            lines.append(entry(kind, text, at, conversation["branch"], tool))
+            line, parent = entry(
+                kind, text, at, session_id, str(root), parent, conversation["branch"], tool
+            )
+            lines.append(line)
             at += timedelta(minutes=random.randint(2, 9))
 
         (transcripts / f"{session_id}.jsonl").write_text("\n".join(lines) + "\n")
