@@ -189,9 +189,26 @@ class ClaudeStatusService(private val project: Project) : Disposable {
 
         root.add("hooks", hooks)
 
-        Files.writeString(file, gson.toJson(root) + "\n")
+        Files.writeString(file, gson.toJson(mergeSettings(userSettings(), root)) + "\n")
         return file
     }
+
+    /**
+     * The user's own settings, lowest priority first, so the file handed to `--settings` still
+     * carries everything they configured rather than only what Canopy adds.
+     */
+    private fun userSettings(): JsonObject {
+        val home = System.getProperty("user.home") ?: return JsonObject()
+
+        return listOf("settings.json", "settings.local.json")
+            .map { Path.of(home, ".claude", it) }
+            .filter { Files.isRegularFile(it) }
+            .fold(JsonObject()) { merged, path -> mergeSettings(merged, readSettings(path)) }
+    }
+
+    private fun readSettings(path: Path): JsonObject = runCatching {
+        gson.fromJson(Files.readString(path), JsonObject::class.java)
+    }.getOrNull() ?: JsonObject()
 
     fun createStatusFilePath(sessionId: String): Path {
         return Path.of(System.getProperty("java.io.tmpdir"), "canopy-status-$sessionId.json")
