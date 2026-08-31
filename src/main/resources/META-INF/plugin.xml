@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>com.patrikmeixner.canopy</id>
-    <name>Canopy</name>
+    <name>Canopy Workspace</name>
     <vendor url="https://github.com/patrik-meixner/canopy">Patrik Meixner</vendor>
 
     <description><![CDATA[
