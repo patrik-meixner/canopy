@@ -22,8 +22,7 @@ class SectionedChangesBrowser(
     private val onProblemsRequested: () -> Unit,
     private val onRestoreRequested: () -> Unit,
     private val onCommitSelectionRequested: () -> Unit,
-    private val onPushSelectionRequested: () -> Unit,
-    private val onRevertSelectionRequested: () -> Unit
+    private val onPushSelectionRequested: () -> Unit
 ) : ChangesBrowserBase(project, false, false) {
 
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
@@ -152,13 +151,13 @@ class SectionedChangesBrowser(
      * ends in wanting the file itself.
      */
     override fun createPopupMenuActions(): List<com.intellij.openapi.actionSystem.AnAction> {
-        val ours = listOf(
+        val ours = listOfNotNull(
             diffAction,
             openSourceAction(),
             com.intellij.openapi.actionSystem.Separator.getInstance(),
             commitSelectionAction(),
             pushSelectionAction(),
-            revertSelectionAction(),
+            rollbackAction(),
             com.intellij.openapi.actionSystem.Separator.getInstance(),
             revealAction(),
             copyPathAction()
@@ -188,21 +187,15 @@ class SectionedChangesBrowser(
         override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
     }
 
-    private fun revertSelectionAction() = object : com.intellij.openapi.actionSystem.AnAction(
-        "Revert Selected Files\u2026",
-        "Put the files under the selection back as HEAD has them",
-        com.intellij.icons.AllIcons.Actions.Rollback
-    ), com.intellij.openapi.project.DumbAware {
-        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) =
-            onRevertSelectionRequested()
-
-        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
-            val (tracked, untracked) = revertablePaths()
-            event.presentation.isEnabled = tracked.isNotEmpty() || untracked.isNotEmpty()
-        }
-
-        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
-    }
+    /**
+     * The IDE's own Rollback, not one of ours.
+     *
+     * It knows the same shortcut people already use, shows the diff of what it is about to undo,
+     * and can shelve it first - none of which a reimplementation would inherit. The browser
+     * publishes the selected changes, so the action finds them the way it finds them anywhere else.
+     */
+    private fun rollbackAction(): com.intellij.openapi.actionSystem.AnAction? =
+        com.intellij.openapi.actionSystem.ActionManager.getInstance().getAction("ChangesView.Revert")
 
     private fun pushSelectionAction() = object : com.intellij.openapi.actionSystem.AnAction(
         "Push Their Repositories",
