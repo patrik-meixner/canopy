@@ -157,7 +157,10 @@ class ClaudeTerminalService(private val project: Project) {
             fullCommand
         } else {
             val shell = env["SHELL"] ?: "/bin/zsh"
-            arrayOf(shell, "-l", "-c", shellCommandLine(fullCommand.toList()))
+            // -i as well as -l: without an interactive shell there is no job control, so the agent
+            // stays in the shell's own process group and is still the session leader, which is the
+            // arrangement it refuses to draw a full-screen interface in.
+            arrayOf(shell, "-l", "-i", "-c", shellCommandLine(fullCommand.toList()))
         }
 
         log.info("Canopy: createWidget — spawned=${spawned.toList()}, PATH=${env["PATH"]?.take(200)}")

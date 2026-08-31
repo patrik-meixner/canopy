@@ -132,8 +132,10 @@
         <group id="Canopy.Menu" text="Canopy" popup="true" icon="/icons/canopy.svg">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
 
-            <reference id="ActivateCanopyToolWindow"/>
-            <reference id="ActivateSessionToolWindow"/>
+            <action id="Canopy.ActivateCanopy" class="com.canopy.toolwindow.ActivateCanopyAction"
+                    text="Sessions and Workspaces" description="Open the Canopy tool window"/>
+            <action id="Canopy.ActivateSession" class="com.canopy.toolwindow.ActivateSessionAction"
+                    text="Session Review" description="Open the review of the session on screen"/>
             <separator/>
             <action id="Canopy.SearchSessions" class="com.canopy.editor.SearchSessionsAction"/>
             <action id="Canopy.SessionPalette" class="com.canopy.editor.SessionPaletteAction">
