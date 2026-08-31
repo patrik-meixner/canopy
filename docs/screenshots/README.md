@@ -1,22 +1,8 @@
 # Screenshots
 
-Framed by `tools/demo/shot.py`: the IDE window alone, rounded, standing on a
-blurred blow-up of itself. Nothing here is cropped by hand.
+Taken from a seeded demo workspace rather than a real project, so no repository
+name, path or piece of anyone's work appears in them. The IDE window alone,
+rounded, standing on a blurred blow-up of itself.
 
-```
-python3 -m venv /tmp/shotenv && /tmp/shotenv/bin/pip install Pillow pyobjc-framework-Quartz
-/tmp/shotenv/bin/python tools/demo/shot.py 01-sessions-and-review
-```
-
-It photographs the largest IntelliJ window whose title contains `CanopyDemo`, so
-the window does not have to be in front and nothing else on screen ends up in
-the shot. `--match` picks a different one, `--width` sets the framed width
-(2400 by default), `--pad` the margin around it.
-
-The workspace comes from `tools/demo/seed_demo.py`; the shot list is in
-`tools/demo/SCREENSHOTS.md`.
-
-Setting the scenes needs Accessibility rights for whatever runs this (System
-Settings → Privacy & Security → Accessibility). With them, a pointer click lands
-where it is aimed and the scenes can be driven from a script; a click carrying a
-modifier is still ignored, so a range selection has to be made by hand.
+The workspace builder and the capture script are kept out of the repository —
+they are for making these, not for using the plugin.

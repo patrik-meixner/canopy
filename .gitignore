@@ -10,3 +10,6 @@ out/
 
 # Working notes, not part of the plugin
 work/
+
+# Demo workspace and capture tooling, kept local
+tools/
