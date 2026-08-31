@@ -146,3 +146,11 @@ The plugin is expected to sit in an IDE all day, so the work it does is bounded 
   while a tab is on screen and only re-renders when something drawable actually changed.
 - Diff content is fetched when a file is opened, not when the tree is built.
 - Git sweeps are throttled, single-flighted, and skipped entirely while their panel is hidden.
+
+## Support
+
+Canopy is free, and stays free. Nothing is behind a payment and nothing is planned to be.
+
+If it saves you an afternoon:
+
+[<img src="https://storage.ko-fi.com/cdn/logomarkLogo.png" width="20" alt=""> Buy me a coffee](https://ko-fi.com/patrikmeixner)
