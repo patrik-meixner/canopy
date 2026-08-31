@@ -195,7 +195,25 @@ class SectionedChangesBrowser(
     fun setSections(changeSet: SessionChangeSet) {
         sections = changeSet.changes
         unversioned = changeSet.unversioned
-        viewer.rebuildTree()
+        // Keeping the state stops a tab switch from throwing away what was expanded and collapsed.
+        viewer.rebuildTree(com.intellij.openapi.vcs.changes.ui.ChangesTree.ALWAYS_KEEP)
+        collapsePushedOnce()
+    }
+
+    private var pushedCollapsed = false
+
+    /** Pushed work is history and outnumbers the rest; it opens closed, and stays how you leave it. */
+    private fun collapsePushedOnce() {
+        if (pushedCollapsed || sections[SessionChangeSection.Pushed].isNullOrEmpty()) return
+        pushedCollapsed = true
+
+        val root = viewer.model.root as? javax.swing.tree.TreeNode ?: return
+        for (index in 0 until root.childCount) {
+            val node = root.getChildAt(index) as? ChangesBrowserNode<*> ?: continue
+            if (!node.userObject.toString().startsWith(SessionChangeSection.Pushed.title)) continue
+
+            viewer.collapsePath(javax.swing.tree.TreePath(node.path))
+        }
     }
 
     override fun buildTreeModel(): DefaultTreeModel {
@@ -214,11 +232,13 @@ class SectionedChangesBrowser(
     }
 
     private fun tagNode(builder: TreeModelBuilder, section: SessionChangeSection): ChangesBrowserNode<*> {
+        // A header that says what the state means, and reads quieter once the work has left.
         val node = com.intellij.openapi.vcs.changes.ui.TagChangesBrowserNode(
             object : ChangesBrowserNode.Tag {
-                override fun toString(): String = section.title
+                override fun toString(): String = "${section.title}  \u00b7  ${section.hint}"
             },
-            com.intellij.ui.SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES,
+            if (section.isYours) com.intellij.ui.SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES
+            else com.intellij.ui.SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES,
             true
         )
         builder.insertSubtreeRoot(node)

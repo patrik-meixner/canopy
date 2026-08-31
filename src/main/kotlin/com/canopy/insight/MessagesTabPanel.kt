@@ -24,7 +24,7 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
     private var messages: List<SessionMessage> = emptyList()
 
     init {
-        background = UIUtil.getListBackground()
+        background = InsightUi.panelBackground()
         search.textEditor.emptyText.text = "Filter messages"
         search.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(event: DocumentEvent) = rebuild()
@@ -32,7 +32,7 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
 
         add(JPanel(BorderLayout()).apply {
             border = JBUI.Borders.empty(4, 6)
-            background = UIUtil.getListBackground()
+            background = InsightUi.panelBackground()
             add(search, BorderLayout.CENTER)
         }, BorderLayout.NORTH)
         add(cards, BorderLayout.CENTER)

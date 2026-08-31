@@ -30,7 +30,7 @@ object InsightUi {
     fun hoverBackground(): Color = accentTint(HOVER_TINT)
 
     /** The IDE's own accent, mixed into the list background rather than replacing it. */
-    fun accentTint(strength: Double): Color = JBColor.lazy { blend(UIUtil.getListBackground(), accent(), strength) }
+    fun accentTint(strength: Double): Color = JBColor.lazy { blend(islandBackground(), accent(), strength) }
 
     fun cardForeground(selected: Boolean): Color =
         if (selected) UIUtil.getLabelForeground() else UIUtil.getLabelForeground()
@@ -51,17 +51,14 @@ object InsightUi {
 
     fun waiting(): Color = JBUI.CurrentTheme.Focus.warningColor(true)
 
-    /** A touch off the list background, so a card reads as a raised island without a border. */
-    fun islandBackground(): Color = JBColor.lazy {
-        val base = UIUtil.getListBackground()
-        if (JBColor.isBright()) shift(base, -6) else shift(base, 10)
+    /** The tone the tool window's own toolbar has, so a card belongs to the panel it sits in. */
+    fun islandBackground(): Color = JBColor.lazy { JBUI.CurrentTheme.ToolWindow.background() }
+
+    /** The strip behind the cards is the editor's ground, which is what the panel opens onto. */
+    fun panelBackground(): Color = JBColor.lazy {
+        com.intellij.openapi.editor.colors.EditorColorsManager.getInstance().globalScheme.defaultBackground
     }
 
-    private fun shift(color: Color, delta: Int): Color = Color(
-        (color.red + delta).coerceIn(0, 255),
-        (color.green + delta).coerceIn(0, 255),
-        (color.blue + delta).coerceIn(0, 255)
-    )
 }
 
 /** A panel that paints itself as a rounded island instead of a square block. */

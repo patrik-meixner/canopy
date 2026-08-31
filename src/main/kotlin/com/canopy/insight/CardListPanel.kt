@@ -27,7 +27,7 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
 
     private val stack = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        background = UIUtil.getListBackground()
+        background = InsightUi.panelBackground()
         border = JBUI.Borders.empty(InsightUi.GAP / 2, 0, InsightUi.GAP, 0)
     }
 
@@ -38,15 +38,15 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
 
     private val scroll: JScrollPane = ScrollPaneFactory.createScrollPane(stack, true).apply {
         horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        viewport.background = UIUtil.getListBackground()
-        background = UIUtil.getListBackground()
+        viewport.background = InsightUi.panelBackground()
+        background = InsightUi.panelBackground()
     }
 
     private var shown = 0
     private var glide: Timer? = null
 
     init {
-        background = UIUtil.getListBackground()
+        background = InsightUi.panelBackground()
         add(scroll, BorderLayout.CENTER)
     }
 

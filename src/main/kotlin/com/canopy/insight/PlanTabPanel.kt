@@ -20,10 +20,10 @@ class PlanTabPanel(project: Project, parent: Disposable) : InsightTabPanel(proje
     }
 
     init {
-        background = UIUtil.getListBackground()
+        background = InsightUi.panelBackground()
 
         add(JPanel(BorderLayout()).apply {
-            background = UIUtil.getListBackground()
+            background = InsightUi.panelBackground()
             add(summary, BorderLayout.WEST)
         }, BorderLayout.NORTH)
         add(cards, BorderLayout.CENTER)

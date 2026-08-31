@@ -35,7 +35,7 @@ class SessionCardRenderer(
      *  a frame around the card; painting the strip explicitly is what keeps the accent on the card. */
     private val outer = object : JPanel(BorderLayout()) {
         override fun paintComponent(graphics: java.awt.Graphics) {
-            graphics.color = UIUtil.getListBackground()
+            graphics.color = InsightUi.panelBackground()
             graphics.fillRect(0, 0, width, height)
         }
     }
