@@ -29,6 +29,9 @@ Shows: what the pitch line means — one session, more than one working tree.
 
 ## 3 — Commits across the whole session
 
+The demo has 16 commits in `billing` and 10 in `storefront`, the newest few from
+the last few hours, so the tab is full and a range is worth selecting.
+
 1. **Commits** tab.
 2. Select the top commit, then shift-click three below it.
 3. Let the file tree fill in.

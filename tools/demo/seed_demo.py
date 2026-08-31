@@ -88,16 +88,39 @@ INFRA_FILES = {
 }
 
 HISTORY = [
-    ("billing", "feat(pricing): assemble a line's price from net, vat and rounding", 9),
-    ("billing", "fix(pricing): round once, at the end, not per component", 8),
-    ("billing", "test(pricing): pin the rate table against the 2026 rules", 8),
-    ("storefront", "feat(cart): summarise a cart without a round trip", 7),
-    ("storefront", "fix(cart): keep quantity edits from resetting the selection", 6),
-    ("billing", "refactor(checkout): one place decides what a checkout costs", 5),
-    ("infra", "chore(terraform): pin the provider so plans stop drifting", 4),
-    ("billing", "feat(checkout): reject a checkout the pricing cannot explain", 3),
-    ("storefront", "feat(cart): show what a discount actually took off", 2),
-    ("billing", "fix(vat): reverse-charge lines carry no vat at all", 1),
+    ("billing", "feat(pricing): assemble a line's price from net, vat and rounding", 26),
+    ("billing", "test(pricing): the rate table is data, so it gets a fixture", 25),
+    ("storefront", "feat(cart): a cart that survives a reload", 24),
+    ("infra", "chore(terraform): one module per service, none of them special", 23),
+    ("billing", "fix(pricing): round once, at the end, not per component", 22),
+    ("storefront", "feat(cart): summarise a cart without a round trip", 21),
+    ("billing", "refactor(pricing): the rate table stops knowing about currencies", 20),
+    ("storefront", "fix(cart): keep quantity edits from resetting the selection", 19),
+    ("billing", "test(pricing): pin the rate table against the 2026 rules", 18),
+    ("infra", "feat(terraform): the billing service gets its own queue", 16),
+    ("billing", "fix(checkout): a failed payment leaves no half-written invoice", 15),
+    ("storefront", "refactor(cart): quantity lives on the line, not beside it", 14),
+    ("billing", "feat(invoice): number invoices per year, not per install", 13),
+    ("billing", "refactor(checkout): one place decides what a checkout costs", 12),
+    ("storefront", "fix(cart): an empty cart says so rather than rendering nothing", 11),
+    ("infra", "chore(terraform): pin the provider so plans stop drifting", 10),
+    ("billing", "test(checkout): the rejection path is the one worth pinning", 9),
+    ("billing", "feat(checkout): reject a checkout the pricing cannot explain", 8),
+    ("storefront", "feat(cart): show what a discount actually took off", 7),
+    ("billing", "fix(invoice): a credit note points at what it credits", 6),
+    ("storefront", "perf(cart): the summary stops recomputing on every keystroke", 5),
+    ("billing", "fix(vat): reverse-charge lines carry no vat at all", 4),
+    ("infra", "fix(terraform): the queue's dead letters are kept, not dropped", 3),
+]
+
+# Committed here rather than in the source repository, so they sit above the remote:
+# the review tree needs a Committed section as well as a Pushed one.
+UNPUSHED = [
+    ("billing", "feat(vat): reverse charge needs to know who the customer is", 4),
+    ("billing", "test(vat): a reverse-charge line carries no vat", 3),
+    ("billing", "fix(vat): domestic lines are unaffected by any of this", 2),
+    ("storefront", "fix(cart): selection is keyed on the line, not its position", 3),
+    ("storefront", "test(cart): editing a quantity keeps the selection", 2),
 ]
 
 
@@ -140,6 +163,13 @@ def build_workspace(root: Path) -> dict:
     commit(root, "chore: add the services as submodules", now - timedelta(days=30))
 
     repos = {name: root / name for name in definitions}
+
+    for name, message, hours_ago in UNPUSHED:
+        path = repos[name]
+        target = sorted(definitions[name])[hash(message) % len(definitions[name])]
+        file = path / target
+        file.write_text(file.read_text() + f"\n// {message.split(': ')[1]}\n")
+        commit(path, message, now - timedelta(hours=hours_ago, minutes=random.randint(0, 50)))
 
     for name, branch in (("billing", "feat/reverse-charge"), ("storefront", "fix/cart-selection")):
         worktree = root / "worktrees" / branch.replace("/", "+")
@@ -299,6 +329,13 @@ def main() -> int:
     print("Sessions:")
     for name, session_id in written:
         print(f"  {name}")
+    print()
+    for name, path in repos.items():
+        total = subprocess.run(["git", "-C", str(path), "rev-list", "--count", "HEAD"],
+                               capture_output=True, text=True).stdout.strip()
+        ahead = subprocess.run(["git", "-C", str(path), "rev-list", "--count", "origin/main..HEAD"],
+                               capture_output=True, text=True).stdout.strip()
+        print(f"  {name}: {total} commits, {ahead} of them unpushed")
     print()
     print(f"Open {root} in the IDE — the services are submodules of it.")
 
