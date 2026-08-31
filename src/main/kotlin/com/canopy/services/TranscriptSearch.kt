@@ -1,5 +1,6 @@
 package com.canopy.services
 
+import com.canopy.toolwindow.agentTextIn
 import com.canopy.toolwindow.humanMessageIn
 import com.canopy.util.ClaudePathEncoder
 import com.google.gson.Gson
@@ -10,15 +11,18 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 
+enum class TranscriptSpeaker { You, Agent }
+
 data class TranscriptHit(
     val sessionId: String,
     val ordinal: Int,
     val text: String,
-    val atMillis: Long
+    val atMillis: Long,
+    val speaker: TranscriptSpeaker
 )
 
 /**
- * Full-text search over what you asked every session.
+ * Full-text search over everything said in every session, by you and by the agent.
  *
  * There is no index, and deliberately so: a raw substring test on the undecoded line rejects
  * upwards of ninety-nine percent of a transcript, and JSON is parsed only for the lines that
@@ -71,10 +75,10 @@ object TranscriptSearch {
                     if (!line.contains(needle, ignoreCase = true)) continue
 
                     val record = runCatching { gson.fromJson(line, JsonObject::class.java) }.getOrNull() ?: continue
-                    val message = humanMessageIn(record, ++ordinal) ?: continue
-                    if (!message.text.contains(needle, ignoreCase = true)) continue
+                    val said = spokenIn(record, ++ordinal) ?: continue
+                    if (!said.second.contains(needle, ignoreCase = true)) continue
 
-                    hits.add(TranscriptHit(sessionId, ordinal, message.text, modifiedMillis(path)))
+                    hits.add(TranscriptHit(sessionId, ordinal, said.second, modifiedMillis(path), said.first))
                 }
             }
         } catch (_: Exception) {
@@ -83,6 +87,20 @@ object TranscriptSearch {
 
         return hits
     }
+
+    private fun spokenIn(record: JsonObject, ordinal: Int): Pair<TranscriptSpeaker, String>? {
+        humanMessageIn(record, ordinal)?.let { return TranscriptSpeaker.You to it.text }
+
+        return agentTextIn(record)?.let { TranscriptSpeaker.Agent to it }
+    }
+
+    /** Session ids alone, for the sidebar filter, which needs membership and not the snippets. */
+    fun sessionsContaining(
+        projectBasePath: String,
+        query: String,
+        withinDays: Int,
+        cancelled: AtomicBoolean
+    ): Set<String> = search(projectBasePath, query, withinDays, cancelled).mapTo(mutableSetOf()) { it.sessionId }
 
     private fun modifiedMillis(path: Path): Long =
         runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(0L)

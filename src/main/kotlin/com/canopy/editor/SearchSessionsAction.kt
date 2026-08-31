@@ -3,6 +3,7 @@ package com.canopy.editor
 import com.canopy.services.ClaudeSessionService
 import com.canopy.services.TranscriptHit
 import com.canopy.services.TranscriptSearch
+import com.canopy.services.TranscriptSpeaker
 import com.canopy.services.snippetAround
 import com.canopy.settings.CanopySettings
 import com.canopy.util.CanopyExecutor
@@ -144,7 +145,7 @@ private class SearchSessionsDialog(private val project: Project) : DialogWrapper
         ) {
             icon = AllIcons.Actions.Search
             append(nameOf(value.sessionId) ?: value.sessionId, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-            append("  #${value.ordinal}", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
+            append("  ${if (value.speaker == TranscriptSpeaker.Agent) "agent" else "you"}", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
             append("   ${snippetAround(value.text, queryOf())}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
         }
     }

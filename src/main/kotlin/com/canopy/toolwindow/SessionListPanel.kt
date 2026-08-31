@@ -88,6 +88,10 @@ class SessionListPanel(
     }
     private val rootPanel = JPanel(BorderLayout())
     private val searchField = SearchTextField(false)
+    private var transcriptMatches: Set<String> = emptySet()
+    private var transcriptQuery = ""
+    private var transcriptScan: java.util.concurrent.atomic.AtomicBoolean? = null
+    private var transcriptScanning = ""
     private val olderToggle = com.intellij.ui.components.ActionLink("") {
         showsOlder = !showsOlder
         applyFilter()
@@ -222,6 +226,8 @@ class SessionListPanel(
         }
         searchField.border = JBUI.Borders.empty()
         searchField.textEditor.border = JBUI.Borders.empty(2, 4)
+        searchField.textEditor.emptyText.text = "Search names and transcripts"
+        searchField.toolTipText = "Matches a session name, its branch or worktree, and anything said in it"
         rootPanel.isOpaque = false
         centerPanel.isOpaque = false
         table.isOpaque = false
@@ -588,17 +594,60 @@ class SessionListPanel(
     }
 
     /**
+     * A session is named after its first prompt, so a name match finds almost nothing of what a
+     * session actually contains. The transcripts are scanned off the thread and the rows they
+     * match are folded in when the scan lands, leaving the name match to render immediately.
+     */
+    private fun searchTranscripts(query: String) {
+        if (query.length < MIN_TRANSCRIPT_QUERY) {
+            transcriptScan?.set(true)
+            transcriptScan = null
+            transcriptScanning = ""
+            transcriptMatches = emptySet()
+            transcriptQuery = ""
+            return
+        }
+
+        // A reload repaints the list while a scan is still running, and restarting the scan there
+        // would mean it never finishes for as long as an agent keeps writing.
+        if (query == transcriptQuery || query == transcriptScanning) return
+
+        val basePath = project.basePath ?: return
+        transcriptScan?.set(true)
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
+        transcriptScan = cancelled
+        transcriptScanning = query
+        val days = com.canopy.settings.CanopySettings.getInstance().state.recentSessionDays
+
+        com.canopy.util.CanopyExecutor.submit {
+            val found = com.canopy.services.TranscriptSearch.sessionsContaining(basePath, query, days, cancelled)
+            if (cancelled.get()) return@submit
+
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                if (cancelled.get() || project.isDisposed) return@invokeLater
+
+                transcriptScanning = ""
+                transcriptQuery = query
+                transcriptMatches = found
+                applyFilter()
+            }
+        }
+    }
+
+    /**
      * Old sessions are kept out of the way rather than deleted: the list grows for months and a
      * search across all of it still has to work, so a query lifts the cut-off on its own.
      */
     private fun applyFilter() {
         val query = searchField.text.orEmpty().lowercase().trim()
+        searchTranscripts(query)
         val visible = if (showsOlder || query.isNotEmpty()) allSessions else allSessions.filter(::isRecent)
         val filtered = if (query.isEmpty()) {
             visible
         } else {
             visible.filter { session ->
-                session.displayName.lowercase().contains(query) ||
+                session.sessionId in transcriptMatches ||
+                    session.displayName.lowercase().contains(query) ||
                     session.firstPrompt.lowercase().contains(query) ||
                     session.gitBranch?.lowercase()?.contains(query) == true ||
                     session.worktreeName?.lowercase()?.contains(query) == true
@@ -894,3 +943,5 @@ private class PurgeDialog(
         super.doOKAction()
     }
 }
+
+private const val MIN_TRANSCRIPT_QUERY = 2

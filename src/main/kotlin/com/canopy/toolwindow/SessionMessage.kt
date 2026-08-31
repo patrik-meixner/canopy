@@ -63,3 +63,26 @@ fun withoutRepeats(messages: List<SessionMessage>): List<SessionMessage> =
     messages.filterIndexed { index, message ->
         index == 0 || messages[index - 1].text != message.text || message.images.isNotEmpty()
     }
+
+/**
+ * What the agent said, which is most of a transcript and none of what search used to look at.
+ *
+ * Thinking blocks are excluded: they are not what the agent told you, and matching them sends a
+ * search to a session where the phrase was only considered.
+ */
+fun agentTextIn(record: JsonObject): String? {
+    if (record.get("type")?.asString != "assistant") return null
+
+    val content = record.getAsJsonObject("message")?.get("content") ?: return null
+    if (!content.isJsonArray) return null
+
+    val spoken = content.asJsonArray
+        .filter { it.isJsonObject }
+        .map { it.asJsonObject }
+        .filter { it.get("type")?.asString == "text" }
+        .mapNotNull { it.get("text")?.asString }
+        .joinToString("\n")
+        .trim()
+
+    return spoken.ifEmpty { null }
+}
