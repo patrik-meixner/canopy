@@ -138,7 +138,7 @@ class SessionListPanel(
         }
         setupTable()
         setupLayout()
-        setupDoubleClick()
+        setupClickToOpen()
         setupContextMenu()
         sessionService.addChangeListener(changeListener)
         ApplicationManager.getApplication().invokeLater { reloadData() }
@@ -148,6 +148,9 @@ class SessionListPanel(
 
     /** JTable has no hover state of its own, so the row under the cursor is tracked here. */
     private var hoveredRow: Int = -1
+
+    /** The session the editor is showing, which survives the rows being replaced under it. */
+    private var selectedSessionId: String? = null
 
     private fun trackHover() {
         val motion = object : java.awt.event.MouseAdapter() {
@@ -348,29 +351,37 @@ class SessionListPanel(
         PopupHandler.installPopupMenu(orphanList, group, "ClaudeOrphanWorktreeMenu")
     }
 
-    private fun setupDoubleClick() {
-        object : DoubleClickListener() {
-            override fun onDoubleClick(event: MouseEvent): Boolean {
-                val row = table.selectedRow
-                if (row < 0) return false
+    /** A row is a session, and clicking one opens it: selecting without opening was never useful. */
+    private fun setupClickToOpen() {
+        table.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseReleased(event: MouseEvent) {
+                if (event.isPopupTrigger || javax.swing.SwingUtilities.isRightMouseButton(event)) return
+                val row = table.rowAtPoint(event.point)
+                if (row < 0) return
                 val session = tableModel.getItem(table.convertRowIndexToModel(row))
-                if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return false
+                if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
+
+                selectedSessionId = session.sessionId
                 onSessionSelected(session)
-                return true
             }
-        }.installOn(table)
+        })
     }
 
-    /** The list is a map of what is open; the session on screen has to be findable on it. */
+    /** The list is a map of what is open; the session on screen has to stay findable on it. */
     fun selectSession(sessionId: String?) {
         if (sessionId == null) return
+
+        selectedSessionId = sessionId
+        restoreSelection(scroll = true)
+    }
+
+    private fun restoreSelection(scroll: Boolean = false) {
+        val sessionId = selectedSessionId ?: return
         val row = (0 until table.rowCount)
             .firstOrNull { tableModel.getItem(table.convertRowIndexToModel(it)).sessionId == sessionId }
-            ?: return
-        if (table.selectedRow == row) return
-
-        table.selectionModel.setSelectionInterval(row, row)
-        table.scrollRectToVisible(table.getCellRect(row, 0, true))
+        if (row == null) return
+        if (table.selectedRow != row) table.selectionModel.setSelectionInterval(row, row)
+        if (scroll) table.scrollRectToVisible(table.getCellRect(row, 0, true))
     }
 
     private fun setupContextMenu() {
@@ -594,6 +605,9 @@ class SessionListPanel(
             }
         }
         tableModel.items = filtered
+        // Replacing the rows drops the selection, and the rows are replaced whenever an agent
+        // writes, so the session being reviewed has to be put back on every reload.
+        restoreSelection()
         updateOlderToggle()
     }
 
