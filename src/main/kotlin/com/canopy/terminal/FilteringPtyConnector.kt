@@ -13,6 +13,10 @@ open class FilteringPtyConnector(
 ) : PtyProcessTtyConnector(process, charset) {
 
     private val trace = PtyTrace.of(process)
+    private val firstOutput = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Runs once the far end has said anything, which for a shell means its prompt is up. */
+    var onFirstOutput: (() -> Unit)? = null
 
     companion object {
         private val UNSUPPORTED = unsupportedSequences
@@ -34,7 +38,10 @@ open class FilteringPtyConnector(
         length,
         readOnce = { target, from, size -> super.read(target, from, size) },
         filter = { UNSUPPORTED.replace(it, "") },
-        onRaw = { trace?.output(it) }
+        onRaw = {
+            trace?.output(it)
+            if (!firstOutput.getAndSet(true)) onFirstOutput?.invoke()
+        }
     )
 }
 

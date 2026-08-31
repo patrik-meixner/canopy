@@ -158,7 +158,7 @@ class ClaudeTerminalService(private val project: Project) {
         // Typed into an interactive shell rather than passed to one: -c runs without job control,
         // and every arrangement short of the shell actually reading the line has left the agent
         // drawing inline, with no alternate screen and so no mouse.
-        val spawned = if (throughShell) arrayOf(shell, "-l", "-i") else fullCommand
+        val spawned = if (throughShell) arrayOf(shell, "-l") else fullCommand
         val typed = if (throughShell) shellCommandLine(fullCommand.toList()) + "\n" else null
 
         log.info("Canopy: createWidget — spawned=${spawned.toList()}, PATH=${env["PATH"]?.take(200)}")
@@ -200,10 +200,10 @@ class ClaudeTerminalService(private val project: Project) {
         // The tool window's terminal installs these; a widget built directly gets none, which is
         // why a URL printed by a status line was plain text rather than something to click.
         widget.addMessageFilter(com.intellij.execution.filters.UrlFilter(project))
-        startOnceWide(widget) {
-            widget.start(connector)
-            typed?.let { sendInput(ptyProcess, it) }
-        }
+        // Written only once the shell has shown its prompt: a line sent before it is reading is a
+        // line the shell never runs.
+        typed?.let { line -> connector.onFirstOutput = { sendInput(ptyProcess, line) } }
+        startOnceWide(widget) { widget.start(connector) }
         ClipboardImagePaste.install(widget.terminalPanel) { sendInput(ptyProcess, it) }
 
         Disposer.register(parent, Disposable {
