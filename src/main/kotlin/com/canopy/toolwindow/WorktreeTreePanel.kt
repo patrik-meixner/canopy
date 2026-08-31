@@ -105,6 +105,10 @@ class WorktreeTreePanel(
 
     private fun selectedRepo(): WorktreeTreeNode.Repo? = selectedNode() as? WorktreeTreeNode.Repo
 
+    /** Every row belongs to a repository, so a repository action never needs the repository row. */
+    private fun scopeOfSelection(): com.canopy.model.RepoScope? =
+        selectedRepo()?.scope ?: selectedWorktree()?.scope ?: selectedBranch()?.scope
+
     private fun selectedBranch(): WorktreeTreeNode.Branch? = selectedNode() as? WorktreeTreeNode.Branch
 
     private fun selectedNode(): WorktreeTreeNode? {
@@ -117,7 +121,7 @@ class WorktreeTreePanel(
         val group = DefaultActionGroup().apply {
             add(object : AnAction("New Worktree Here", "Create a worktree in this repository", AllIcons.General.Add) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    val scope = selectedRepo()?.scope ?: return
+                    val scope = scopeOfSelection() ?: return
                     val name = Messages.showInputDialog(
                         project,
                         "Worktree name:",
@@ -130,7 +134,7 @@ class WorktreeTreePanel(
                 }
 
                 override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = selectedRepo() != null
+                    e.presentation.isEnabled = scopeOfSelection() != null
                 }
 
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -173,13 +177,13 @@ class WorktreeTreePanel(
             })
             add(object : AnAction("Configure Worktree Setup\u2026", "Choose the ignored files and install command this repository's worktrees need", AllIcons.General.Settings) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    val scope = selectedRepo()?.scope ?: selectedWorktree()?.scope ?: return
+                    val scope = scopeOfSelection() ?: return
 
                     WorktreeSetupDialog(project, scope.label, scope.root).show()
                 }
 
                 override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = selectedRepo() != null || selectedWorktree() != null
+                    e.presentation.isEnabled = scopeOfSelection() != null
                 }
 
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -187,13 +191,13 @@ class WorktreeTreePanel(
             addSeparator()
             add(object : AnAction("Run in Several Worktrees\u2026", "Start one prompt in several worktrees at once", AllIcons.Actions.RunAll) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    val scope = selectedRepo()?.scope ?: selectedWorktree()?.scope ?: return
+                    val scope = scopeOfSelection() ?: return
 
                     fanOut(scope)
                 }
 
                 override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = selectedRepo() != null || selectedWorktree() != null
+                    e.presentation.isEnabled = scopeOfSelection() != null
                 }
 
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -215,30 +219,62 @@ class WorktreeTreePanel(
             addSeparator()
             add(object : AnAction("Disk Usage", "Measure what this repository's worktrees cost on disk", AllIcons.Actions.Profile) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    val repo = selectedRepo() ?: return
+                    val scope = scopeOfSelection() ?: return
 
-                    reportDiskUsage(repo, worktreesUnderSelection())
+                    reportDiskUsage(scope, worktreesOf(scope))
                 }
 
                 override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = selectedRepo() != null
+                    e.presentation.isEnabled = scopeOfSelection() != null
                 }
 
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
             add(object : AnAction("Prune Registrations", "Drop git's entries for worktree directories that are gone", AllIcons.Actions.GC) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    val repo = selectedRepo() ?: return
+                    val scope = scopeOfSelection() ?: return
 
-                    pruneRegistrations(repo)
+                    pruneRegistrations(scope)
                 }
 
                 override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = selectedRepo() != null
+                    e.presentation.isEnabled = scopeOfSelection() != null
                 }
 
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
+            addSeparator()
+            add(object : AnAction("Delete Worktree", "Remove this worktree and its directory", AllIcons.Actions.GC) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val worktree = selectedWorktree() ?: return
+
+                    deleteWorktree(worktree)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedWorktree() != null
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Delete Branch", "Delete this branch, if it has been merged", AllIcons.Actions.GC) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val branch = selectedBranch() ?: return
+
+                    deleteBranch(branch)
+                }
+
+                override fun update(e: AnActionEvent) {
+                    val branch = selectedBranch()
+                    // git refuses to delete the branch a worktree has checked out, and so does this.
+                    e.presentation.isEnabled = branch != null &&
+                        branch.entry.worktreePath == null &&
+                        !branch.entry.isCurrent
+                }
+
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            addSeparator()
             add(object : AnAction("Reveal in Finder", "Open the worktree directory", AllIcons.Actions.MenuOpen) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val path = selectedWorktree()?.entry?.path ?: return
@@ -256,13 +292,9 @@ class WorktreeTreePanel(
         PopupHandler.installPopupMenu(tree, group, "CanopyWorktreeTree")
     }
 
-    private fun worktreesUnderSelection(): List<Pair<String, String>> {
-        val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return emptyList()
-
-        return (0 until node.childCount)
-            .mapNotNull { (node.getChildAt(it) as? DefaultMutableTreeNode)?.userObject as? WorktreeTreeNode.Worktree }
-            .map { (it.status?.name ?: Path.of(it.entry.path).fileName.toString()) to it.entry.path }
-    }
+    /** Asked of the repository, not of the selected row, so it answers the same from any of them. */
+    private fun worktreesOf(scope: com.canopy.model.RepoScope): List<Pair<String, String>> =
+        WorktreeInspector.list(scope.root).map { (Path.of(it.path).fileName?.toString() ?: it.path) to it.path }
 
     /** Each worktree gets its own session, and each session gets the same prompt once it is up. */
     private fun fanOut(scope: com.canopy.model.RepoScope) {
@@ -277,6 +309,59 @@ class WorktreeTreePanel(
         com.canopy.services.FanOutPrompts.getInstance(project).expect(plan.names, plan.prompt)
     }
 
+    /** Removal is not undoable, so it names what will go and what would be lost with it. */
+    private fun deleteWorktree(worktree: WorktreeTreeNode.Worktree) {
+        val name = Path.of(worktree.entry.path).fileName?.toString() ?: worktree.entry.path
+        val ahead = worktree.status?.ahead ?: 0
+        val dirty = worktree.status?.dirtyCount ?: 0
+        val losses = listOfNotNull(
+            dirty.takeIf { it > 0 }?.let { "$it uncommitted file(s)" },
+            ahead.takeIf { it > 0 }?.let { "$it commit(s) not in the base branch" }
+        )
+        val warning = if (losses.isEmpty()) "" else "\n\nThis would lose ${losses.joinToString(" and ")}."
+
+        val confirmed = Messages.showYesNoDialog(
+            project,
+            "Remove the worktree $name and its directory?$warning",
+            "Delete Worktree",
+            null
+        )
+        if (confirmed != Messages.YES) return
+
+        CanopyExecutor.submit {
+            val (removed, output) = WorktreeInspector.remove(worktree.scope.root, worktree.entry.path, force = losses.isNotEmpty())
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                notify(if (removed) "Removed $name" else "Could not remove $name: ${output.take(200)}")
+                refresh(force = true)
+            }
+        }
+    }
+
+    private fun deleteBranch(branch: WorktreeTreeNode.Branch) {
+        val confirmed = Messages.showYesNoDialog(
+            project,
+            "Delete the branch ${branch.entry.name}?",
+            "Delete Branch",
+            null
+        )
+        if (confirmed != Messages.YES) return
+
+        CanopyExecutor.submit {
+            val (deleted, output) = WorktreeInspector.deleteBranchIfMerged(branch.scope.root, branch.entry.name)
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                // git -d refuses an unmerged branch; saying so beats a silent failure.
+                notify(if (deleted) "Deleted ${branch.entry.name}" else "Not deleted: ${output.take(200)}")
+                refresh(force = true)
+            }
+        }
+    }
+
     private fun provision(scope: com.canopy.model.RepoScope, targetPath: String) {
         val copied = WorktreeProvisioning.provision(project, scope.label, scope.root, targetPath)
 
@@ -284,9 +369,9 @@ class WorktreeTreePanel(
     }
 
     /** Walking a worktree with installed dependencies takes seconds, so it never runs on the EDT. */
-    private fun reportDiskUsage(repo: WorktreeTreeNode.Repo, worktrees: List<Pair<String, String>>) {
+    private fun reportDiskUsage(scope: com.canopy.model.RepoScope, worktrees: List<Pair<String, String>>) {
         if (worktrees.isEmpty()) {
-            return notify("${repo.scope.label} has no secondary worktrees")
+            return notify("${scope.label} has no worktrees")
         }
 
         CanopyExecutor.submit {
@@ -299,14 +384,14 @@ class WorktreeTreePanel(
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
 
-                notify("${repo.scope.label} worktrees: ${formatSize(total)}<br>$lines")
+                notify("${scope.label} worktrees: ${formatSize(total)}<br>$lines")
             }
         }
     }
 
-    private fun pruneRegistrations(repo: WorktreeTreeNode.Repo) {
+    private fun pruneRegistrations(scope: com.canopy.model.RepoScope) {
         CanopyExecutor.submit {
-            val (succeeded, output) = WorktreeInspector.prune(repo.scope.root)
+            val (succeeded, output) = WorktreeInspector.prune(scope.root)
 
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
