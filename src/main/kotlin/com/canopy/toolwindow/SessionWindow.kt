@@ -16,6 +16,9 @@ object SessionWindow {
     fun activateDetail(project: Project) {
         val window = ToolWindowManager.getInstance(project).getToolWindow(ID) ?: return
 
+        // A window the user has closed stays closed: switching sessions is not a reason to reopen it.
+        if (!window.isVisible) return
+
         window.activate {
             val content = window.contentManager.contents.firstOrNull { it.displayName == "Detail" } ?: return@activate
 

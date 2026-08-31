@@ -95,7 +95,11 @@ class SessionListPanel(
     private val olderToggle = com.intellij.ui.components.ActionLink("") {
         showsOlder = !showsOlder
         applyFilter()
-    }.apply { border = JBUI.Borders.empty(0, 6) }
+    }.apply {
+        border = JBUI.Borders.empty(6, 10)
+        isOpaque = true
+        background = com.canopy.insight.InsightUi.panelBackground()
+    }
 
     private var allSessions: List<SessionDisplay> = emptyList()
 
@@ -279,7 +283,6 @@ class SessionListPanel(
 
         topBar.add(toolbar.component, BorderLayout.WEST)
         topBar.add(searchField, BorderLayout.CENTER)
-        topBar.add(olderToggle, BorderLayout.EAST)
 
         rootPanel.add(topBar, BorderLayout.NORTH)
         if (worktreeMode) {
@@ -290,6 +293,8 @@ class SessionListPanel(
             rootPanel.add(loadingPanel, BorderLayout.CENTER)
         }
         loadingPanel.add(tableScroll, BorderLayout.CENTER)
+        // The link belongs where the list runs out, not in a toolbar above rows it says nothing about.
+        loadingPanel.add(olderToggle, BorderLayout.SOUTH)
     }
 
     private fun setupOrphanSection() {

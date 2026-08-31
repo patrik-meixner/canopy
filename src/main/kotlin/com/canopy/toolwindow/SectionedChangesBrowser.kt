@@ -287,12 +287,21 @@ class SectionedChangesBrowser(
     }
 
     private fun insertByCommit(builder: TreeModelBuilder, parent: ChangesBrowserNode<*>) {
-        for (entry in pushedCommits) {
-            if (entry.changes.isEmpty()) continue
+        val listed = pushedCommits.filter { it.changes.isNotEmpty() }
+        val budgeted = withinFileBudget(listed, PUSHED_FILE_BUDGET) { it.changes.size }
+
+        budgeted.kept.forEach { entry ->
             val node = CommitBrowserNode(entry)
             builder.insertSubtreeRoot(node, parent)
             builder.insertChanges(entry.changes, node)
         }
+
+        if (budgeted.omitted == 0) return
+
+        builder.insertSubtreeRoot(
+            OlderCommitsNode("${budgeted.omitted} older commits, ${budgeted.omittedFiles} files"),
+            parent
+        )
     }
 
     private fun tagNode(builder: TreeModelBuilder, section: SessionChangeSection): ChangesBrowserNode<*> {
@@ -310,3 +319,5 @@ class SectionedChangesBrowser(
         return node
     }
 }
+
+private const val PUSHED_FILE_BUDGET = 400
