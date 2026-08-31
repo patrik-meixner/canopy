@@ -406,15 +406,8 @@ class ClaudeSessionEditor(
                 refreshTabTitle()
                 updateContextBar(status)
 
-                // Notify when a non-focused tab needs attention
-                if (file.notifyState != null && prevNotify == null && selectedFile != file) {
-                    val msg = if (file.notifyState == "permission_prompt")
-                        "${file.baseName} needs permission" else "${file.baseName} is waiting for input"
-                    NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Canopy Session Attention")
-                        .createNotification(msg, NotificationType.INFORMATION)
-                        .notify(project)
-                }
+                // Notifications are SessionAttentionNotifier's job: it is the only place that knows
+                // which states are worth a balloon, and two producers cannot honour one setting.
             }
         }
         statusService.addStatusListener(statusListener)
