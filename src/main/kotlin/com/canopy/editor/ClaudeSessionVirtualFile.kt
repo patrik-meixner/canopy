@@ -67,14 +67,19 @@ class ClaudeSessionVirtualFile(
     // it resized the tab and reflowed the whole strip. Returning null means "idle": the
     // badge slot is reserved but drawn empty, so the tab width is identical in every state.
     /** The same vocabulary the session list uses, so a tab and its row never disagree. */
-    fun statusGlyph(): String? = when {
-        isExternallyOpen -> "↗"
-        isUnresponsive -> "⊘"
-        notifyState != null -> com.canopy.model.sessionAttentionOf(notifyState)
-            .takeIf { it != com.canopy.model.SessionAttention.None }
-            ?.glyph
-        isThinking -> com.canopy.model.SessionAttention.Working.glyph
-        else -> null
+    fun statusGlyph(): String? {
+        val presence = when {
+            isUnresponsive -> com.canopy.model.SessionPresence.Unresponsive
+            isExternallyOpen -> com.canopy.model.SessionPresence.OpenElsewhere
+            else -> com.canopy.model.SessionPresence.OpenHere
+        }
+        val attention = when {
+            notifyState != null -> com.canopy.model.sessionAttentionOf(notifyState)
+            isThinking -> com.canopy.model.SessionAttention.Working
+            else -> com.canopy.model.SessionAttention.None
+        }
+
+        return com.canopy.model.sessionGlyph(attention, presence, System.currentTimeMillis())
     }
 
     fun computeTabTitle(): String = baseName

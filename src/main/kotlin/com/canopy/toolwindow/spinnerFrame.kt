@@ -11,3 +11,6 @@ const val SPINNER_FRAME_MS = 110L
  * often each one happens to be repainted.
  */
 fun spinnerFrame(millis: Long): String = FRAMES[((millis / SPINNER_FRAME_MS) % FRAMES.size).toInt()]
+
+/** Whether a glyph came from the spinner, for a painter that has to keep it moving. */
+fun isSpinnerFrame(glyph: String): Boolean = glyph in FRAMES

@@ -105,17 +105,14 @@ class SessionCardRenderer(
     }
 
     private fun glyphFor(session: SessionDisplay, attention: SessionAttention): String {
-        // A spinner is the difference between an agent that is running and one that has stopped.
-        if (attention == SessionAttention.Working || attention == SessionAttention.Compacting) {
-            return spinnerFrame(System.currentTimeMillis())
+        val presence = when (getStatus(session.sessionId)) {
+            SessionStatus.OPEN_IN_PLUGIN -> com.canopy.model.SessionPresence.OpenHere
+            SessionStatus.OPEN_EXTERNALLY -> com.canopy.model.SessionPresence.OpenElsewhere
+            SessionStatus.AVAILABLE -> com.canopy.model.SessionPresence.Available
         }
-        if (attention != SessionAttention.None) return attention.glyph
 
-        return when (getStatus(session.sessionId)) {
-            SessionStatus.OPEN_IN_PLUGIN -> "●"
-            SessionStatus.OPEN_EXTERNALLY -> "↗"
-            SessionStatus.AVAILABLE -> "○"
-        }
+        // A row always carries a mark, so the column never changes width as a session changes state.
+        return com.canopy.model.sessionGlyph(attention, presence, System.currentTimeMillis()) ?: "●"
     }
 
     private fun glyphColor(session: SessionDisplay, attention: SessionAttention, selected: Boolean): java.awt.Color = when {

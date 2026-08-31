@@ -47,7 +47,7 @@ class ClaudeSessionIconProvider : FileIconProvider {
     /** Paints a status glyph centered in a fixed 16px box; an empty glyph reserves the box but draws nothing. */
     private class StatusGlyphIcon(private val glyph: String) : Icon {
         private val size = JBUIScale.scale(16)
-        private val spins = glyph == com.canopy.model.SessionAttention.Working.glyph
+        private val spins = com.canopy.toolwindow.isSpinnerFrame(glyph)
 
         override fun getIconWidth(): Int = size
         override fun getIconHeight(): Int = size
