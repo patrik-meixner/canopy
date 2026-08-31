@@ -20,7 +20,9 @@ class SectionedChangesBrowser(
     private val onOverlapsRequested: () -> Unit,
     private val onNoteRequested: () -> Unit,
     private val onProblemsRequested: () -> Unit,
-    private val onRestoreRequested: () -> Unit
+    private val onRestoreRequested: () -> Unit,
+    private val onCommitSelectionRequested: () -> Unit,
+    private val onPushSelectionRequested: () -> Unit
 ) : ChangesBrowserBase(project, false, false) {
 
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
@@ -133,7 +135,51 @@ class SectionedChangesBrowser(
      * ends in wanting the file itself.
      */
     override fun createPopupMenuActions(): List<com.intellij.openapi.actionSystem.AnAction> =
-        listOf(diffAction, openSourceAction(), revealAction(), copyPathAction()) + super.createPopupMenuActions()
+        listOf(
+            diffAction,
+            openSourceAction(),
+            com.intellij.openapi.actionSystem.Separator.getInstance(),
+            commitSelectionAction(),
+            pushSelectionAction(),
+            com.intellij.openapi.actionSystem.Separator.getInstance(),
+            revealAction(),
+            copyPathAction()
+        ) + super.createPopupMenuActions()
+
+    /**
+     * A directory row stands for the files under it, so committing one commits those and nothing
+     * else. Pushing has no directory-sized form: a push moves a repository, so the selection only
+     * says which repositories are meant.
+     */
+    private fun commitSelectionAction() = object : com.intellij.openapi.actionSystem.AnAction(
+        "Commit Selected Files\u2026",
+        "Commit only the files under the selection",
+        com.intellij.icons.AllIcons.Actions.Commit
+    ), com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) =
+            onCommitSelectionRequested()
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            event.presentation.isEnabled = selectedPaths().isNotEmpty()
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }
+
+    private fun pushSelectionAction() = object : com.intellij.openapi.actionSystem.AnAction(
+        "Push Their Repositories",
+        "Push the repositories the selected files belong to",
+        com.intellij.icons.AllIcons.Vcs.Push
+    ), com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) =
+            onPushSelectionRequested()
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            event.presentation.isEnabled = selectedPaths().isNotEmpty()
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }
 
     private fun openSourceAction() = object : com.intellij.openapi.actionSystem.AnAction(
         "Edit Source",

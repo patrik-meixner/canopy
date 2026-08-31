@@ -15,14 +15,49 @@ object SessionCommit {
 
     private const val GIT_TIMEOUT_MS = 60_000L
 
-    fun commit(roots: List<String>, message: String, superproject: String?): List<CommitOutcome> {
-        val committed = roots.mapNotNull { root -> commitOne(root, message)?.let { root to it } }
+    fun commit(roots: List<String>, message: String, superproject: String?): List<CommitOutcome> =
+        finish(roots.mapNotNull { root -> commitOne(root, message)?.let { root to it } }, message, superproject)
+
+    /**
+     * Commits only the files that were picked, leaving the rest of the working tree where it is.
+     *
+     * The pathspec is repeated on the commit so anything already staged for other reasons does not
+     * ride along in a commit that claims to be about the selection.
+     */
+    fun commitPaths(
+        pathsByRoot: Map<String, List<String>>,
+        message: String,
+        superproject: String?
+    ): List<CommitOutcome> =
+        finish(
+            pathsByRoot.mapNotNull { (root, paths) -> commitSome(root, paths, message)?.let { root to it } },
+            message,
+            superproject
+        )
+
+    private fun finish(
+        committed: List<Pair<String, CommitOutcome>>,
+        message: String,
+        superproject: String?
+    ): List<CommitOutcome> {
         val outcomes = committed.map { it.second }
         val submodules = committed.map { it.first }.filter { isInside(it, superproject) }
 
         if (submodules.isEmpty() || superproject == null) return outcomes
 
         return outcomes + updatePointers(superproject, submodules, message)
+    }
+
+    private fun commitSome(root: String, paths: List<String>, message: String): CommitOutcome? {
+        if (paths.isEmpty()) return null
+
+        val staged = git(root, "add", "--", *paths.toTypedArray())
+        if (!staged.first) return CommitOutcome(root, false, staged.second)
+        if (!hasStagedChanges(root)) return null
+
+        val (ok, output) = git(root, "commit", "-m", message, "--", *paths.toTypedArray())
+
+        return CommitOutcome(root, ok, output)
     }
 
     private fun commitOne(root: String, message: String): CommitOutcome? {

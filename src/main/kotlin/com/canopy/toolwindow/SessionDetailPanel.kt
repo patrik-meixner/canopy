@@ -43,7 +43,9 @@ class SessionDetailPanel(
         onOverlapsRequested = ::showOverlaps,
         onNoteRequested = ::sendNote,
         onProblemsRequested = ::sendProblems,
-        onRestoreRequested = ::restoreCheckpoint
+        onRestoreRequested = ::restoreCheckpoint,
+        onCommitSelectionRequested = ::commitSelection,
+        onPushSelectionRequested = ::pushSelection
     ).apply { border = JBUI.Borders.empty() }
 
     /** Recomputing on every tab switch made going back and forth re-run git each time. */
@@ -188,14 +190,64 @@ class SessionDetailPanel(
         CanopyExecutor.submit {
             val outcomes = SessionCommit.commit(rootsOf(sessionId).toList(), message, project.basePath)
             ApplicationManager.getApplication().invokeLater {
-                val failed = outcomes.filterNot { it.ok }
-                if (failed.isNotEmpty()) {
-                    com.intellij.openapi.ui.Messages.showErrorDialog(
-                        project,
-                        failed.joinToString("\n\n") { "${it.root}:\n${it.detail.take(400)}" },
-                        "Commit Failed"
-                    )
-                }
+                reportCommit(outcomes)
+                refresh(force = true)
+            }
+        }
+    }
+
+    private fun reportCommit(outcomes: List<CommitOutcome>) {
+        val failed = outcomes.filterNot { it.ok }
+        if (failed.isEmpty()) return
+
+        com.intellij.openapi.ui.Messages.showErrorDialog(
+            project,
+            failed.joinToString("\n\n") { "${it.root}:\n${it.detail.take(400)}" },
+            "Commit Failed"
+        )
+    }
+
+    private fun commitSelection() {
+        val sessionId = shownSessionId ?: return
+        val paths = browser.selectedPaths()
+        if (paths.isEmpty()) return
+
+        val message = com.intellij.openapi.ui.Messages.showMultilineInputDialog(
+            project,
+            "Commit message for the ${paths.size} selected file(s):",
+            "Commit Selected Files",
+            null,
+            null,
+            null
+        )?.trim().orEmpty()
+        if (message.isEmpty()) return
+
+        CanopyExecutor.submit {
+            val grouped = groupPathsByRoot(paths, rootsOf(sessionId))
+            val outcomes = SessionCommit.commitPaths(grouped, message, project.basePath)
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                reportCommit(outcomes)
+                refresh(force = true)
+            }
+        }
+    }
+
+    private fun pushSelection() {
+        val sessionId = shownSessionId ?: return
+        val paths = browser.selectedPaths()
+        if (paths.isEmpty()) return
+
+        CanopyExecutor.submit {
+            val roots = groupPathsByRoot(paths, rootsOf(sessionId)).keys.toList()
+            val outcomes = SessionPush.push(roots, project.basePath)
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                reportPush(outcomes)
                 refresh(force = true)
             }
         }
