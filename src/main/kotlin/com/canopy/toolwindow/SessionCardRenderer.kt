@@ -99,7 +99,7 @@ class SessionCardRenderer(
     private fun glyphColor(session: SessionDisplay, attention: SessionAttention, selected: Boolean): java.awt.Color = when {
         selected -> InsightUi.cardForeground(true)
         attention == SessionAttention.NeedsPermission -> InsightUi.needsAttention()
-        attention == SessionAttention.WaitingForInput -> InsightUi.waiting()
+        attention == SessionAttention.WaitingForInput -> InsightUi.accent()
         getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN -> InsightUi.accent()
         else -> UIUtil.getLabelDisabledForeground()
     }

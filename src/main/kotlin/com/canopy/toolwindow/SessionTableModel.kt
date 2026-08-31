@@ -78,7 +78,7 @@ private class StatusColumnInfo(
                     item != null && getAttention(item) == com.canopy.model.SessionAttention.NeedsPermission ->
                         com.canopy.insight.InsightUi.needsAttention()
                     item != null && getAttention(item) == com.canopy.model.SessionAttention.WaitingForInput ->
-                        com.canopy.insight.InsightUi.waiting()
+                        com.canopy.insight.InsightUi.accent()
                     item != null && getStatus(item.sessionId) == SessionStatus.OPEN_IN_PLUGIN ->
                         com.intellij.ui.JBColor.namedColor("Component.focusColor", com.canopy.insight.InsightUi.accent())
                     item != null && getStatus(item.sessionId) == SessionStatus.OPEN_EXTERNALLY ->

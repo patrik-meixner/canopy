@@ -8,7 +8,8 @@ package com.canopy.model
  */
 enum class SessionAttention(val rank: Int, val glyph: String) {
     NeedsPermission(0, "!"),
-    WaitingForInput(1, "?"),
+    /** A finished turn is your turn, not an alarm: it reads as a prompt, not a question. */
+    WaitingForInput(1, "\u203A"),
     Working(2, "*"),
     Compacting(2, "~"),
     None(3, "");
