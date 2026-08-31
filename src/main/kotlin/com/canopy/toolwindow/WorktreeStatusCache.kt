@@ -110,11 +110,12 @@ class WorktreeStatusCache(
     /** Sequential on purpose: N worktrees must not mean N git processes at once. */
     private fun sweep(names: List<String>) {
         val basePath = project.basePath ?: return
+        val mainBranch = WorktreeInspector.currentBranch(basePath)
         var changed = false
         for (name in names) {
             val path = ClaudePathEncoder.worktreeAbsolutePath(basePath, name)
             // status() short-circuits on a missing directory without spawning git.
-            val status = WorktreeInspector.status(path, basePath)
+            val status = WorktreeInspector.status(path, basePath, mainBranch)
             if (cache.put(name, status) != status) changed = true
         }
         if (changed) ApplicationManager.getApplication().invokeLater(onUpdated)

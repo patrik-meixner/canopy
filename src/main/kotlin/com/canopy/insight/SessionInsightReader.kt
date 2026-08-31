@@ -6,7 +6,6 @@ import com.canopy.util.JsonlTailReader
 import com.canopy.util.touchedFilePathsIn
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -50,18 +49,12 @@ class SessionInsightReader {
         return fresh
     }
 
-    /** Walking up to a .git per file per tick was disk work on the EDT; the answer never changes. */
-    private fun repositoryOf(path: String): String =
-        repositories.getOrPut(Path.of(path).parent?.toString() ?: path) { repositoryLabel(path) }
+    /** The shared cache, so the walk up to a .git happens once per directory for the whole plugin. */
+    private fun repositoryOf(path: String): String {
+        val directory = Path.of(path).parent ?: return OUTSIDE_ANY_REPOSITORY
+        val root = com.canopy.util.GitRootCache.rootOf(directory) ?: return OUTSIDE_ANY_REPOSITORY
 
-    private fun repositoryLabel(path: String): String {
-        var current: Path? = Path.of(path).parent
-        while (current != null) {
-            if (Files.exists(current.resolve(".git"))) return current.fileName?.toString() ?: current.toString()
-            current = current.parent
-        }
-
-        return "Outside any repository"
+        return repositories.getOrPut(root) { Path.of(root).fileName?.toString() ?: root }
     }
 
     private fun clear() {
@@ -128,3 +121,5 @@ internal fun activityDetail(tool: String, input: JsonObject?): String {
 
     return if (single.length > DETAIL_LENGTH) single.take(DETAIL_LENGTH - 1) + "…" else single
 }
+
+private const val OUTSIDE_ANY_REPOSITORY = "Outside any repository"

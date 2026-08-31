@@ -318,7 +318,14 @@ object WorktreeInspector {
      *
      * Costs two to four short git invocations (~30-50 ms total). Call off the EDT.
      */
-    fun status(worktreePath: String, projectPath: String): WorktreeStatus {
+    /** The branch a repository is on, for callers that would otherwise ask once per worktree. */
+    fun currentBranch(repositoryPath: String): String? = runGit(repositoryPath, "branch", "--show-current")
+        .takeIf { it.first == 0 }
+        ?.second
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+    fun status(worktreePath: String, projectPath: String, knownMainBranch: String? = null): WorktreeStatus {
         val name = worktreePath.substringAfterLast('/')
 
         val wtPath = Path.of(worktreePath)
@@ -327,17 +334,21 @@ object WorktreeInspector {
         }
 
         try {
-            fun gitPathExists(arg: String): Boolean {
-                val (rc, out) = runGit(worktreePath, "rev-parse", "--git-path", arg)
-                if (rc != 0) return false
-                val rel = out.trim()
-                return rel.isNotEmpty() && Files.exists(wtPath.resolve(rel))
-            }
+            // One rev-parse for the git directory, then plain existence checks inside it. Asking
+            // git for each path meant four processes per worktree to learn that nothing is going on.
+            val gitDir = runGit(worktreePath, "rev-parse", "--git-dir")
+                .takeIf { it.first == 0 }
+                ?.second
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { wtPath.resolve(it) }
+
+            fun inGitDir(entry: String): Boolean = gitDir != null && Files.exists(gitDir.resolve(entry))
 
             val inProgress = when {
-                gitPathExists("rebase-merge") || gitPathExists("rebase-apply") -> WorktreeState.REBASING
-                gitPathExists("MERGE_HEAD") -> WorktreeState.MERGING
-                gitPathExists("CHERRY_PICK_HEAD") -> WorktreeState.CHERRY_PICKING
+                inGitDir("rebase-merge") || inGitDir("rebase-apply") -> WorktreeState.REBASING
+                inGitDir("MERGE_HEAD") -> WorktreeState.MERGING
+                inGitDir("CHERRY_PICK_HEAD") -> WorktreeState.CHERRY_PICKING
                 else -> null
             }
 
@@ -351,8 +362,12 @@ object WorktreeInspector {
             }
             val wtBranch = wtOut.trim()
 
-            val (mainRc, mainOut) = runGit(projectPath, "branch", "--show-current")
-            val mainBranch = if (mainRc == 0) mainOut.trim() else ""
+            // The same answer for every worktree of a repository, so a sweep asks once.
+            val mainBranch = knownMainBranch ?: runGit(projectPath, "branch", "--show-current")
+                .takeIf { it.first == 0 }
+                ?.second
+                ?.trim()
+                .orEmpty()
 
             val (dirtyRc, dirtyOut) = runGit(worktreePath, "status", "--porcelain")
             // Porcelain v1: "XY <path>" — the path starts at column 3. Renames read
