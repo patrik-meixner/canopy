@@ -47,6 +47,10 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
         group("Review") {
             row {
+                checkBox("Start the agent through the login shell").bindSelected(state::runAgentThroughShell)
+            }.rowComment("As the terminal's own process the agent renders inline, so its mouse selection and clickable rows do not work. Costs whatever your shell profile costs at startup.")
+
+            row {
                 checkBox("Detect whether the agent is working").bindSelected(state::detectAgentActivity)
             }.rowComment("Reads the terminal stream to sort blocked sessions first. Turning it off spawns the agent exactly as a shell tab does, at the cost of the working and waiting states.")
 

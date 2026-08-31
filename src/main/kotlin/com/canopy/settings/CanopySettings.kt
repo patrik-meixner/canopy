@@ -20,6 +20,9 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         /** Wraps the terminal stream to tell working from waiting. Off spawns the agent exactly as a shell tab does. */
         @JvmField var detectAgentActivity: Boolean = true
 
+        /** Starts the agent as a child of the login shell, which is the only arrangement where its mouse works. */
+        @JvmField var runAgentThroughShell: Boolean = true
+
         /** Manual override for the claude binary path. Empty string means auto-detect. */
         @JvmField var claudeBinaryPath: String = ""
 

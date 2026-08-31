@@ -151,10 +151,19 @@ class ClaudeTerminalService(private val project: Project) {
             resolvedCommand
         }
 
-        log.info("Canopy: createWidget — fullCommand=${fullCommand.toList()}, PATH=${env["PATH"]?.take(200)}")
+        // Run through the login shell: as the pty's own process the agent renders inline, with no
+        // alternate screen and therefore no mouse, so selection and its clickable parts are dead.
+        val spawned = if (isShell || !com.canopy.settings.CanopySettings.getInstance().state.runAgentThroughShell) {
+            fullCommand
+        } else {
+            val shell = env["SHELL"] ?: "/bin/zsh"
+            arrayOf(shell, "-l", "-c", shellCommandLine(fullCommand.toList()))
+        }
+
+        log.info("Canopy: createWidget — spawned=${spawned.toList()}, PATH=${env["PATH"]?.take(200)}")
 
         val ptyProcess = try {
-            PtyProcessBuilder(fullCommand)
+            PtyProcessBuilder(spawned)
                 .setEnvironment(env)
                 .setDirectory(effectiveWorkingDir)
                 .setInitialColumns(INITIAL_COLUMNS)
