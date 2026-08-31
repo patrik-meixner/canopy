@@ -191,7 +191,12 @@ class SessionDetailPanel(
      */
     private fun collectChanges(session: SessionDisplay?): SessionChangeSet {
         val scope = changeScopeFor(session, workspaceRoots())
-        val collected = scope.roots.map { SessionChanges.collect(it, scope.since) }
+        // Around five git processes per repository, and a session routinely spans six of them.
+        // Run sequentially that is the half second before the tree appears; they are waiting on
+        // the disk, not on each other.
+        val collected = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
+            .invokeAll(scope.roots.map { root -> java.util.concurrent.Callable { SessionChanges.collect(root, scope.since) } })
+            .map { it.get() }
 
         return SessionChangeSet(
             changes = SessionChangeSection.entries.associateWith { section ->

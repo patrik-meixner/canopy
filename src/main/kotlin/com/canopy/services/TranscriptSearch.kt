@@ -107,10 +107,11 @@ object TranscriptSearch {
 }
 
 private const val SNIPPET_RADIUS = 60
+private val WHITESPACE_RUN = Regex("\\s+")
 
 /** The match in the middle of its own sentence, which is what makes a result list scannable. */
 fun snippetAround(text: String, query: String): String {
-    val single = text.replace(Regex("\\s+"), " ").trim()
+    val single = text.replace(WHITESPACE_RUN, " ").trim()
     val at = single.indexOf(query, ignoreCase = true)
     if (at < 0) return single.take(SNIPPET_RADIUS * 2)
 

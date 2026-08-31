@@ -7,6 +7,13 @@ import java.nio.file.Path
 
 object ClaudeProcessDetector {
 
+    private val SPARE_PROCESS = Regex("""\bclaude\b.*\b(daemon|bg-pty-host|bg-spare)\b""")
+    private val WHITESPACE = Regex("\\s+")
+    private const val EXCLUDED_PIDS_TTL_MS = 30_000L
+
+    @Volatile private var excludedPids: Set<Int>? = null
+    @Volatile private var excludedPidsAt = 0L
+
     private val gson = Gson()
     /**
      * Detects externally running claude sessions (not launched by Canopy).
@@ -66,7 +73,21 @@ object ClaudeProcessDetector {
      *  - Claude Code's own daemon/background pool (`daemon`, `bg-pty-host`, `bg-spare`),
      *    which shares the project cwd but isn't a user's external terminal.
      */
+    /**
+     * The whole process table, so it is asked for at most once every [EXCLUDED_PIDS_TTL_MS]. The
+     * processes it looks for are daemons the CLI keeps around, which do not come and go per second.
+     */
     private fun getSelfExcludedPids(): Set<Int> {
+        val now = System.currentTimeMillis()
+        excludedPids?.takeIf { now - excludedPidsAt < EXCLUDED_PIDS_TTL_MS }?.let { return it }
+
+        return readExcludedPids().also {
+            excludedPids = it
+            excludedPidsAt = now
+        }
+    }
+
+    private fun readExcludedPids(): Set<Int> {
         return try {
             val res = ProcessHelper.execWithTimeout(
                 command = arrayOf("ps", "-A", "-o", "pid,args", "-ww"),
@@ -74,11 +95,9 @@ object ClaudeProcessDetector {
             )
             res.output.lines()
                 .map { it.trim() }
-                .filter { line ->
-                    line.contains("canopy-settings") ||
-                        line.contains(Regex("""\bclaude\b.*\b(daemon|bg-pty-host|bg-spare)\b"""))
-                }
-                .mapNotNull { it.split(Regex("\\s+"), limit = 2).firstOrNull()?.toIntOrNull() }
+                // Compiled once: this ran against every line of the process table.
+                .filter { line -> line.contains("canopy-settings") || SPARE_PROCESS.containsMatchIn(line) }
+                .mapNotNull { it.split(WHITESPACE, limit = 2).firstOrNull()?.toIntOrNull() }
                 .toSet()
         } catch (_: Exception) {
             emptySet()

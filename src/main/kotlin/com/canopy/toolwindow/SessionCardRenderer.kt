@@ -43,6 +43,7 @@ class SessionCardRenderer(
     private val glyph = JLabel("", SwingConstants.CENTER)
     private val title = JLabel()
     private val meta = JLabel()
+    private val metaCache = HashMap<String, Pair<String, String>>()
 
     init {
         outer.isOpaque = true
@@ -75,16 +76,32 @@ class SessionCardRenderer(
         val attention = getAttention(session)
 
         island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow())
+        val (metaText, tooltip) = cachedMeta(session)
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)
         glyph.toolTipText = attention.takeIf { it != SessionAttention.None }?.name
         title.text = session.displayName
         title.foreground = InsightUi.cardForeground(selected)
-        meta.text = metaLine(session, getDetail(session))
+        meta.text = metaText
         meta.foreground = if (selected) InsightUi.cardForeground(true) else UIUtil.getLabelDisabledForeground()
-        outer.toolTipText = tooltipFor(session)
+        outer.toolTipText = tooltip
 
         return outer
+    }
+
+    /**
+     * A row is redrawn on hover, on selection, and ten times a second while an agent is working.
+     * Sorting a session's repositories and formatting its age on every one of those was the whole
+     * cost of drawing the list.
+     */
+    private fun cachedMeta(session: SessionDisplay): Pair<String, String> {
+        val detail = getDetail(session)
+        val key = "${session.sessionId}|${session.modified.toEpochMilli()}|$detail|${System.currentTimeMillis() / META_BUCKET_MS}"
+
+        metaCache[key]?.let { return it }
+        if (metaCache.size > META_CACHE_LIMIT) metaCache.clear()
+
+        return (metaLine(session, detail) to tooltipFor(session)).also { metaCache[key] = it }
     }
 
     private fun glyphFor(session: SessionDisplay, attention: SessionAttention): String {
@@ -170,10 +187,13 @@ internal fun relativeAge(atMillis: Long, nowMillis: Long): String {
         elapsed < HOUR -> "${elapsed / MINUTE}m ago"
         elapsed < DAY -> "${elapsed / HOUR}h ago"
         elapsed < 7 * DAY -> "${elapsed / DAY}d ago"
-        else -> java.time.format.DateTimeFormatter.ofPattern("d MMM")
-            .withZone(java.time.ZoneId.systemDefault())
-            .format(java.time.Instant.ofEpochMilli(atMillis))
+        else -> DAY_AND_MONTH.format(java.time.Instant.ofEpochMilli(atMillis))
     }
 }
 
 private const val GLYPH_SCALE = 1.35f
+
+private const val META_BUCKET_MS = 20_000L
+private const val META_CACHE_LIMIT = 400
+private val DAY_AND_MONTH: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("d MMM").withZone(java.time.ZoneId.systemDefault())
