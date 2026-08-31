@@ -24,6 +24,7 @@ class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
         val parent = toolWindow.disposable
         addTab(toolWindow, "Detail", "canopy", detailPanel(project, parent))
         addTab(toolWindow, "Context", "context", ClaudeContextPanel(project, parent))
+        addTab(toolWindow, "Commits", "tab-commits", com.canopy.insight.CommitsTabPanel(project, parent))
         addTab(toolWindow, "Plan", "tab-plan", PlanTabPanel(project, parent))
         addTab(toolWindow, "Messages", "tab-messages", MessagesTabPanel(project, parent))
         addTab(toolWindow, "Activity", "tab-activity", ActivityTabPanel(project, parent))

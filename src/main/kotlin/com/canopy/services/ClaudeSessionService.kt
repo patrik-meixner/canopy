@@ -105,6 +105,10 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         cachedSessions?.firstOrNull { it.sessionId == sessionId }
             ?.let { session -> session.worktreeName?.let { com.canopy.util.ClaudePathEncoder.worktreeAbsolutePath(project.basePath ?: return null, it) } ?: session.projectPath }
 
+    /** From the cache only, so a tab render cannot trigger a transcript sweep. */
+    fun cachedStartedAt(sessionId: String): java.time.Instant? =
+        cachedSessions?.firstOrNull { it.sessionId == sessionId }?.startedAt
+
     fun getSessions(): List<SessionDisplay> {
         var result = cachedSessions
         if (result == null) {
