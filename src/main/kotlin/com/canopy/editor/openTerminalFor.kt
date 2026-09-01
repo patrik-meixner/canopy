@@ -7,9 +7,9 @@ import com.intellij.openapi.project.Project
  * The working directory comes from the session rather than the project: a session running in a
  * worktree wants a shell in that worktree, not in the checkout it was launched from.
  */
-fun openTerminalFor(project: Project, owner: ClaudeSessionVirtualFile?) {
+fun openTerminalFor(project: Project, owner: ClaudeSessionVirtualFile?, name: String = "Terminal") {
     val file = ClaudeSessionVirtualFile(
-        name = "Terminal",
+        name = name,
         isShellSession = true,
         ownerSessionKey = owner?.sessionKey
     ).apply {

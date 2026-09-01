@@ -128,6 +128,11 @@
             displayName="Canopy"
         />
     </extensions>
+    <projectListeners>
+        <listener class="com.canopy.services.RememberTerminalsOnClose"
+                  topic="com.intellij.openapi.project.ProjectCloseListener"/>
+    </projectListeners>
+
     <actions>
         <group id="Canopy.Menu" text="Canopy" popup="true" icon="/icons/canopy.svg">
             <add-to-group group-id="ToolsMenu" anchor="last"/>

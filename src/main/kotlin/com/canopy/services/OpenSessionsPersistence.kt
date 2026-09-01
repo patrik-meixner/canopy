@@ -17,6 +17,9 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
     class State {
         @JvmField
         var sessionIds: MutableList<String> = mutableListOf()
+
+        @JvmField
+        var terminals: MutableList<RememberedTerminal> = mutableListOf()
     }
 
     private var myState = State()
@@ -38,6 +41,12 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
     }
 
     fun getAll(): List<String> = myState.sessionIds.toList()
+
+    fun getTerminals(): List<RememberedTerminal> = myState.terminals.toList()
+
+    fun rememberTerminals(terminals: List<RememberedTerminal>) {
+        myState.terminals = terminals.toMutableList()
+    }
 
     companion object {
         fun getInstance(project: Project): OpenSessionsPersistence =
