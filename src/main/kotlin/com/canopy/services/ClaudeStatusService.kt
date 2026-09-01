@@ -112,16 +112,13 @@ class ClaudeStatusService(private val project: Project) : Disposable {
             appendLine("      tool=\$(echo \"\$input\" | sed -n 's/.*\"tool_name\":\"\\([^\"]*\\)\".*/\\1/p')")
             appendLine("      state=\"tool:\$tool\"")
             appendLine("      ;;")
-            appendLine("    PostToolUse|PostToolUseFailure)")
-            appendLine("      state=\"clear\"")
-            appendLine("      ;;")
             appendLine("    PreCompact)")
             appendLine("      state=\"compact\"")
             appendLine("      ;;")
             appendLine("    PostCompact)")
-            appendLine("      state=\"clear\"")
+            appendLine("      state=\"working\"")
             appendLine("      ;;")
-            appendLine("    Stop|SubagentStop|SessionEnd)")
+            appendLine("    Stop|SessionEnd)")
             appendLine("      state=\"clear\"")
             appendLine("      ;;")
             appendLine("  esac")
@@ -154,56 +151,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         }
         root.add("statusLine", statusLine)
 
-        val notifyCmd = notifyPath.toAbsolutePath().toString()
-        val hookEntry = JsonArray().apply {
-            add(JsonObject().apply {
-                addProperty("type", "command")
-                addProperty("command", notifyCmd)
-            })
-        }
-
-        val hooks = JsonObject()
-
-        // Notification hooks (idle/permission)
-        val notificationRules = JsonArray()
-        for (type in listOf("idle_prompt", "permission_prompt")) {
-            notificationRules.add(JsonObject().apply {
-                addProperty("matcher", type)
-                add("hooks", hookEntry.deepCopy())
-            })
-        }
-        hooks.add("Notification", notificationRules)
-
-        // Tool use hooks (all tools)
-        val toolRule = JsonArray().apply {
-            add(JsonObject().apply {
-                addProperty("matcher", ".*")
-                add("hooks", hookEntry.deepCopy())
-            })
-        }
-        hooks.add("PreToolUse", toolRule)
-        hooks.add("PostToolUse", toolRule.deepCopy())
-        hooks.add("PostToolUseFailure", toolRule.deepCopy())
-
-        // Compact hooks (no matcher needed)
-        val compactRule = JsonArray().apply {
-            add(JsonObject().apply {
-                add("hooks", hookEntry.deepCopy())
-            })
-        }
-        // The one event that fires when a turn starts. Between the last PostToolUse writing "clear"
-        // and the first PreToolUse of the next turn, the agent is thinking and writes nothing at
-        // all - no hook, no transcript record - so the only other way to know was to wait for it.
-        hooks.add("UserPromptSubmit", compactRule.deepCopy())
-        hooks.add("PreCompact", compactRule)
-        hooks.add("PostCompact", compactRule.deepCopy())
-
-        // A turn interrupted between PreToolUse and PostToolUse never clears the tool state, and
-        // the session then reads as working forever. The end of the turn says it plainly.
-        hooks.add("Stop", compactRule.deepCopy())
-        hooks.add("SessionEnd", compactRule.deepCopy())
-
-        root.add("hooks", hooks)
+        root.add("hooks", canopyHooks(notifyPath.toAbsolutePath().toString()))
 
         Files.writeString(file, gson.toJson(mergeSettings(userSettings(), root)) + "\n")
         return file

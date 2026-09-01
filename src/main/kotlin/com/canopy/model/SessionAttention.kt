@@ -42,8 +42,15 @@ fun sessionAttentionFor(
     return if (tail == TranscriptTail.AgentsTurn) SessionAttention.Working else SessionAttention.WaitingForInput
 }
 
-/** Long enough that a genuinely long tool run is never mistaken for an abandoned one. */
-const val WORKING_GOES_STALE_MS = 300_000L
+/**
+ * Long enough that a genuinely long turn is never mistaken for an abandoned one.
+ *
+ * Working now lasts a whole turn rather than a single tool call, and it is only ever cleared by the
+ * hook that fires when the turn ends. A turn killed before that - the process gone, the keystroke
+ * interrupted - would otherwise report working for as long as the session existed. Measured against
+ * the transcript, which a working agent writes to on every tool result.
+ */
+const val WORKING_GOES_STALE_MS = 600_000L
 
 fun sessionAttentionOf(notifyState: String?): SessionAttention = when {
     notifyState == null -> SessionAttention.None

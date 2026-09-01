@@ -44,13 +44,26 @@ class SessionInsightService(private val project: Project) : Disposable {
         reader.reset()
         taskSignature = ""
         insight = SessionInsight()
-        refresh()
+        refreshSoon()
     }
 
     /** Ticking with nothing on screen is the cost nobody sees and everybody pays. */
     fun watch() {
         if (watchers++ == 0) schedule()
-        refresh()
+        refreshSoon()
+    }
+
+    /**
+     * Binding is what a tab does when the selected session changes, and it happens on the EDT.
+     *
+     * A new session means the incremental reader starts over, so that first read is the whole
+     * transcript - tens of megabytes on a long one. Done inline it froze the IDE for as long as the
+     * parse took, which is why switching sessions stuttered only while these tabs were open.
+     */
+    private fun refreshSoon() {
+        if (alarm.isDisposed) return
+
+        alarm.addRequest({ runCatching { refresh() } }, 0)
     }
 
     fun unwatch() {
