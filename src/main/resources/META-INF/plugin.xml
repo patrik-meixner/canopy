@@ -127,6 +127,7 @@
             id="com.canopy.settings.CanopySettingsConfigurable"
             displayName="Canopy"
         />
+        <directoryIndexExcludePolicy implementation="com.canopy.services.CanopyWorktreeExcludePolicy"/>
     </extensions>
     <applicationListeners>
         <listener class="com.canopy.services.CanopyShutdownFlag"

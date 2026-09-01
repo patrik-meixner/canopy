@@ -28,6 +28,7 @@ class SectionedChangesBrowser(
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
     private var unversioned: List<FilePath> = emptyList()
     private var pushedCommits: List<CommitWithChanges> = emptyList()
+    private var fileQuery = ""
 
     init {
         init()
@@ -301,6 +302,18 @@ class SectionedChangesBrowser(
     private fun virtualFileAt(path: String): com.intellij.openapi.vfs.VirtualFile? =
         com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(java.nio.file.Path.of(path))
 
+    /** Narrows the tree to the files whose path carries [query]; blank shows everything again. */
+    fun setFileQuery(query: String) {
+        if (query == fileQuery) return
+
+        fileQuery = query
+        viewer.rebuildTree(com.intellij.openapi.vcs.changes.ui.ChangesTree.ALWAYS_KEEP)
+    }
+
+    private fun matching(changes: List<Change>): List<Change> =
+        if (fileQuery.isBlank()) changes
+        else changes.filter { matchesFileQuery(com.intellij.openapi.vcs.changes.ChangesUtil.getFilePath(it).path, fileQuery) }
+
     fun setSections(changeSet: SessionChangeSet) {
         sections = changeSet.changes
         unversioned = changeSet.unversioned
@@ -330,7 +343,7 @@ class SectionedChangesBrowser(
         val builder = TreeModelBuilder(myProject, grouping)
 
         for (section in SessionChangeSection.entries) {
-            val changes = sections[section].orEmpty()
+            val changes = matching(sections[section].orEmpty())
             if (changes.isEmpty()) continue
 
             val tag = tagNode(builder, section)
@@ -345,9 +358,10 @@ class SectionedChangesBrowser(
 
         // Its own tag rather than setUnversioned, which the platform always places first: what the
         // session actually changed reads before a heap of untracked output it never wrote.
-        if (unversioned.isNotEmpty()) {
+        val shownUnversioned = unversioned.filter { matchesFileQuery(it.path, fileQuery) }
+        if (shownUnversioned.isNotEmpty()) {
             val tag = tagNode(builder, SessionChangeSection.Unversioned)
-            unversioned.forEach { builder.insertChangeNode(it, tag, ChangesBrowserNode.createFilePath(it)) }
+            shownUnversioned.forEach { builder.insertChangeNode(it, tag, ChangesBrowserNode.createFilePath(it)) }
         }
 
         return builder.build()

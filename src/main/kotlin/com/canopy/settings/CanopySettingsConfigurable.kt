@@ -69,6 +69,11 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
         }
 
         group("Worktrees") {
+            row {
+                checkBox("Keep worktrees out of the index").bindSelected(state::excludeWorktreesFromIndex)
+            }.rowComment("A worktree is a second copy of code the IDE has already indexed, and nobody edits in one. Leaving them in costs a full repository each and puts every file in Find in Files twice. Takes effect after Invalidate Caches or the next start.")
+
+
             row("Sweep no more often than every") {
                 intTextField(1..600).bindIntText(state::worktreeRefreshSeconds).columns(4)
                 label("seconds")

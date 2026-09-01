@@ -68,6 +68,9 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         /** Blocked agents sort above the rest, instead of ordering purely by recency. */
         @JvmField var sortAttentionFirst: Boolean = false
 
+        /** Keep every .claude/worktrees directory out of the IDE's index. */
+        @JvmField var excludeWorktreesFromIndex: Boolean = true
+
         /** Include untracked files as their own section in the Detail tree. */
         @JvmField var showUnversionedInDetail: Boolean = true
 

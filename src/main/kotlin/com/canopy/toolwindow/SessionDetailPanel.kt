@@ -93,12 +93,26 @@ class SessionDetailPanel(
         onCancel = { pending = null }
     )
 
+    private val fileSearch = com.intellij.ui.SearchTextField(false).apply {
+        textEditor.emptyText.text = "Filter changed files"
+        border = JBUI.Borders.empty(2, com.canopy.insight.InsightUi.GAP)
+        isOpaque = false
+        addDocumentListener(object : com.intellij.ui.DocumentAdapter() {
+            override fun textChanged(event: javax.swing.event.DocumentEvent) = browser.setFileQuery(text.orEmpty())
+        })
+    }
+    private val changesWithSearch = JPanel(BorderLayout()).apply {
+        isOpaque = false
+        add(fileSearch, BorderLayout.NORTH)
+        add(browser, BorderLayout.CENTER)
+    }
+
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
         add(placeholder, ReviewState.NoSession.name)
         add(JPanel().apply { isOpaque = false }, ReviewState.Collecting.name)
         add(nothingOutstanding, ReviewState.NothingOutstanding.name)
-        add(browser, ReviewState.Changes.name)
+        add(changesWithSearch, ReviewState.Changes.name)
     }
 
     init {

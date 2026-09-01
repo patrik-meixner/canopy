@@ -32,6 +32,15 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     private var loadedFor: String? = null
     private var loadedRoots: List<Pair<String, String>> = emptyList()
     private var collected: List<CommitEntry> = emptyList()
+    private var shownChanges: List<com.intellij.openapi.vcs.changes.Change> = emptyList()
+    private val fileSearch = com.intellij.ui.SearchTextField(false).apply {
+        textEditor.emptyText.text = "Filter files in the selected commits"
+        border = JBUI.Borders.empty(2, InsightUi.GAP)
+        isOpaque = false
+        addDocumentListener(object : com.intellij.ui.DocumentAdapter() {
+            override fun textChanged(event: javax.swing.event.DocumentEvent) = applyFileQuery()
+        })
+    }
     /**
      * What was last read for each session, shown the moment you come back to it.
      *
@@ -75,7 +84,11 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         }
 
         split.firstComponent = JPanelWithMore(ScrollPaneFactory.createScrollPane(commits, true), more)
-        split.secondComponent = files
+        split.secondComponent = javax.swing.JPanel(java.awt.BorderLayout()).apply {
+            isOpaque = false
+            add(fileSearch, java.awt.BorderLayout.NORTH)
+            add(files, java.awt.BorderLayout.CENTER)
+        }
 
         add(toolbar().component, BorderLayout.NORTH)
         add(body, BorderLayout.CENTER)
@@ -179,8 +192,23 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         com.canopy.util.GitRootCache.rootOf(com.canopy.util.directoryOf(java.nio.file.Path.of(path)))
 
     /** Several commits answer as one set of files, which is what a range of them means. */
+    /** The filter survives a change of selection, so walking commits keeps hunting the same file. */
+    private fun applyFileQuery() {
+        val query = fileSearch.text.orEmpty()
+
+        files.setChangesToDisplay(
+            shownChanges.filter {
+                val path = it.afterRevision?.file?.path ?: it.beforeRevision?.file?.path.orEmpty()
+                com.canopy.toolwindow.matchesFileQuery(path, query)
+            }
+        )
+    }
+
     private fun showFilesOf(selected: List<CommitEntry>) {
-        if (selected.isEmpty()) return files.setChangesToDisplay(emptyList())
+        if (selected.isEmpty()) {
+            shownChanges = emptyList()
+            return files.setChangesToDisplay(emptyList())
+        }
 
         val shas = selected.map { it.sha }
 
@@ -193,7 +221,8 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed || commits.selectedValuesList.map { it.sha } != shas) return@invokeLater
 
-                files.setChangesToDisplay(changes)
+                shownChanges = changes
+                applyFileQuery()
             }
         }
     }
