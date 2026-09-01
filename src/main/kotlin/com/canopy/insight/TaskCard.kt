@@ -44,8 +44,17 @@ class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
         island.repaint()
     }
 
-    private fun statusChip() = JLabel(task.status.glyph, SwingConstants.CENTER).apply {
-        foreground = statusColor(task.status)
+    /** The same mark and the same spin the session itself is drawn with, so a state means one thing. */
+    private fun statusChip() = JLabel(
+        com.canopy.toolwindow.GlyphIcon(
+            com.canopy.model.taskGlyph(
+                isRunning = task.status == TaskStatus.IN_PROGRESS,
+                isDone = task.status == TaskStatus.COMPLETED,
+                nowMillis = System.currentTimeMillis()
+            ),
+            statusColor(task.status)
+        )
+    ).apply {
         verticalAlignment = SwingConstants.TOP
         preferredSize = Dimension(JBUI.scale(18), 0)
     }

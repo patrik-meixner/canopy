@@ -2,11 +2,7 @@ package com.canopy.insight
 
 import com.canopy.toolwindow.SessionMessage
 
-enum class TaskStatus(val glyph: String) {
-    PENDING("☐"),
-    IN_PROGRESS("▶"),
-    COMPLETED("☑")
-}
+enum class TaskStatus { PENDING, IN_PROGRESS, COMPLETED }
 
 data class PlannedTask(
     val id: String,
