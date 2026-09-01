@@ -12,7 +12,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.DoubleClickListener
-import com.intellij.ui.JBColor
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.ui.JBUI
@@ -38,6 +37,14 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
     private val list = ViewportWidthList(model)
     private var entries: List<ActivityEntry> = emptyList()
     private var writesOnly = false
+    private val body = ContentOrEmpty(
+        ScrollPaneFactory.createScrollPane(list, true),
+        EmptyState(
+            AllIcons.Actions.ListFiles,
+            "Nothing recorded yet",
+            "Every file the agent read, wrote or ran a command against lands here, folded into runs."
+        )
+    )
 
     init {
         list.cellRenderer = ActivityRenderer()
@@ -49,7 +56,7 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
         }.installOn(list)
 
         add(toolbar(), BorderLayout.NORTH)
-        add(ScrollPaneFactory.createScrollPane(list, true), BorderLayout.CENTER)
+        add(body, BorderLayout.CENTER)
     }
 
     override fun render(insight: SessionInsight) {
@@ -62,6 +69,7 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
 
         model.clear()
         activityRuns(entries, writesOnly).asReversed().forEach { model.addElement(it) }
+        body.showEmpty(model.isEmpty)
         if (atTop && !model.isEmpty) list.ensureIndexIsVisible(0)
     }
 

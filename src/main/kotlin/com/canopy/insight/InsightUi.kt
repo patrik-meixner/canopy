@@ -71,6 +71,12 @@ object InsightUi {
     /** The strip behind the cards is the editor's ground, which is what the panel opens onto. */
     fun panelBackground(): Color = PANEL
 
+    /**
+     * A tab with nothing in it has no strip and no cards, so it sits on the ground the review tree
+     * sits on rather than on the colour that exists to separate cards from each other.
+     */
+    fun emptyBackground(): Color = ISLAND
+
 }
 
 /** A panel that paints itself as a rounded island instead of a square block. */

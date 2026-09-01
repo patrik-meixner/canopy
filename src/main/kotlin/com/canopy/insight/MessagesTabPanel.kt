@@ -9,7 +9,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SearchTextField
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import javax.swing.JPanel
 import javax.swing.event.DocumentEvent
@@ -19,10 +18,17 @@ import javax.swing.event.DocumentEvent
  */
 class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
-    private val cards = CardListPanel("No messages in this session yet")
+    private val cards = CardListPanel(
+        EmptyState(
+            com.intellij.icons.AllIcons.General.Balloon,
+            "Nothing said here yet",
+            "Everything you ask this session shows up here, searchable, and clicks back to where it was said."
+        )
+    )
     private val search = SearchTextField(false)
     private var messages: List<SessionMessage> = emptyList()
     private var limit = MESSAGE_PAGE
+    private var boundSession: String? = null
 
     init {
         background = InsightUi.panelBackground()
@@ -43,8 +49,14 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
     }
 
     override fun render(insight: SessionInsight) {
+        val session = selectedSession()?.sessionId
+        val changedSession = session != boundSession
+        boundSession = session
+
         messages = com.canopy.toolwindow.withoutRepeats(insight.messages)
         rebuild()
+        // A different session is a different conversation, and you read a conversation from its end.
+        if (changedSession) cards.followNewest()
     }
 
     private fun rebuild() {

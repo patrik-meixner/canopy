@@ -14,7 +14,6 @@ import java.awt.BorderLayout
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 import javax.swing.JPanel
-import javax.swing.SwingConstants
 
 /**
  * Everything one session changed, across every repository it wrote to.
@@ -31,10 +30,16 @@ class SessionDetailPanel(
 ) : JPanel(BorderLayout()), Disposable {
 
     private val loadingPanel = JBLoadingPanel(BorderLayout(), this).apply { isOpaque = false }
-    private val placeholder = JBLabel("Open a session to review its changes", SwingConstants.CENTER).apply {
-        foreground = UIUtil.getLabelDisabledForeground()
-        border = JBUI.Borders.empty(16)
-    }
+    private val placeholder = com.canopy.insight.EmptyState(
+        com.intellij.icons.AllIcons.Actions.Diff,
+        "No session selected",
+        "Open a session and this reviews everything it changed, across every repository it wrote to."
+    )
+    private val nothingOutstanding = com.canopy.insight.EmptyState(
+        com.intellij.icons.AllIcons.General.InspectionsOK,
+        "Nothing outstanding",
+        "This session has left no uncommitted, unpushed or untracked work behind."
+    )
     private val browser = SectionedChangesBrowser(
         project,
         onRefreshRequested = { refresh(force = true) },
@@ -83,6 +88,7 @@ class SessionDetailPanel(
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
         add(placeholder, PLACEHOLDER_CARD)
+        add(nothingOutstanding, CLEAN_CARD)
         add(browser, BROWSER_CARD)
     }
 
@@ -394,7 +400,7 @@ class SessionDetailPanel(
     /** An unchanged result must not redraw: rebuilding the tree would drop scroll and selection. */
     private fun render(changeSet: SessionChangeSet) {
         loadingPanel.stopLoading()
-        showCard(BROWSER_CARD)
+        showCard(if (changeSet.isEmpty) CLEAN_CARD else BROWSER_CARD)
 
         val signature = changeSet.signature()
         if (signature == shownSignature) return
@@ -427,6 +433,7 @@ class SessionDetailPanel(
     private companion object {
         const val PLACEHOLDER_CARD = "placeholder"
         const val BROWSER_CARD = "browser"
+        const val CLEAN_CARD = "clean"
         val EMPTY_CHANGES = SessionChangeSet(emptyMap(), emptyList())
     }
 }

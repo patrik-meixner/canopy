@@ -66,6 +66,14 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
 
     private val hiddenKinds = HashSet<ContextKind>()
     private var groups: List<ContextGroup> = emptyList()
+    private val body = com.canopy.insight.ContentOrEmpty(
+        ScrollPaneFactory.createScrollPane(tree, true),
+        com.canopy.insight.EmptyState(
+            com.intellij.icons.AllIcons.Nodes.Folder,
+            "No context here",
+            "CLAUDE.md files, skills, agents and MCP servers this session loads would be listed here."
+        )
+    )
 
     @Volatile private var workingDir: String? = null
 
@@ -76,7 +84,7 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         tree.showsRootHandles = true
         tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
         tree.cellRenderer = ContextTreeRenderer()
-        tree.emptyText.text = "Nothing loaded from these directories"
+
 
         object : DoubleClickListener() {
             override fun onDoubleClick(event: MouseEvent): Boolean = openSelected()
@@ -86,7 +94,7 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
 
         add(createToolbar(), BorderLayout.NORTH)
         tree.border = JBUI.Borders.empty(com.canopy.insight.InsightUi.GAP, com.canopy.insight.InsightUi.GAP)
-        add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER)
+        add(body, BorderLayout.CENTER)
         add(boundTo, BorderLayout.SOUTH)
 
         project.messageBus.connect(this).subscribe(
@@ -220,6 +228,7 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         }
 
         treeModel.reload()
+        body.showEmpty(rootNode.childCount == 0)
         restoreExpansion(expanded)
     }
 

@@ -13,7 +13,13 @@ import javax.swing.JPanel
  */
 class PlanTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
-    private val cards = CardListPanel("This session has no task list")
+    private val cards = CardListPanel(
+        EmptyState(
+            com.intellij.icons.AllIcons.Actions.Checked,
+            "No task list yet",
+            "Claude writes one when a job is worth planning, and every step it works through shows up here."
+        )
+    )
     private val summary = JBLabel().apply {
         border = JBUI.Borders.empty(6, 12)
         foreground = UIUtil.getLabelDisabledForeground()

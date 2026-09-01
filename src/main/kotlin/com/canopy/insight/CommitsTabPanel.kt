@@ -7,7 +7,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ui.SimpleChangesBrowser
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBSplitter
@@ -34,6 +33,15 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     private var loadedRoots: List<Pair<String, String>> = emptyList()
     private var collected: List<CommitEntry> = emptyList()
     private var limit = COMMIT_PAGE
+    private val split = JBSplitter(true, "canopy.commits.split", 0.45f)
+    private val body = ContentOrEmpty(
+        split,
+        EmptyState(
+            AllIcons.Vcs.CommitNode,
+            "No commits yet",
+            "What this session committed, in every repository it wrote to, with the files behind each one."
+        )
+    )
     private val more = MoreRow {
         limit += COMMIT_PAGE
         showPage()
@@ -53,11 +61,11 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             if (isShowing && loadedRoots.isNotEmpty()) reload(loadedRoots)
         }
 
+        split.firstComponent = JPanelWithMore(ScrollPaneFactory.createScrollPane(commits, true), more)
+        split.secondComponent = files
+
         add(toolbar().component, BorderLayout.NORTH)
-        add(JBSplitter(true, "canopy.commits.split", 0.45f).apply {
-            firstComponent = JPanelWithMore(ScrollPaneFactory.createScrollPane(commits, true), more)
-            secondComponent = files
-        }, BorderLayout.CENTER)
+        add(body, BorderLayout.CENTER)
     }
 
     /** The tab follows the working trees on its own; this is for a commit made outside them. */
@@ -104,6 +112,7 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         val page = pageful(collected, limit)
 
         more.show(page.remaining, COMMIT_PAGE)
+        body.showEmpty(collected.isEmpty())
         model.clear()
         page.shown.forEach { model.addElement(it) }
         // Every commit that was selected and is still listed, so a reload keeps a whole range.

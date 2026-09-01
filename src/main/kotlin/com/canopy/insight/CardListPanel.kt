@@ -1,12 +1,13 @@
 package com.canopy.insight
 
 import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
+import java.awt.CardLayout
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
@@ -14,7 +15,6 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 import javax.swing.Timer
-import javax.swing.SwingConstants
 
 /**
  * A vertical stack of real card components rather than a list of rendered cells.
@@ -23,17 +23,12 @@ import javax.swing.SwingConstants
  * list width fights that cache: the row overflows, and it changes height whenever anything is
  * repainted. Real components wrap to whatever width the viewport gives them, once.
  */
-class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
+class CardListPanel(private val emptyState: EmptyState) : JPanel(CardLayout()) {
 
     private val stack = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         background = InsightUi.panelBackground()
         border = JBUI.Borders.empty(InsightUi.GAP / 2, 0, InsightUi.GAP, 0)
-    }
-
-    private val empty = JBLabel(emptyText, SwingConstants.CENTER).apply {
-        foreground = UIUtil.getLabelDisabledForeground()
-        isOpaque = false
     }
 
     private val scroll: JScrollPane = ScrollPaneFactory.createScrollPane(stack, true).apply {
@@ -43,16 +38,28 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
     }
 
     private var shown = 0
-    private var keys: List<String> = emptyList()
+    private var keys: List<String>? = null
     private var glide: Timer? = null
+    private var more: MoreRow? = null
+    private var moreAtTop = false
+    private var followingNewest = false
 
     init {
         background = InsightUi.panelBackground()
-        add(scroll, BorderLayout.CENTER)
-    }
+        add(scroll, CARDS)
+        add(emptyState, EMPTY)
 
-    private var more: MoreRow? = null
-    private var moreAtTop = false
+        // The height the stack will have does not exist until it has been laid out, and images in
+        // the cards change it again after that. Following the bottom until the reader scrolls is
+        // what makes "open on the newest message" survive both.
+        scroll.verticalScrollBar.model.addChangeListener { if (followingNewest) jumpToNewest() }
+        scroll.addMouseWheelListener { followingNewest = false }
+        scroll.verticalScrollBar.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(event: MouseEvent) {
+                followingNewest = false
+            }
+        })
+    }
 
     /**
      * The row that reveals the rest of the list, at whichever end the rest actually lies: older
@@ -75,40 +82,55 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
     fun setCards(cards: List<JComponent>, cardKeys: List<String>) {
         if (cardKeys == keys && cards.size == shown) return
 
+        val first = keys == null
         keys = cardKeys
+        showCard(if (cards.isEmpty()) EMPTY else CARDS)
+        if (cards.isEmpty()) {
+            shown = 0
+            stack.removeAll()
+            return
+        }
+
         val bar = scroll.verticalScrollBar
         val keptValue = bar.value
         val wasAtBottom = bar.value + bar.visibleAmount >= bar.maximum - JBUI.scale(BOTTOM_SLACK)
         val grew = cards.size > shown
-        val first = shown == 0 && cards.isNotEmpty()
 
         shown = cards.size
         stack.removeAll()
         if (moreAtTop) more?.let { stack.add(it.alignedToWidth()) }
-        if (cards.isEmpty()) {
-            stack.add(Box.createVerticalStrut(JBUI.scale(40)))
-            stack.add(empty.alignedToWidth())
-        } else {
-            cards.forEach { stack.add(it.alignedToWidth()) }
-        }
+        cards.forEach { stack.add(it.alignedToWidth()) }
         if (!moreAtTop) more?.let { stack.add(it.alignedToWidth()) }
         stack.add(Box.createVerticalGlue())
         stack.revalidate()
         stack.repaint()
 
-        // The new height only exists after layout, so the decision runs once the stack has one.
+        if (first) return followNewest()
+
         SwingUtilities.invokeLater {
-            val bottom = bar.maximum - bar.visibleAmount
-            when {
-                first -> bar.value = bottom
-                grew && wasAtBottom -> glideTo(bottom)
-                else -> bar.value = keptValue
-            }
+            if (grew && wasAtBottom) glideTo(bar.maximum - bar.visibleAmount) else bar.value = keptValue
         }
     }
 
+    /** Stay at the newest entry through every relayout, until the reader scrolls away from it. */
+    fun followNewest() {
+        followingNewest = true
+        jumpToNewest()
+    }
+
     fun scrollToTop() {
+        followingNewest = false
         scroll.verticalScrollBar.value = 0
+    }
+
+    private fun jumpToNewest() {
+        val bar = scroll.verticalScrollBar
+        val bottom = bar.maximum - bar.visibleAmount
+        if (bar.value != bottom) bar.value = bottom
+    }
+
+    private fun showCard(name: String) {
+        (layout as CardLayout).show(this, name)
     }
 
     /** A jump loses where you were reading; a short glide keeps the new message tied to it. */
@@ -140,6 +162,8 @@ class CardListPanel(emptyText: String) : JPanel(BorderLayout()) {
     }
 }
 
+private const val CARDS = "cards"
+private const val EMPTY = "empty"
 private const val GLIDE_MS = 220.0
 private const val GLIDE_STEP_MS = 12
 private const val BOTTOM_SLACK = 80
