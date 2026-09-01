@@ -57,6 +57,7 @@ class ClaudeSessionEditor(
     private val rootDisposable = Disposer.newDisposable("claude-editor-${file.sessionId ?: file.baseName}")
     private val loadingPanel = JBLoadingPanel(BorderLayout(), rootDisposable)
     private val loadingStopped = AtomicBoolean(false)
+    private val isDisposed = AtomicBoolean(false)
 
     /**
      * Whether this tab is actually on screen. Toolbar polling is gated on it: the periodic
@@ -192,6 +193,10 @@ class ClaudeSessionEditor(
                 val isExternal = file.sessionId in externalIds
                 ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
+                    // Taken off the stage while the check was still running: starting an agent into
+                    // a disposed editor leaves a terminal nothing will ever draw.
+                    if (isDisposed.get()) return@invokeLater
+
                     if (isExternal) {
                         refreshTabTitle()
                         showExternalPanel()
@@ -1577,7 +1582,10 @@ class ClaudeSessionEditor(
     override fun addPropertyChangeListener(listener: PropertyChangeListener) {}
     override fun removePropertyChangeListener(listener: PropertyChangeListener) {}
     override fun getFile(): VirtualFile = file
-    override fun dispose() { Disposer.dispose(rootDisposable) }
+    override fun dispose() {
+        isDisposed.set(true)
+        Disposer.dispose(rootDisposable)
+    }
 
     companion object {
         private val COLOR_GREEN = Color(0x5B, 0xA8, 0x5B)

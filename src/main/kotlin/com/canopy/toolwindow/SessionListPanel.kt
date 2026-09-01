@@ -703,8 +703,7 @@ class SessionListPanel(
     private fun openDrafts(): List<SessionDisplay> {
         if (worktreeMode) return emptyList()
 
-        val open = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
-            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+        val open = canopyFiles()
             .filter { it.sessionId == null && !it.isShellSession }
             .map { DraftSource(it.sessionKey, it.baseName) }
 
@@ -718,8 +717,7 @@ class SessionListPanel(
     private fun openTerminals(): List<TerminalSource> {
         if (worktreeMode) return emptyList()
 
-        val open = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
-            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+        val open = canopyFiles()
         val startedByKey = open.mapNotNull { file -> file.sessionId?.let { file.sessionKey to it } }.toMap()
 
         return open.filter { it.isShellSession }.mapNotNull { shell ->
@@ -727,6 +725,13 @@ class SessionListPanel(
             TerminalSource(shell.sessionKey, shell.baseName, startedByKey[ownerKey] ?: ownerKey)
         }
     }
+
+    /**
+     * Everything the project is holding, not everything a tab is showing: a session taken off the
+     * stage keeps its terminals, and a list drawn from the tabs would drop the rows for both.
+     */
+    private fun canopyFiles(): List<com.canopy.editor.ClaudeSessionVirtualFile> =
+        com.canopy.services.SessionRuntimeService.getInstance(project).all().map { it.file }
 
     private fun sessionFileFor(rowId: String): com.canopy.editor.ClaudeSessionVirtualFile? =
         com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
@@ -738,12 +743,19 @@ class SessionListPanel(
             sessionFileFor(rowId) != null
 
     /** The tab goes with it: a tab showing a stopped agent has nothing left to show. */
+    /** Its terminals belong to it, so they end with it rather than outliving what they were for. */
     private fun stopSession(rowId: String) {
-        val file = sessionFileFor(rowId)
-        val key = file?.sessionKey ?: rowId
-        com.canopy.services.SessionRuntimeService.getInstance(project).stop(key)
+        val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
+        val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+        val session = sessionFileFor(rowId)
+        val shells = canopyFiles().filter { it.isShellSession && it.ownerSessionKey == session?.sessionKey }
+
+        (shells + listOfNotNull(session)).forEach { file ->
+            manager.closeFile(file)
+            runtimes.keyOf(file)?.let(runtimes::stop)
+        }
+        runtimes.stop(rowId)
         com.canopy.services.OpenSessionsPersistence.getInstance(project).remove(rowId)
-        file?.let { com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).closeFile(it) }
         reloadData()
     }
 
@@ -775,9 +787,7 @@ class SessionListPanel(
 
     private fun focusTerminal(key: String) {
         val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
-        val shell = manager.openFiles
-            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
-            .firstOrNull { it.sessionKey == key } ?: return
+        val shell = canopyFiles().firstOrNull { it.sessionKey == key } ?: return
 
         manager.openFile(shell, true)
     }

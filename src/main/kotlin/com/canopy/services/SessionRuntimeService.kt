@@ -37,6 +37,10 @@ class SessionRuntimeService : Disposable {
         return runtime
     }
 
+    /** Filed under its session id once Claude has given the session one, its tab key until then. */
+    fun keyOf(file: com.canopy.editor.ClaudeSessionVirtualFile): String? =
+        runtimes.entries.firstOrNull { it.value.file === file }?.key
+
     /** A session started inside Canopy is keyed on its tab until Claude gives it a real id. */
     fun rekey(from: String, to: String) {
         if (from == to) return
