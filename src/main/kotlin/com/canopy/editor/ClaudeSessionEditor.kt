@@ -178,9 +178,14 @@ class ClaudeSessionEditor(
 
         // Show loading, then async-detect external status before deciding what to display
         val isResume = file.sessionId != null && file.forkFrom == null
-        loadingPanel.startLoading()
+        // An agent this project is already holding is ours, however much it looks like a stray
+        // claude process from outside, and its scrollback is on screen the moment it reattaches.
+        val isReattaching = com.canopy.services.SessionRuntimeService.getInstance(project)
+            .existing(file.sessionId ?: file.sessionKey) != null
 
-        if (isResume) {
+        if (!isReattaching) loadingPanel.startLoading()
+
+        if (isResume && !isReattaching) {
             AppExecutorUtil.getAppScheduledExecutorService().execute {
                 val externalIds = com.canopy.util.ClaudeProcessDetector
                     .detectExternalSessions(project.basePath, sessionService.getSessions())
@@ -198,6 +203,7 @@ class ClaudeSessionEditor(
             }
         } else {
             startTerminalSession()
+            if (isReattaching) file.sessionId?.let { persistence.add(it) }
         }
     }
 

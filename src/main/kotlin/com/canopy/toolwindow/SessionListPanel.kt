@@ -232,6 +232,9 @@ class SessionListPanel(
 
     private fun setupTable() {
         trackHover()
+        // A card wider than its column makes JBTable pop the overflowing tail into a little window
+        // of its own, just outside the list: a floating copy of half a row, cross and all.
+        table.setExpandableItemsEnabled(false)
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
         table.setShowGrid(false)
         table.intercellSpacing = java.awt.Dimension(0, 0)
