@@ -132,6 +132,9 @@ class SectionedChangesBrowser(
             diffAction,
             openSourceAction(),
             com.intellij.openapi.actionSystem.Separator.getInstance(),
+            expandSubtreeAction(),
+            collapseSubtreeAction(),
+            com.intellij.openapi.actionSystem.Separator.getInstance(),
             commitSelectionAction(),
             pushSelectionAction(),
             rollbackAction(),
@@ -143,6 +146,55 @@ class SectionedChangesBrowser(
         // Show Diff is the platform's own action and it is in both lists; adding it twice throws.
         return ours + super.createPopupMenuActions().filterNot { it in ours }
     }
+
+    /**
+     * A double click on a directory opens all of it, not one more level of it.
+     *
+     * One level at a time is the tedious half of reviewing a tree that is mostly path segments,
+     * and a directory row has nothing else a double click could sensibly mean - a file row still
+     * opens its diff.
+     */
+    override fun onDoubleClick() {
+        val branch = selectedBranch() ?: return super.onDoubleClick()
+
+        expandSubtree(viewer, branch)
+    }
+
+    /**
+     * Everything under one row, rather than everything.
+     *
+     * Expand All opens four hundred pushed files to find one directory, and the alternative was
+     * clicking down a level at a time. A section header is a row like any other, so this opens a
+     * whole state as readily as a single module.
+     */
+    private fun expandSubtreeAction() = subtreeAction("Expand Subtree", com.intellij.icons.AllIcons.Actions.Expandall) {
+        expandSubtree(viewer, it)
+    }
+
+    private fun collapseSubtreeAction() = subtreeAction("Collapse Subtree", com.intellij.icons.AllIcons.Actions.Collapseall) {
+        collapseSubtree(viewer, it)
+    }
+
+    private fun subtreeAction(
+        title: String,
+        icon: javax.swing.Icon,
+        act: (javax.swing.tree.TreePath) -> Unit
+    ) = object : com.intellij.openapi.actionSystem.AnAction(title, "$title of the selected row", icon),
+        com.intellij.openapi.project.DumbAware {
+        override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            selectedBranch()?.let(act)
+        }
+
+        override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
+            event.presentation.isEnabled = selectedBranch() != null
+        }
+
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+    }
+
+    /** A leaf has no subtree, so the actions stay off rather than doing nothing. */
+    private fun selectedBranch(): javax.swing.tree.TreePath? = viewer.selectionPath
+        ?.takeIf { (it.lastPathComponent as? javax.swing.tree.TreeNode)?.isLeaf == false }
 
     /**
      * A directory row stands for the files under it, so committing one commits those and nothing
