@@ -415,7 +415,15 @@ class SessionDetailPanel(
             pushed = changeSet.changes[SessionChangeSection.Pushed].orEmpty().size
         )
 
-        header.show(session, counts) { com.canopy.model.SessionState(attentionOf(session), presenceOf(session)) }
+        // Resolved again on every paint, not captured: a SessionDisplay is a snapshot, and reading
+        // a frozen one at paint time is the same staleness as freezing the state itself.
+        header.show(session, counts) { currentState() }
+    }
+
+    private fun currentState(): com.canopy.model.SessionState {
+        val live = shownSessionId?.let(resolveSession)
+
+        return com.canopy.model.SessionState(attentionOf(live), presenceOf(live))
     }
 
     private fun attentionOf(session: SessionDisplay?): com.canopy.model.SessionAttention {

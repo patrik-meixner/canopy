@@ -28,11 +28,12 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
     }
 
     override fun getPreferredSize(): Dimension {
-        val metrics = getFontMetrics(boldFont)
-        val labelMetrics = getFontMetrics(labelFont)
-        val width = metrics.stringWidth(entry.count.toString()) + labelMetrics.stringWidth(entry.label) + JBUI.scale(PADDING * 2 + GAP)
+        val bold = getFontMetrics(boldFont)
+        val width = JBUI.scale(PAD_X) * 2 + JBUI.scale(GAP) +
+            bold.stringWidth(entry.count.toString()) +
+            getFontMetrics(labelFont).stringWidth(entry.label)
 
-        return Dimension(width, metrics.height + JBUI.scale(PADDING))
+        return Dimension(width, bold.height + JBUI.scale(PAD_Y) * 2)
     }
 
     /** A chip is as wide as what it says. Without this a row of one lets it stretch to the panel. */
@@ -47,15 +48,19 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
             g.color = InsightUi.blendInto(InsightUi.raisedBackground(), ink, CHIP_TINT)
             g.fillRoundRect(0, 0, width, height, JBUI.scale(ARC), JBUI.scale(ARC))
 
-            val baseline = (height + getFontMetrics(boldFont).ascent - getFontMetrics(boldFont).descent) / 2
+            // Both halves share one baseline, set from the padding rather than guessed from the
+            // middle: the number and the word are different fonts and must sit on the same line.
+            val bold = getFontMetrics(boldFont)
+            val baseline = JBUI.scale(PAD_Y) + bold.ascent
+            val count = entry.count.toString()
+
             g.font = boldFont
             g.color = ink
-            val count = entry.count.toString()
-            g.drawString(count, JBUI.scale(PADDING), baseline)
+            g.drawString(count, JBUI.scale(PAD_X), baseline)
 
             g.font = labelFont
             g.color = UIUtil.getLabelDisabledForeground()
-            g.drawString(entry.label, JBUI.scale(PADDING + GAP) + getFontMetrics(boldFont).stringWidth(count), baseline)
+            g.drawString(entry.label, JBUI.scale(PAD_X + GAP) + bold.stringWidth(count), baseline)
         } finally {
             g.dispose()
         }
@@ -69,7 +74,8 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
     }
 }
 
-private const val ARC = 8
-private const val PADDING = 8
+private const val ARC = 9
+private const val PAD_X = 8
+private const val PAD_Y = 4
 private const val GAP = 5
 private const val CHIP_TINT = 0.22
