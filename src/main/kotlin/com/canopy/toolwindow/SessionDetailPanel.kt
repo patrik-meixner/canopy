@@ -234,29 +234,32 @@ class SessionDetailPanel(
         val sessionId = shownSessionId ?: return
         val scope = pending ?: return
         pending = null
+        val title = if (after == AfterCommit.Push) "Committing and pushing" else "Committing"
 
-        CanopyExecutor.submit {
-            val roots = rootsOf(sessionId)
-            val outcomes = when (scope) {
-                is CommitScope.Everything -> SessionCommit.commit(roots.toList(), message, project.basePath)
-                is CommitScope.Selection ->
-                    SessionCommit.commitPaths(groupPathsByRoot(scope.paths, roots), message, project.basePath)
-            }
-            val committed = outcomes.filter { it.ok }.map { it.root }
-            val pushed = if (after == AfterCommit.Push && committed.isNotEmpty()) {
-                SessionPush.push(committed, project.basePath)
-            } else {
-                emptyList()
-            }
+        com.canopy.util.inBackground(
+            project,
+            title,
+            work = { indicator ->
+                val roots = rootsOf(sessionId)
+                indicator.text = "Committing ${roots.size} repository(s)"
+                val outcomes = when (scope) {
+                    is CommitScope.Everything -> SessionCommit.commit(roots.toList(), message, project.basePath)
+                    is CommitScope.Selection ->
+                        SessionCommit.commitPaths(groupPathsByRoot(scope.paths, roots), message, project.basePath)
+                }
+                val committed = outcomes.filter { it.ok }.map { it.root }
+                if (after != AfterCommit.Push || committed.isEmpty()) return@inBackground outcomes to emptyList()
 
-            ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed || Disposer.isDisposed(this)) return@invokeLater
+                indicator.text = "Pushing ${committed.size} repository(s)"
 
+                outcomes to SessionPush.push(committed, project.basePath)
+            },
+            onDone = { (outcomes, pushed) ->
                 reportCommit(outcomes)
                 if (pushed.isNotEmpty()) reportPush(pushed)
                 refresh(force = true)
             }
-        }
+        )
     }
 
     private fun reportCommit(outcomes: List<CommitOutcome>) {
@@ -275,32 +278,31 @@ class SessionDetailPanel(
         val paths = browser.selectedPaths()
         if (paths.isEmpty()) return
 
-        CanopyExecutor.submit {
-            val roots = groupPathsByRoot(paths, rootsOf(sessionId)).keys.toList()
-            val outcomes = SessionPush.push(roots, project.basePath)
-
-            ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed) return@invokeLater
-
-                reportPush(outcomes)
-                refresh(force = true)
-            }
-        }
+        pushInBackground { groupPathsByRoot(paths, rootsOf(sessionId)).keys.toList() }
     }
 
     /** Ends the review where it actually ends: on the remote, with the link to open the request. */
     private fun pushEverything() {
         val sessionId = shownSessionId ?: return
 
-        CanopyExecutor.submit {
-            val outcomes = SessionPush.push(rootsOf(sessionId).toList(), project.basePath)
-            ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed) return@invokeLater
+        pushInBackground { rootsOf(sessionId).toList() }
+    }
 
-                reportPush(outcomes)
+    private fun pushInBackground(rootsOf: () -> List<String>) {
+        com.canopy.util.inBackground(
+            project,
+            "Pushing",
+            work = { indicator ->
+                val roots = rootsOf()
+                indicator.text = "Pushing ${roots.size} repository(s)"
+
+                SessionPush.push(roots, project.basePath)
+            },
+            onDone = {
+                reportPush(it)
                 refresh(force = true)
             }
-        }
+        )
     }
 
     private fun reportPush(outcomes: List<PushOutcome>) {
