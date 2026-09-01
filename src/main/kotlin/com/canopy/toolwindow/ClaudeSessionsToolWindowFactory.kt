@@ -70,7 +70,7 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
                     notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(session.sessionId),
                     isRunning = sessionService.isExternallyOpen(session.sessionId) ||
                         isOpenInPlugin(project, session.sessionId),
-                    lastEntryRole = session.lastEntryRole,
+                    tail = session.tail,
                     idleForMillis = System.currentTimeMillis() - session.modified.toEpochMilli()
                 )
             },

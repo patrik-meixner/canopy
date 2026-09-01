@@ -7,7 +7,7 @@ class SessionAttentionTest {
 
     @Test
     fun `a tool running right now is working`() {
-        val attention = sessionAttentionFor("tool:Bash", isRunning = true, lastEntryRole = "user", idleForMillis = 1_000)
+        val attention = sessionAttentionFor("tool:Bash", isRunning = true, tail = TranscriptTail.AgentsTurn, idleForMillis = 1_000)
 
         assertEquals(SessionAttention.Working, attention)
     }
@@ -17,7 +17,7 @@ class SessionAttentionTest {
         val attention = sessionAttentionFor(
             "tool:Bash",
             isRunning = true,
-            lastEntryRole = "assistant",
+            tail = TranscriptTail.AssistantReply,
             idleForMillis = LONG_AFTER_ANY_TOOL
         )
 
@@ -29,7 +29,7 @@ class SessionAttentionTest {
         val attention = sessionAttentionFor(
             "permission_prompt",
             isRunning = true,
-            lastEntryRole = "assistant",
+            tail = TranscriptTail.AssistantReply,
             idleForMillis = LONG_AFTER_ANY_TOOL
         )
 
@@ -41,7 +41,7 @@ class SessionAttentionTest {
         val attention = sessionAttentionFor(
             "tool:Bash",
             isRunning = false,
-            lastEntryRole = "assistant",
+            tail = TranscriptTail.AssistantReply,
             idleForMillis = LONG_AFTER_ANY_TOOL
         )
 

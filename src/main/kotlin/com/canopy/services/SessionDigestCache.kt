@@ -33,7 +33,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         @JvmField var worktreeName: String? = null
         @JvmField var startedAtMillis: Long = 0
         @JvmField var touchedRoots: MutableMap<String, Int> = mutableMapOf()
-        @JvmField var lastEntryRole: String? = null
+        @JvmField var tail: String? = null
         @JvmField var lastPromptAtMillis: Long = 0
     }
 
@@ -67,7 +67,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
             worktreeName = entry.worktreeName,
             touchedRoots = entry.touchedRoots,
             startedAt = entry.startedAtMillis.takeIf { it > 0 }?.let(Instant::ofEpochMilli),
-            lastEntryRole = entry.lastEntryRole,
+            tail = entry.tail?.let { runCatching { com.canopy.model.TranscriptTail.valueOf(it) }.getOrNull() },
             lastPromptAt = entry.lastPromptAtMillis.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         )
     }
@@ -87,7 +87,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         entry.worktreeName = session.worktreeName
         entry.startedAtMillis = session.startedAt?.toEpochMilli() ?: 0
         entry.touchedRoots = LinkedHashMap(session.touchedRoots)
-        entry.lastEntryRole = session.lastEntryRole
+        entry.tail = session.tail?.name
         entry.lastPromptAtMillis = session.lastPromptAt?.toEpochMilli() ?: 0
     }
 

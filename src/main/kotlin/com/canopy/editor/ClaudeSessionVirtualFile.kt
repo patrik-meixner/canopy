@@ -77,7 +77,7 @@ class ClaudeSessionVirtualFile(
         val attention = com.canopy.model.sessionAttentionFor(
             notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(id),
             isRunning = true,
-            lastEntryRole = session?.lastEntryRole,
+            tail = session?.tail,
             idleForMillis = session?.let { System.currentTimeMillis() - it.modified.toEpochMilli() } ?: 0
         )
         val presence = when {

@@ -57,7 +57,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         var gitBranch: String? = null
         var lastTimestamp: Instant = Instant.EPOCH
         var firstTimestamp: Instant? = null
-        var lastEntryRole: String? = null
+        var turnTail: com.canopy.model.TranscriptTail? = null
         var lastPromptLine = 0
         var lastPromptAt: Instant? = null
         /** Capped: a long session can touch thousands of files and this list only feeds a summary. */
@@ -84,7 +84,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             gitBranch = null
             lastTimestamp = Instant.EPOCH
             firstTimestamp = null
-            lastEntryRole = null
+            turnTail = null
             lastPromptLine = 0
             lastPromptAt = null
             touchedPaths.clear()
@@ -469,7 +469,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 worktreeName = worktreeName,
                 touchedRoots = acc.rootsOfTouched(),
                 startedAt = acc.firstTimestamp,
-                lastEntryRole = acc.lastEntryRole,
+                tail = acc.turnTail,
                 lastPromptAt = acc.lastPromptAt
             )
             SessionFileIndex.getInstance(project).record(sessionId, acc.touchedPaths)
@@ -485,9 +485,16 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             val obj = gson.fromJson(line, JsonObject::class.java)
             val type = obj.get("type")?.asString
 
+            val text = com.canopy.util.leadingTextOf(obj.getAsJsonObject("message")).orEmpty()
             if (type == "user" || type == "assistant") {
                 acc.messageCount++
-                acc.lastEntryRole = type
+                acc.turnTail = com.canopy.model.transcriptTailOf(
+                    type = type,
+                    isCompactSummary = obj.get("isCompactSummary")?.asBoolean == true,
+                    isMeta = obj.get("isMeta")?.asBoolean == true,
+                    hasToolUseResult = obj.has("toolUseResult"),
+                    text = text
+                ) ?: acc.turnTail
             }
             if (type == "user" && !obj.has("toolUseResult") && obj.get("isMeta")?.asBoolean != true) {
                 acc.lastPromptLine = acc.messageCount
@@ -502,22 +509,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 acc.customTitle = obj.get("customTitle")?.asString
             }
 
-            // Extract first user prompt
             if (type == "user" && acc.firstPrompt == null) {
-                val message = obj.getAsJsonObject("message")
-                val content = message?.get("content")
-                acc.firstPrompt = when {
-                    content == null -> null
-                    content.isJsonPrimitive -> content.asString
-                    content.isJsonArray -> {
-                        content.asJsonArray
-                            .firstOrNull { it.isJsonObject && it.asJsonObject.get("type")?.asString == "text" }
-                            ?.asJsonObject?.get("text")?.asString
-                    }
-                    else -> null
-                }
-
-                // Grab git branch from first user message
+                acc.firstPrompt = text.ifEmpty { null }
                 acc.gitBranch = obj.get("gitBranch")?.asString
             }
 

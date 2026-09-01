@@ -9,7 +9,7 @@ package com.canopy.model
 enum class SessionAttention(val rank: Int, val glyph: String) {
     NeedsPermission(0, "!"),
     /** A finished turn is your turn, not an alarm: it reads as a prompt, not a question. */
-    WaitingForInput(1, "\u203A"),
+    WaitingForInput(1, "›"),
     Working(2, "*"),
     Compacting(2, "~"),
     None(3, "");
@@ -28,7 +28,7 @@ enum class SessionAttention(val rank: Int, val glyph: String) {
 fun sessionAttentionFor(
     notifyState: String?,
     isRunning: Boolean,
-    lastEntryRole: String?,
+    tail: TranscriptTail?,
     idleForMillis: Long = 0
 ): SessionAttention {
     val reported = notifyState?.let(::sessionAttentionOf)
@@ -39,7 +39,7 @@ fun sessionAttentionFor(
     }
     if (!isRunning) return SessionAttention.None
 
-    return if (lastEntryRole == "assistant") SessionAttention.WaitingForInput else SessionAttention.Working
+    return if (tail == TranscriptTail.AgentsTurn) SessionAttention.Working else SessionAttention.WaitingForInput
 }
 
 /** Long enough that a genuinely long tool run is never mistaken for an abandoned one. */
