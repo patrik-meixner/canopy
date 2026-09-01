@@ -150,9 +150,9 @@ class SectionedChangesBrowser(
     /**
      * A double click on a directory opens all of it, not one more level of it.
      *
-     * One level at a time is the tedious half of reviewing a tree that is mostly path segments,
-     * and a directory row has nothing else a double click could sensibly mean - a file row still
-     * opens its diff.
+     * This takes the platform's meaning - diff everything under here - off the double click, which
+     * is a deliberate trade: clicking down a tree that is mostly path segments is the tedious half
+     * of a review, and Show Diff is still one right click away. A file row is unchanged.
      */
     override fun onDoubleClick() {
         val branch = selectedBranch() ?: return super.onDoubleClick()
