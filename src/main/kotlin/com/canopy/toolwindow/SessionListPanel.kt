@@ -411,6 +411,13 @@ class SessionListPanel(
                     e.presentation.isEnabled = session != null && com.canopy.editor.SessionInput.canSend(project, session.sessionId)
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            }.also {
+                it.registerCustomShortcutSet(
+                    com.intellij.openapi.actionSystem.CustomShortcutSet(
+                        javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F2, 0)
+                    ),
+                    table
+                )
             })
             add(object : AnAction("Fork Session", "Create a new session branching from this one", AllIcons.Actions.SplitHorizontally) {
                 override fun actionPerformed(e: AnActionEvent) {
