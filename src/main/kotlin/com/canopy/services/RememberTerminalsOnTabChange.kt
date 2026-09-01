@@ -30,7 +30,6 @@ class RememberTerminalsOnTabChange(private val project: Project) : FileEditorMan
         if (session.isShellSession) return
 
         ActiveSessionTracker.getInstance(project).lastSessionKey = session.sessionKey
-        session.sessionId?.let { OpenSessionsPersistence.getInstance(project).focusedSessionId = it }
     }
 
     override fun tabsChanged() = rememberOpenTerminals(project, "tabsChanged")

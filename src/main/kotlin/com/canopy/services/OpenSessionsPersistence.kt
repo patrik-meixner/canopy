@@ -21,8 +21,6 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
         @JvmField
         var terminals: MutableList<RememberedTerminal> = mutableListOf()
 
-        @JvmField
-        var focusedSessionId: String? = null
     }
 
     private var myState = State()
@@ -47,10 +45,6 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
 
     fun getTerminals(): List<RememberedTerminal> = myState.terminals.toList()
 
-    /** The one session a restart comes back to: reviving a whole stage means reviving every agent. */
-    var focusedSessionId: String?
-        get() = myState.focusedSessionId
-        set(value) { myState.focusedSessionId = value }
 
     fun rememberTerminals(terminals: List<RememberedTerminal>) {
         myState.terminals = terminals.toMutableList()
