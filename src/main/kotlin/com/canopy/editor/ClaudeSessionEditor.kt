@@ -1350,6 +1350,7 @@ class ClaudeSessionEditor(
                         .worktreeAbsolutePath(project.basePath!!, candidate.worktreeName)
                 }
                 persistence.add(candidate.sessionId)
+                com.canopy.services.rememberOpenTerminals(project, "sessionLinked")
 
                 // Migrate status monitoring from temp to real session ID.
                 // Keep the original temp file paths — CANOPY_STATUS_FILE/NOTIFY_FILE

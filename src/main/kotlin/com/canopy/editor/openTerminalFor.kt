@@ -22,16 +22,22 @@ fun openTerminalFor(project: Project, owner: ClaudeSessionVirtualFile?, name: St
 /**
  * A shell opened while another shell is on screen becomes its sibling rather than its child: a
  * shell owned by a shell has no session row to sit under and would vanish from the list.
+ *
+ * Falling back to the last session on screen is what makes the + on the tab strip do the obvious
+ * thing after a detour into a source file, which deselects every Canopy tab.
  */
 fun ownerOnScreen(project: Project): ClaudeSessionVirtualFile? {
+    val sessions = FileEditorManager.getInstance(project).openFiles
+        .filterIsInstance<ClaudeSessionVirtualFile>()
     val selected = FileEditorManager.getInstance(project).selectedFiles
         .filterIsInstance<ClaudeSessionVirtualFile>()
-        .firstOrNull() ?: return null
-    if (!selected.isShellSession) return selected
+        .firstOrNull()
 
-    val ownerKey = selected.ownerSessionKey ?: return null
+    val ownerKey = when {
+        selected == null -> com.canopy.services.ActiveSessionTracker.getInstance(project).lastSessionKey
+        selected.isShellSession -> selected.ownerSessionKey
+        else -> selected.sessionKey
+    } ?: return null
 
-    return FileEditorManager.getInstance(project).openFiles
-        .filterIsInstance<ClaudeSessionVirtualFile>()
-        .firstOrNull { it.sessionKey == ownerKey }
+    return sessions.firstOrNull { !it.isShellSession && it.sessionKey == ownerKey }
 }

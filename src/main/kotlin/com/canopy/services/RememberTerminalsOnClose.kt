@@ -1,7 +1,5 @@
 package com.canopy.services
 
-import com.canopy.editor.ClaudeSessionVirtualFile
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectCloseListener
 
@@ -11,11 +9,5 @@ import com.intellij.openapi.project.ProjectCloseListener
  */
 class RememberTerminalsOnClose : ProjectCloseListener {
 
-    override fun projectClosing(project: Project) {
-        val tabs = FileEditorManager.getInstance(project).openFiles
-            .filterIsInstance<ClaudeSessionVirtualFile>()
-            .map { OpenTab(it.sessionKey, it.sessionId, it.isShellSession, it.ownerSessionKey, it.baseName) }
-
-        OpenSessionsPersistence.getInstance(project).rememberTerminals(rememberedTerminals(tabs))
-    }
+    override fun projectClosing(project: Project) = rememberOpenTerminals(project, "projectClosing")
 }
