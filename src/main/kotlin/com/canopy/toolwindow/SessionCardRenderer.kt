@@ -46,7 +46,7 @@ class SessionCardRenderer(
     private val title = JLabel()
     private val meta = JLabel()
     private val stop = JLabel()
-    private val metaCache = HashMap<String, Pair<String, String>>()
+    private val metaCache = HashMap<String, String>()
 
     init {
         outer.isOpaque = true
@@ -63,7 +63,6 @@ class SessionCardRenderer(
             add(meta)
         }
         stop.preferredSize = Dimension(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE)
-        stop.toolTipText = "Stop this session"
 
         island.add(glyph, BorderLayout.WEST)
         island.add(text, BorderLayout.CENTER)
@@ -92,16 +91,13 @@ class SessionCardRenderer(
         } else {
             null
         }
-        val (metaText, tooltip) = cachedMeta(session)
+        val metaText = cachedMeta(session)
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)
-        glyph.toolTipText = attention.takeIf { it != SessionAttention.None }?.name
         title.text = session.displayName
         title.foreground = InsightUi.cardForeground(selected)
         meta.text = metaText
         meta.foreground = if (selected) InsightUi.cardForeground(true) else UIUtil.getLabelDisabledForeground()
-        outer.toolTipText = tooltip
-
         return outer
     }
 
@@ -110,14 +106,14 @@ class SessionCardRenderer(
      * Sorting a session's repositories and formatting its age on every one of those was the whole
      * cost of drawing the list.
      */
-    private fun cachedMeta(session: SessionDisplay): Pair<String, String> {
+    private fun cachedMeta(session: SessionDisplay): String {
         val detail = getDetail(session)
         val key = "${session.sessionId}|${session.modified.toEpochMilli()}|$detail|${System.currentTimeMillis() / META_BUCKET_MS}"
 
         metaCache[key]?.let { return it }
         if (metaCache.size > META_CACHE_LIMIT) metaCache.clear()
 
-        return (metaLine(session, detail) to tooltipFor(session)).also { metaCache[key] = it }
+        return metaLine(session, detail).also { metaCache[key] = it }
     }
 
     private fun glyphFor(session: SessionDisplay, attention: SessionAttention): String {

@@ -50,7 +50,6 @@ class TerminalCardRenderer(private val hoveredRow: () -> Int) : TableCellRendere
         island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow())
         title.text = terminal.displayName
         title.foreground = if (selected) InsightUi.cardForeground(true) else UIUtil.getLabelDisabledForeground()
-        outer.toolTipText = terminal.displayName.takeIf { it.isNotBlank() }
 
         return outer
     }

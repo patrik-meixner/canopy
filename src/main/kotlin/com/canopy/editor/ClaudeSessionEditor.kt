@@ -381,9 +381,13 @@ class ClaudeSessionEditor(
         // Drag-and-drop: accept files dropped onto the terminal
         setupDropTarget(session.widget.component)
 
-        loadingPanel.startLoading()
-        AppExecutorUtil.getAppScheduledExecutorService()
-            .schedule(::stopLoading, 5L, TimeUnit.SECONDS)
+        // A terminal that was already running has its scrollback on screen the moment it is
+        // reattached, and an idle agent sends nothing to end a spinner with.
+        if (running == null) {
+            loadingPanel.startLoading()
+            AppExecutorUtil.getAppScheduledExecutorService()
+                .schedule(::stopLoading, 5L, TimeUnit.SECONDS)
+        }
 
         // A shell tab has no Claude process behind it, so nothing would ever write a status file.
         if (running == null && !file.isShellSession) {

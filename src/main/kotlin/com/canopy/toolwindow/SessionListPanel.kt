@@ -61,6 +61,21 @@ class SessionListPanel(
         isCloseHovered = { closeHovered }
     )
     private val table = object : TableView<SessionDisplay>(tableModel) {
+        /**
+         * A renderer draws into one shared component that lives in no hierarchy, and giving that
+         * component a tooltip left the tooltip window painting the card at the component's stale
+         * bounds: a stray copy of a row, next to the tip, over whatever was there.
+         */
+        override fun getToolTipText(event: MouseEvent): String? {
+            if (worktreeMode) return super.getToolTipText(event)
+
+            val row = rowAtPoint(event.point)
+            if (row < 0) return null
+            if (closeHitArea(getCellRect(row, 0, true)).contains(event.point)) return "Stop this session"
+
+            return tooltipFor(tableModel.getItem(convertRowIndexToModel(row))).takeIf { it.isNotBlank() }
+        }
+
         override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): Component {
             val c = super.prepareRenderer(renderer, row, column)
             val session = tableModel.getItem(convertRowIndexToModel(row))
@@ -433,7 +448,7 @@ class SessionListPanel(
 
     private fun setupContextMenu() {
         val group = DefaultActionGroup().apply {
-            add(object : AnAction("Rename Session", "Give this session a name of your own", AllIcons.Actions.Edit) {
+            add(object : AnAction("Rename", "Give this session a name of your own", AllIcons.Actions.Edit) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val session = selectedSession() ?: return
 
@@ -463,7 +478,7 @@ class SessionListPanel(
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            add(object : AnAction("Stop Session", "End the agent; closing its tab only hides it", AllIcons.Actions.Suspend) {
+            add(object : AnAction("Stop", "End the agent; closing its tab only hides it", AllIcons.Actions.Suspend) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val row = selectedRow()?.takeUnless { it.isTerminal } ?: return
                     stopSession(row.sessionId)
@@ -474,7 +489,8 @@ class SessionListPanel(
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            add(object : AnAction("New Terminal Here", "Open a shell that belongs to this session", AllIcons.Debugger.Console) {
+            addSeparator()
+            add(object : AnAction("New Terminal", "Open a shell that belongs to this session", AllIcons.Debugger.Console) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val row = selectedRow()?.takeUnless { it.isTerminal } ?: return
                     if (sessionFileFor(row.sessionId) == null) openClaudeSession(project, row)
@@ -486,7 +502,7 @@ class SessionListPanel(
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            add(object : AnAction("Fork Session", "Create a new session branching from this one", AllIcons.Actions.SplitHorizontally) {
+            add(object : AnAction("Fork", "Create a new session branching from this one", AllIcons.Actions.SplitHorizontally) {
                 override fun actionPerformed(e: AnActionEvent) {
                     selectedSession()?.let { onForkSession(it) }
                 }
@@ -495,7 +511,7 @@ class SessionListPanel(
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            add(object : AnAction("Reply Without Opening", "Type an answer straight into a session that is waiting", AllIcons.Actions.Execute) {
+            add(object : AnAction("Reply", "Type an answer straight into a session that is waiting", AllIcons.Actions.Execute) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val session = selectedSession() ?: return
                     com.canopy.editor.SessionInput.promptAndReply(project, session.sessionId, session.displayName, table)
@@ -506,6 +522,7 @@ class SessionListPanel(
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
+            addSeparator()
             add(object : AnAction("Open in Terminal", "Resume in the built-in Terminal tool window", AllIcons.Debugger.Console) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val session = selectedSession() ?: return
@@ -555,7 +572,7 @@ class SessionListPanel(
                     override fun getActionUpdateThread() = ActionUpdateThread.EDT
                 })
             }
-            add(object : AnAction("Open Session Folder", "Reveal session files in the project directory", AllIcons.Actions.MenuOpen) {
+            add(object : AnAction("Open Folder", "Reveal session files in the project directory", AllIcons.Actions.MenuOpen) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val basePath = project.basePath ?: return
                     val projectDir = ClaudePathEncoder.projectDir(basePath)
@@ -570,7 +587,7 @@ class SessionListPanel(
                 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            add(object : AnAction("Copy Session ID", "Copy the session ID to clipboard", AllIcons.Actions.Copy) {
+            add(object : AnAction("Copy ID", "Copy the session ID to clipboard", AllIcons.Actions.Copy) {
                 override fun actionPerformed(e: AnActionEvent) {
                     selectedSession()?.let {
                         CopyPasteManager.getInstance().setContents(StringSelection(it.sessionId))
@@ -582,7 +599,7 @@ class SessionListPanel(
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
             addSeparator()
-            add(object : AnAction("Delete Session", "Permanently delete this session", AllIcons.Actions.GC) {
+            add(object : AnAction("Delete", "Permanently delete this session", AllIcons.Actions.GC) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val session = selectedSession() ?: return
                     val status = getStatus(session.sessionId)
