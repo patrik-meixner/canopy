@@ -7,6 +7,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vcs.VcsConfiguration
 import com.intellij.openapi.vcs.ui.CommitMessage
 import com.intellij.ui.JBColor
+import com.intellij.ui.RoundedLineBorder
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -53,6 +54,14 @@ class SessionCommitPanel(
             JBUI.Borders.empty(InsightUi.GAP)
         )
         message.preferredSize = Dimension(0, JBUI.scale(EDITOR_HEIGHT))
+        // The Commit window's editor sits in a rounded hairline with the text held off it. Left to
+        // itself out here the field draws a square line and puts the caret against the corner.
+        message.border = JBUI.Borders.compound(
+            RoundedLineBorder(JBColor.border(), JBUI.scale(EDITOR_ARC), 1),
+            JBUI.Borders.empty(EDITOR_PADDING)
+        )
+        // Otherwise the field's own square line is drawn inside the rounded one.
+        message.editorField.border = JBUI.Borders.empty()
 
         add(header(), BorderLayout.NORTH)
         add(message, BorderLayout.CENTER)
@@ -123,5 +132,7 @@ class SessionCommitPanel(
     private companion object {
         const val EDITOR_HEIGHT = 96
         const val BUTTON_GAP = 6
+        const val EDITOR_ARC = 10
+        const val EDITOR_PADDING = 6
     }
 }

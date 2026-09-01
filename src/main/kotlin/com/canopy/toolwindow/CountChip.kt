@@ -35,6 +35,9 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
         return Dimension(width, metrics.height + JBUI.scale(PADDING))
     }
 
+    /** A chip is as wide as what it says. Without this a row of one lets it stretch to the panel. */
+    override fun getMaximumSize(): Dimension = preferredSize
+
     override fun paintComponent(graphics: Graphics) {
         val g = graphics.create() as Graphics2D
         try {
