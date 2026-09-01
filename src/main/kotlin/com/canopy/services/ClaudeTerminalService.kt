@@ -213,13 +213,15 @@ class ClaudeTerminalService(private val project: Project) {
         startOnceWide(widget) { widget.start(connector) }
         ClipboardImagePaste.install(widget.terminalPanel) { sendInput(ptyProcess, it) }
 
+        // A file editor is disposed on the EDT, so waiting here for the agent to exit is the UI
+        // thread waiting: closing a tab took as long as node took to answer a signal, up to the
+        // two seconds below. The signal goes now; whether it worked is somebody else's problem.
         Disposer.register(parent, Disposable {
-            if (ptyProcess.isAlive) {
-                ptyProcess.destroy()
-                // Force kill if it doesn't exit promptly (e.g. during tab detach)
-                if (!ptyProcess.waitFor(2, TimeUnit.SECONDS)) {
-                    ptyProcess.destroyForcibly()
-                }
+            if (!ptyProcess.isAlive) return@Disposable
+
+            ptyProcess.destroy()
+            com.canopy.util.CanopyExecutor.submit {
+                if (!ptyProcess.waitFor(GRACEFUL_EXIT_SECONDS, TimeUnit.SECONDS)) ptyProcess.destroyForcibly()
             }
         })
 
@@ -259,6 +261,7 @@ class ClaudeTerminalService(private val project: Project) {
     }
 
     companion object {
+        private const val GRACEFUL_EXIT_SECONDS = 2L
         private const val INITIAL_COLUMNS = 120
         private const val INITIAL_ROWS = 40
         private const val MIN_START_WIDTH = 200
