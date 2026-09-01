@@ -36,8 +36,16 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
         return Dimension(width, bold.height + JBUI.scale(PAD_Y) * 2)
     }
 
-    /** A chip is as wide as what it says. Without this a row of one lets it stretch to the panel. */
+    /**
+     * One size, whatever the layout around it is trying to do.
+     *
+     * Without a maximum a row of one chip stretches it across the card; without a minimum a
+     * BoxLayout under any pressure at all squeezes it to nothing, since a bare JComponent reports
+     * no minimum of its own.
+     */
     override fun getMaximumSize(): Dimension = preferredSize
+
+    override fun getMinimumSize(): Dimension = preferredSize
 
     override fun paintComponent(graphics: Graphics) {
         val g = graphics.create() as Graphics2D

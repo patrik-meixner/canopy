@@ -464,8 +464,14 @@ class SessionDetailPanel(
      */
     private fun showState(state: ReviewState) {
         if (state == ReviewState.Collecting) loadingPanel.startLoading() else loadingPanel.stopLoading()
-        header.isVisible = state == ReviewState.Changes || state == ReviewState.NothingOutstanding
+        val showsHeader = state == ReviewState.Changes || state == ReviewState.NothingOutstanding
+        val appearing = showsHeader && !header.isVisible
+        header.isVisible = showsHeader
         (cards.layout as java.awt.CardLayout).show(cards, state.name)
+        // A card is filled while it is hidden, and BoxLayout does not measure hidden children, so
+        // the height this panel gave it was the height it had with nothing in it: the chips were
+        // laid out below the card's own edge and cut off by it.
+        if (appearing) revalidate()
     }
 
     override fun dispose() = Unit
