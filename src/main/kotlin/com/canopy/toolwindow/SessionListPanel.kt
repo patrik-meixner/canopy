@@ -423,7 +423,7 @@ class SessionListPanel(
                     return if (session.isTerminal) stopTerminal(session.sessionId) else stopSession(session.sessionId)
                 }
                 selectedSessionId = session.sessionId
-                if (session.isTerminal) return focusTerminal(session.sessionId)
+                if (session.isTerminal) return focusTerminal(session.sessionId, event.isMetaDown)
                 if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
 
                 activate(session, isAdditive = event.isMetaDown)
@@ -727,7 +727,11 @@ class SessionListPanel(
 
         return open.filter { it.isShellSession }.mapNotNull { shell ->
             val ownerKey = shell.ownerSessionKey ?: return@mapNotNull null
-            TerminalSource(shell.sessionKey, shell.baseName, startedByKey[ownerKey] ?: ownerKey)
+            TerminalSource(
+                shell.sessionKey,
+                com.canopy.editor.terminalLabel(project, shell),
+                startedByKey[ownerKey] ?: ownerKey
+            )
         }
     }
 
@@ -779,33 +783,39 @@ class SessionListPanel(
      * keep them. Coming off the stage is not stopping: the agents behind those tabs go on running.
      */
     private fun activate(session: SessionDisplay, isAdditive: Boolean) {
-        val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
-        val known = com.canopy.services.SessionRuntimeService.getInstance(project).all().map { it.file }
-        val openKeys = manager.openFiles.filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
-            .map { it.sessionKey }
-            .toSet()
-        val target = known.firstOrNull {
+        val target = canopyFiles().firstOrNull {
             !it.isShellSession && (it.sessionId == session.sessionId || it.sessionKey == session.sessionId)
         }
 
+        // A session with no agent yet matches nothing, so the stage clears and the caller starts it.
+        stageTo(target?.sessionKey ?: session.sessionId, isAdditive)
+        if (target == null) return
+
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(target, true)
+    }
+
+    private fun stageTo(targetKey: String, isAdditive: Boolean) {
+        val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+        val known = canopyFiles()
+        val openKeys = manager.openFiles.filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .map { it.sessionKey }
+            .toSet()
         val tabs = known.map { StageTab(it.sessionKey, it.isShellSession, it.ownerSessionKey, it.sessionKey in openKeys) }
         val byKey = known.associateBy { it.sessionKey }
-        // A session with no agent yet matches nothing, so the plan clears the stage and the open
-        // below starts it.
-        val plan = stagePlan(tabs, target?.sessionKey ?: session.sessionId, isAdditive)
+        val plan = stagePlan(tabs, targetKey, isAdditive)
 
         com.canopy.services.SessionStaging.getInstance(project).rearranging {
             plan.close.mapNotNull(byKey::get).forEach(manager::closeFile)
             plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, false) }
         }
-
-        if (target != null) manager.openFile(target, true)
     }
 
-    private fun focusTerminal(key: String) {
+    /** A shell belongs to a session, so reaching for one brings that session along. */
+    private fun focusTerminal(key: String, isAdditive: Boolean) {
         val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
         val shell = canopyFiles().firstOrNull { it.sessionKey == key } ?: return
 
+        shell.ownerSessionKey?.let { stageTo(it, isAdditive) }
         manager.openFile(shell, true)
     }
 

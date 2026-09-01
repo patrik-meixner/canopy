@@ -6,7 +6,9 @@ import com.intellij.openapi.vfs.VirtualFile
 
 class ClaudeSessionTabTitleProvider : EditorTabTitleProvider {
     override fun getEditorTabTitle(project: Project, file: VirtualFile): String? {
-        return (file as? ClaudeSessionVirtualFile)?.computeTabTitle()
+        val session = file as? ClaudeSessionVirtualFile ?: return null
+
+        return if (session.isShellSession) terminalLabel(project, session) else session.computeTabTitle()
     }
 
     // Without this the platform falls back to the file's path, which is the
