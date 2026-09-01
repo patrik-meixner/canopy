@@ -250,8 +250,12 @@ class SectionedChangesBrowser(
             }
         }
 
+        // update() runs on every menu open and every toolbar refresh, and a whole section can be
+        // selected: asking the file system about four hundred files each time is not a question
+        // for the UI thread. The action opens the first one it can, so probing that far is enough.
         override fun update(event: com.intellij.openapi.actionSystem.AnActionEvent) {
-            event.presentation.isEnabled = selectedPaths().any { virtualFileAt(it) != null }
+            event.presentation.isEnabled =
+                selectedPaths().asSequence().take(OPENABLE_PROBE).any { virtualFileAt(it) != null }
         }
 
         override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
@@ -389,3 +393,4 @@ class SectionedChangesBrowser(
 }
 
 private const val PUSHED_FILE_BUDGET = 400
+private const val OPENABLE_PROBE = 20
