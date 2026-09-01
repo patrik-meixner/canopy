@@ -32,6 +32,8 @@ data class TouchedFile(
  * tool results does not rebuild five list models and repaint them.
  */
 data class SessionInsight(
+    /** Which session this is about: a revision counts per session and says nothing on its own. */
+    val sessionId: String? = null,
     val revision: Long = 0,
     val messages: List<SessionMessage> = emptyList(),
     val activity: List<ActivityEntry> = emptyList(),

@@ -9,18 +9,25 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Keeps one parsed view of the session currently being looked at, refreshed while a tab is on
- * screen and not otherwise.
+ * The parsed view of the session being looked at, refreshed while a tab is on screen and not
+ * otherwise.
  *
- * The transcript is read incrementally, so a tick costs the bytes appended since the last one
- * rather than the whole file, which reaches tens of megabytes on a long session.
+ * A few sessions are remembered rather than one. Switching used to throw the reader away, so going
+ * back to a session you left a moment ago re-read its whole transcript from the top - and flicking
+ * between two of them re-read both, every time. What is already known is shown at once and
+ * confirmed behind you; only the bytes appended since are ever parsed again.
  */
 @Service(Service.Level.PROJECT)
 class SessionInsightService(private val project: Project) : Disposable {
 
-    private val reader = SessionInsightReader()
     private val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
     private val listeners = mutableListOf<(SessionInsight) -> Unit>()
+
+    /** Access ordered, so the sessions falling out are the ones nobody has come back to. */
+    private val readers = object : LinkedHashMap<String, SessionInsightReader>(REMEMBERED, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, SessionInsightReader>) = size > REMEMBERED
+    }
+    private val remembered = HashMap<String, SessionInsight>()
 
     @Volatile private var sessionId: String? = null
     @Volatile private var workingDir: String? = null
@@ -41,9 +48,11 @@ class SessionInsightService(private val project: Project) : Disposable {
 
         this.sessionId = sessionId
         this.workingDir = workingDir
-        reader.reset()
         taskSignature = ""
-        insight = SessionInsight()
+        // Whatever was last known about this session, now, rather than the previous session's
+        // content left on screen until a parse finishes.
+        insight = sessionId?.let { id -> synchronized(readers) { remembered[id] } } ?: SessionInsight(sessionId)
+        publish(insight)
         refreshSoon()
     }
 
@@ -53,19 +62,6 @@ class SessionInsightService(private val project: Project) : Disposable {
         refreshSoon()
     }
 
-    /**
-     * Binding is what a tab does when the selected session changes, and it happens on the EDT.
-     *
-     * A new session means the incremental reader starts over, so that first read is the whole
-     * transcript - tens of megabytes on a long one. Done inline it froze the IDE for as long as the
-     * parse took, which is why switching sessions stuttered only while these tabs were open.
-     */
-    private fun refreshSoon() {
-        if (alarm.isDisposed) return
-
-        alarm.addRequest({ runCatching { refresh() } }, 0)
-    }
-
     fun unwatch() {
         if (watchers > 0) watchers--
     }
@@ -73,14 +69,33 @@ class SessionInsightService(private val project: Project) : Disposable {
     fun refresh() {
         val id = sessionId ?: return
         val transcript = transcriptOf(id) ?: return
+        val reader = synchronized(readers) { readers.getOrPut(id) { SessionInsightReader() } }
 
         val fresh = reader.read(transcript)
         val signature = TaskStore.signature(id)
         val tasks = if (signature == taskSignature) insight.tasks else TaskStore.read(id)
         taskSignature = signature
-        insight = fresh.copy(tasks = tasks)
+        val updated = fresh.copy(sessionId = id, tasks = tasks)
 
-        val snapshot = insight
+        synchronized(readers) { remembered[id] = updated }
+        // A slow read of the session you just left must not overwrite the one you moved to.
+        if (id != sessionId) return
+
+        insight = updated
+        publish(updated)
+    }
+
+    /**
+     * Binding happens on the EDT, and a session bound for the first time is read whole - tens of
+     * megabytes on a long one. Done inline it froze the IDE for as long as the parse took.
+     */
+    private fun refreshSoon() {
+        if (alarm.isDisposed) return
+
+        alarm.addRequest({ runCatching { refresh() } }, 0)
+    }
+
+    private fun publish(snapshot: SessionInsight) {
         synchronized(listeners) { listeners.toList() }.forEach { it(snapshot) }
     }
 
@@ -102,10 +117,15 @@ class SessionInsightService(private val project: Project) : Disposable {
 
     override fun dispose() {
         synchronized(listeners) { listeners.clear() }
+        synchronized(readers) {
+            readers.clear()
+            remembered.clear()
+        }
     }
 
     companion object {
         private const val REFRESH_MS = 2000
+        private const val REMEMBERED = 4
 
         fun getInstance(project: Project): SessionInsightService =
             project.getService(SessionInsightService::class.java)

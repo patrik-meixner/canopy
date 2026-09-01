@@ -23,16 +23,21 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
     private var drawnRevision = -1L
     private var drawnTasks: List<PlannedTask>? = null
     private var drawn: SessionInsight? = null
+    private var drawnSession: String? = null
 
     init {
         Disposer.register(parent, this)
 
         service.addListener(this) { insight ->
-            if (insight.revision == drawnRevision && insight.tasks === drawnTasks) return@addListener
+            val same = insight.sessionId == drawnSession &&
+                insight.revision == drawnRevision &&
+                insight.tasks === drawnTasks
+            if (same) return@addListener
 
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed || Disposer.isDisposed(this)) return@invokeLater
 
+                drawnSession = insight.sessionId
                 drawnRevision = insight.revision
                 drawnTasks = insight.tasks
                 drawn = insight
