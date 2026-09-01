@@ -22,6 +22,7 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
     private var watching = false
     private var drawnRevision = -1L
     private var drawnTasks: List<PlannedTask>? = null
+    private var drawn: SessionInsight? = null
 
     init {
         Disposer.register(parent, this)
@@ -34,6 +35,7 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
 
                 drawnRevision = insight.revision
                 drawnTasks = insight.tasks
+                drawn = insight
                 render(insight)
             }
         }
@@ -73,6 +75,11 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
     }
 
     protected abstract fun render(insight: SessionInsight)
+
+    /** Redraw what is already parsed, for a filter the tab owns rather than the transcript. */
+    protected fun refresh() {
+        drawn?.let(::render)
+    }
 
     protected fun selectedSession(): ClaudeSessionVirtualFile? =
         FileEditorManager.getInstance(project).selectedFiles.firstOrNull() as? ClaudeSessionVirtualFile

@@ -10,77 +10,61 @@ import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.ui.ColoredListCellRenderer
-import com.intellij.ui.DoubleClickListener
-import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.SimpleTextAttributes
-import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
-import java.awt.event.MouseEvent
 import java.nio.file.Path
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import javax.swing.DefaultListModel
-import javax.swing.Icon
-import javax.swing.JList
 
 /**
- * What the agent has been doing, folded into runs.
+ * What the session did, turn by turn.
  *
- * Twelve consecutive Bash rows say nothing that "Bash ×12" does not, and they bury the one Edit
- * between them; a file it wrote to opens on a double click.
+ * A flat log of tool calls answers "what calls were made", which nobody asks: it buries the one
+ * edit under twelve greps and reads as the terminal again, only worse. A turn is the unit the work
+ * was asked for in, so it is the unit it reads back in.
  */
 class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
-    private val model = DefaultListModel<ActivityRun>()
-    private val list = ViewportWidthList(model)
-    private var entries: List<ActivityEntry> = emptyList()
-    private var writesOnly = false
-    private val body = ContentOrEmpty(
-        ScrollPaneFactory.createScrollPane(list, true),
+    private val cards = CardListPanel(
         EmptyState(
             AllIcons.Actions.ListFiles,
             "Nothing recorded yet",
-            "Every file the agent read, wrote or ran a command against lands here, folded into runs."
+            "Each of your prompts becomes a turn here, with the files it wrote and what it ran to get there."
         )
     )
+    private var turns: List<ActivityTurn> = emptyList()
+    private var writesOnly = false
+    private var limit = TURN_PAGE
 
     init {
-        list.cellRenderer = ActivityRenderer()
-        list.emptyText.text = "Nothing recorded for this session yet"
-        list.border = JBUI.Borders.empty(InsightUi.GAP, InsightUi.GAP)
-
-        object : DoubleClickListener() {
-            override fun onDoubleClick(event: MouseEvent): Boolean = openSelected()
-        }.installOn(list)
-
+        background = InsightUi.panelBackground()
         add(toolbar(), BorderLayout.NORTH)
-        add(body, BorderLayout.CENTER)
+        add(cards, BorderLayout.CENTER)
     }
 
     override fun render(insight: SessionInsight) {
-        entries = insight.activity
+        val prompts = insight.messages.associate { it.ordinal to it.headline }
+
+        turns = activityTurns(insight.activity, prompts, writesOnly).asReversed()
         rebuild()
     }
 
     private fun rebuild() {
-        val atTop = list.firstVisibleIndex <= 0
+        val page = pageful(turns, limit)
 
-        model.clear()
-        activityRuns(entries, writesOnly).asReversed().forEach { model.addElement(it) }
-        body.showEmpty(model.isEmpty)
-        if (atTop && !model.isEmpty) list.ensureIndexIsVisible(0)
+        cards.onMore(page.remaining, TURN_PAGE) {
+            limit += TURN_PAGE
+            rebuild()
+        }
+        cards.setCards(page.shown.map { TurnCard(it, ::openFile) }, page.shown.map(::turnCardKey))
     }
 
     private fun toolbar(): javax.swing.JComponent {
         val group = DefaultActionGroup()
-        group.add(object : ToggleAction("Writes Only", "Hide reads, searches and shell calls", AllIcons.Actions.Edit) {
+        group.add(object : ToggleAction("Turns That Wrote Something", "Hide turns that only read and searched", AllIcons.Actions.Edit) {
             override fun isSelected(event: AnActionEvent) = writesOnly
 
             override fun setSelected(event: AnActionEvent, state: Boolean) {
                 writesOnly = state
-                rebuild()
+                limit = TURN_PAGE
+                refresh()
             }
 
             override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -91,61 +75,11 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
             .component
     }
 
-    private fun openSelected(): Boolean {
-        val run = list.selectedValue ?: return false
-        if (!run.detail.startsWith("/")) return false
-        val file = LocalFileSystem.getInstance().findFileByNioFile(Path.of(run.detail)) ?: return false
+    private fun openFile(path: String) {
+        val file = LocalFileSystem.getInstance().findFileByNioFile(Path.of(path)) ?: return
 
-        return FileEditorManager.getInstance(project).openFile(file, true).isNotEmpty()
-    }
-
-    private class ActivityRenderer : ColoredListCellRenderer<ActivityRun>() {
-        override fun customizeCellRenderer(
-            list: JList<out ActivityRun>,
-            value: ActivityRun,
-            index: Int,
-            selected: Boolean,
-            hasFocus: Boolean
-        ) {
-            icon = iconFor(value.tool)
-            val headline = headlineOf(value)
-            append(headline.first, if (value.isWrite) writeAttributes else SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-            if (value.count > 1) append(" ×${value.count}", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
-            if (headline.second.isNotEmpty()) append("  ${headline.second}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            timeOf(value.lastAtMillis)?.let { append("   $it", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES) }
-            toolTipText = value.detail.takeIf { it.isNotBlank() }
-        }
-
-        private val writeAttributes get() = SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, InsightUi.accent())
+        FileEditorManager.getInstance(project).openFile(file, true)
     }
 }
 
-private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
-
-internal fun timeOf(millis: Long): String? =
-    if (millis <= 0) null else TIME.format(Instant.ofEpochMilli(millis))
-
-/** A shell call reads as its verb; anything else reads as its tool and target. */
-internal fun headlineOf(run: ActivityRun): Pair<String, String> {
-    if (run.tool != "Bash") return run.tool to shortDetail(run.detail)
-    val summary = summarizeCommand(run.detail)
-
-    return summary.verb to shortDetail(summary.rest)
-}
-
-/** A path is read by its tail; a command is read by its head. */
-internal fun shortDetail(detail: String): String {
-    if (!detail.startsWith("/")) return detail
-    val parts = detail.split("/").filter { it.isNotEmpty() }
-
-    return if (parts.size <= 2) detail else "…/" + parts.takeLast(2).joinToString("/")
-}
-
-internal fun iconFor(tool: String): Icon = when {
-    tool == "Bash" -> AllIcons.Debugger.Console
-    tool == "Read" || tool == "Glob" || tool == "Grep" -> AllIcons.Actions.Search
-    tool.startsWith("Task") -> AllIcons.Actions.Checked
-    tool == "Agent" -> AllIcons.General.User
-    tool.startsWith("mcp__") -> AllIcons.Nodes.Plugin
-    else -> AllIcons.Actions.Edit
-}
+private const val TURN_PAGE = 30

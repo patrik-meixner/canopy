@@ -89,7 +89,7 @@ class SessionInsightReader {
         val name = block.get("name")?.asString ?: return
         val input = block.getAsJsonObject("input")
 
-        activity.add(ActivityEntry(name, activityDetail(name, input), at))
+        activity.add(ActivityEntry(name, activityDetail(name, input), at, messages.size))
         revision++
         if (activity.size > ACTIVITY_LIMIT * 2) activity.subList(0, activity.size - ACTIVITY_LIMIT).clear()
     }

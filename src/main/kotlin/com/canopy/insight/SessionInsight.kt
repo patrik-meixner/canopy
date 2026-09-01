@@ -16,7 +16,9 @@ data class PlannedTask(
 data class ActivityEntry(
     val tool: String,
     val detail: String,
-    val atMillis: Long
+    val atMillis: Long,
+    /** Which of your prompts the agent was answering; 0 for anything before the first one. */
+    val turn: Int
 )
 
 data class TouchedFile(
