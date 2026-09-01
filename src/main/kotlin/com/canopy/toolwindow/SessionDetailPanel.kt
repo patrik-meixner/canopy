@@ -43,7 +43,6 @@ class SessionDetailPanel(
         onOverlapsRequested = ::showOverlaps,
         onNoteRequested = ::sendNote,
         onProblemsRequested = ::sendProblems,
-        onRestoreRequested = ::restoreCheckpoint,
         onCommitSelectionRequested = ::commitSelection,
         onPushSelectionRequested = ::pushSelection
     ).apply { border = JBUI.Borders.empty() }
@@ -342,49 +341,6 @@ class SessionDetailPanel(
             .getNotificationGroup("Canopy")
             .createNotification(message, com.intellij.notification.NotificationType.INFORMATION)
             .notify(project)
-    }
-
-    /** Restoring writes over the working tree, so it names what it will do and asks first. */
-    private fun restoreCheckpoint() {
-        val sessionId = shownSessionId ?: return
-        val checkpoints = com.canopy.services.SessionCheckpoints.getInstance(project).list(sessionId)
-        if (checkpoints.isEmpty()) {
-            return com.intellij.openapi.ui.Messages.showInfoMessage(
-                project,
-                "This session has no checkpoints yet. One is taken each time it finishes a turn.",
-                "No Checkpoints"
-            )
-        }
-
-        val chosen = com.intellij.openapi.ui.Messages.showEditableChooseDialog(
-            "Put the working tree back as it stood at:",
-            "Restore a Checkpoint",
-            null,
-            checkpoints.map { it.label }.toTypedArray(),
-            checkpoints.first().label,
-            null
-        ) ?: return
-        val checkpoint = checkpoints.firstOrNull { it.label == chosen } ?: return
-
-        val confirmed = com.intellij.openapi.ui.Messages.showYesNoDialog(
-            project,
-            "Files as they were at ${checkpoint.label} will overwrite what is on disk now. " +
-                "Files created since are left alone.",
-            "Restore Checkpoint",
-            null
-        )
-        if (confirmed != com.intellij.openapi.ui.Messages.YES) return
-
-        CanopyExecutor.submit {
-            val (ok, output) = com.canopy.services.SessionCheckpoints.getInstance(project).restore(sessionId, checkpoint)
-
-            ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed) return@invokeLater
-                if (!ok) com.intellij.openapi.ui.Messages.showErrorDialog(project, output.take(400), "Restore Failed")
-                com.intellij.openapi.vfs.VirtualFileManager.getInstance().asyncRefresh(null)
-                refresh(force = true)
-            }
-        }
     }
 
     /** The agent cannot see the IDE's analysis, so it ships code the editor is already underlining. */

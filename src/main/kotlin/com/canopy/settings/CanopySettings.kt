@@ -41,9 +41,6 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         /** Additional custom env vars (KEY=VALUE per line). */
         @JvmField var customEnvVars: String = ""
 
-        /** Snapshot the working tree into refs/canopy when a session finishes a turn. */
-        @JvmField var checkpointOnTurnEnd: Boolean = true
-
         /** Untracked files carried into a fresh worktree, comma or newline separated. */
         @JvmField var worktreeSetupFiles: String = ".env"
 

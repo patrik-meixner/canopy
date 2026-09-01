@@ -20,7 +20,6 @@ class SectionedChangesBrowser(
     private val onOverlapsRequested: () -> Unit,
     private val onNoteRequested: () -> Unit,
     private val onProblemsRequested: () -> Unit,
-    private val onRestoreRequested: () -> Unit,
     private val onCommitSelectionRequested: () -> Unit,
     private val onPushSelectionRequested: () -> Unit
 ) : ChangesBrowserBase(project, false, false) {
@@ -95,17 +94,7 @@ class SectionedChangesBrowser(
             override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
         }
 
-        val restore = object : com.intellij.openapi.actionSystem.AnAction(
-            "Restore a Checkpoint",
-            "Put the working tree back as it stood at the end of an earlier turn",
-            com.intellij.icons.AllIcons.Actions.Rollback
-        ), com.intellij.openapi.project.DumbAware {
-            override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) = onRestoreRequested()
-
-            override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
-        }
-
-        return listOf(refresh, commit, push, note, problems, restore, overlaps) + super.createToolbarActions()
+        return listOf(refresh, commit, push, note, problems, overlaps) + super.createToolbarActions()
     }
 
     /** What a note is about: the selected rows, and their untracked files as well as their changes. */
