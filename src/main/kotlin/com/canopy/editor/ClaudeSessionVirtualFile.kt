@@ -77,12 +77,10 @@ class ClaudeSessionVirtualFile(
         val id = sessionId ?: return null
         val sessions = com.canopy.services.ClaudeSessionService.getInstance(project)
         val session = sessions.getSessions().firstOrNull { it.sessionId == id }
-        val attention = com.canopy.model.sessionAttentionFor(
-            notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(id),
-            isRunning = true,
-            tail = session?.tail,
-            idleForMillis = session?.let { System.currentTimeMillis() - it.modified.toEpochMilli() } ?: 0
-        )
+        val attention = session?.let { com.canopy.services.sessionAttentionIn(project, it, isRunning = true) }
+            ?: com.canopy.model.sessionAttentionOf(
+                com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(id)
+            )
         val presence = when {
             isUnresponsive -> com.canopy.model.SessionPresence.Unresponsive
             sessions.isExternallyOpen(id) -> com.canopy.model.SessionPresence.OpenElsewhere

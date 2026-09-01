@@ -543,12 +543,11 @@ class SessionListPanel(
         return listOfNotNull(context, cost).joinToString("  ")
     }
 
-    private fun sessionAttention(session: SessionDisplay) = com.canopy.model.sessionAttentionFor(
-        notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(session.sessionId),
+    private fun sessionAttention(session: SessionDisplay) = com.canopy.services.sessionAttentionIn(
+        project,
+        session,
         isRunning = sessionService.isExternallyOpen(session.sessionId) ||
-            getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN,
-        tail = session.tail,
-        idleForMillis = System.currentTimeMillis() - session.modified.toEpochMilli()
+            getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
     )
 
     private fun selectedSession(): SessionDisplay? {

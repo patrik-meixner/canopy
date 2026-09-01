@@ -72,18 +72,7 @@ class SessionDetailPanel(
      * The tree says which files are in which state; the header says whether anything needs doing,
      * and which session is being reviewed, without expanding four sections to find out.
      */
-    private val headline = com.intellij.ui.components.JBLabel().apply {
-        font = font.deriveFont(java.awt.Font.BOLD)
-    }
-    private val outstanding = com.intellij.ui.components.JBLabel().apply {
-        foreground = com.intellij.util.ui.UIUtil.getLabelDisabledForeground()
-        font = com.intellij.util.ui.UIUtil.getLabelFont(com.intellij.util.ui.UIUtil.FontSize.SMALL)
-    }
-    private val header = com.canopy.insight.IslandPanel(BorderLayout(0, JBUI.scale(3))).apply {
-        border = JBUI.Borders.empty(8, 12)
-        add(headline, BorderLayout.NORTH)
-        add(outstanding, BorderLayout.SOUTH)
-    }
+    private val header = SessionHeaderCard()
 
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
@@ -412,17 +401,34 @@ class SessionDetailPanel(
 
     private fun updateHeader(changeSet: SessionChangeSet) {
         val session = shownSessionId?.let(resolveSession)
-        val repositories = shownSessionId?.let { rootsOf(it).size } ?: 0
-
-        headline.text = sessionHeadline(session)
-        outstanding.text = outstandingSummary(
+        val counts = outstandingCounts(
             uncommitted = changeSet.changes[SessionChangeSection.Uncommitted].orEmpty().size,
             untracked = changeSet.unversioned.size,
             unpushed = changeSet.changes[SessionChangeSection.Committed].orEmpty().size,
-            pushed = changeSet.changes[SessionChangeSection.Pushed].orEmpty().size,
-            repositories = repositories
+            pushed = changeSet.changes[SessionChangeSection.Pushed].orEmpty().size
         )
+
+        header.show(session, attentionOf(session), presenceOf(session), counts)
     }
+
+    private fun attentionOf(session: SessionDisplay?): com.canopy.model.SessionAttention {
+        if (session == null) return com.canopy.model.SessionAttention.None
+
+        return com.canopy.services.sessionAttentionIn(project, session, isRunning = isOpenHere(session))
+    }
+
+    private fun presenceOf(session: SessionDisplay?): com.canopy.model.SessionPresence = when {
+        session == null -> com.canopy.model.SessionPresence.Available
+        isOpenHere(session) -> com.canopy.model.SessionPresence.OpenHere
+        com.canopy.services.ClaudeSessionService.getInstance(project).isExternallyOpen(session.sessionId) ->
+            com.canopy.model.SessionPresence.OpenElsewhere
+        else -> com.canopy.model.SessionPresence.Available
+    }
+
+    private fun isOpenHere(session: SessionDisplay): Boolean =
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
+            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .any { it.sessionId == session.sessionId }
 
     private fun showCard(name: String) {
         (cards.layout as java.awt.CardLayout).show(cards, name)

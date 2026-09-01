@@ -52,6 +52,9 @@ object InsightUi {
     fun mutedForeground(selected: Boolean): Color =
         if (selected) UIUtil.getLabelForeground() else JBColor.GRAY
 
+    /** The same mix the cards use, for anything that has to sit on one of them. */
+    fun blendInto(base: Color, ink: Color, strength: Double): Color = blend(base, ink, strength)
+
     private fun blend(base: Color, accent: Color, strength: Double): Color = Color(
         (base.red + (accent.red - base.red) * strength).toInt().coerceIn(0, 255),
         (base.green + (accent.green - base.green) * strength).toInt().coerceIn(0, 255),

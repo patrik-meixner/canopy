@@ -66,12 +66,11 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
             onWorktreeActivated = { worktree -> offerSessionsForWorktree(project, sessionService, worktree) },
             loadSessions = { sessionService.getSessions() },
             attentionOf = { session ->
-                com.canopy.model.sessionAttentionFor(
-                    notifyState = com.canopy.services.ClaudeStatusService.getInstance(project).getNotifyState(session.sessionId),
+                com.canopy.services.sessionAttentionIn(
+                    project,
+                    session,
                     isRunning = sessionService.isExternallyOpen(session.sessionId) ||
-                        isOpenInPlugin(project, session.sessionId),
-                    tail = session.tail,
-                    idleForMillis = System.currentTimeMillis() - session.modified.toEpochMilli()
+                        isOpenInPlugin(project, session.sessionId)
                 )
             },
             onSessionActivated = openForReview,

@@ -290,7 +290,7 @@ class SectionedChangesBrowser(
         if (unversioned.isNotEmpty()) {
             val tag = com.intellij.openapi.vcs.changes.ui.TagChangesBrowserNode(
                 object : ChangesBrowserNode.Tag {
-                    override fun toString(): String = "Unversioned Files  \u00b7  not tracked by git"
+                    override fun toString(): String = "Unversioned Files   not tracked by git"
                 },
                 com.intellij.ui.SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES,
                 true
@@ -324,7 +324,7 @@ class SectionedChangesBrowser(
         // A header that says what the state means, and reads quieter once the work has left.
         val node = com.intellij.openapi.vcs.changes.ui.TagChangesBrowserNode(
             object : ChangesBrowserNode.Tag {
-                override fun toString(): String = "${section.title}  \u00b7  ${section.hint}"
+                override fun toString(): String = "${section.title}   ${section.hint}"
             },
             if (section.isYours) com.intellij.ui.SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES
             else com.intellij.ui.SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES,
