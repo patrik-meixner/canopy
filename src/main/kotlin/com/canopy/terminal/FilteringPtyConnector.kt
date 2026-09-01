@@ -13,6 +13,9 @@ open class FilteringPtyConnector(
 ) : PtyProcessTtyConnector(process, charset) {
 
     private val trace = PtyTrace.of(process)
+
+    /** Read from and written to by the single reader thread JediTerm runs. */
+    private var held = ""
     private val firstOutput = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /** Runs once the far end has said anything, which for a shell means its prompt is up. */
@@ -41,7 +44,9 @@ open class FilteringPtyConnector(
         onRaw = {
             trace?.output(it)
             if (!firstOutput.getAndSet(true)) onFirstOutput?.invoke()
-        }
+        },
+        carried = { held.also { held = "" } },
+        carry = { held = it }
     )
 }
 
