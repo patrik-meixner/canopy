@@ -41,7 +41,7 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
             val ink = toneColor(entry.tone)
-            g.color = InsightUi.blendInto(InsightUi.islandBackground(), ink, CHIP_TINT)
+            g.color = InsightUi.blendInto(InsightUi.raisedBackground(), ink, CHIP_TINT)
             g.fillRoundRect(0, 0, width, height, JBUI.scale(ARC), JBUI.scale(ARC))
 
             val baseline = (height + getFontMetrics(boldFont).ascent - getFontMetrics(boldFont).descent) / 2

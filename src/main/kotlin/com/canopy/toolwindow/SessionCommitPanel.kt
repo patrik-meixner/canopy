@@ -21,45 +21,56 @@ import javax.swing.KeyStroke
  *
  * A modal input dialog for a commit message hides the tree behind it, which is the one thing worth
  * looking at while writing one. This is the platform's own editor, so it brings the commit-message
- * highlighting, the history and the inspections with it - and it is only on screen while a commit
- * is actually being written.
+ * highlighting, the history and the inspections with it - laid out the way the Commit window lays
+ * it out, because that is where the habit was learned.
  */
 class SessionCommitPanel(
     project: Project,
     parent: Disposable,
     private val onCommit: (message: String, after: AfterCommit) -> Unit,
     private val onCancel: () -> Unit
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout(0, JBUI.scale(6))) {
 
-    private val message = CommitMessage(project, false, true, true)
+    // No toolbar of its own: the Commit window puts one above the editor, horizontally, next to
+    // what it is about. Left to itself the editor stacks it vertically down its right edge.
+    private val message = CommitMessage(project, false, false, true)
     private val caption = JBLabel().apply {
-        border = JBUI.Borders.empty(0, 4)
         foreground = UIUtil.getLabelDisabledForeground()
         font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
     }
-    private val commit = JButton("Commit")
-    private val commitAndPush = JButton("Commit and Push")
 
     init {
         Disposer.register(parent, message)
         isVisible = false
-        border = JBUI.Borders.empty(InsightUi.GAP / 2, InsightUi.GAP, InsightUi.GAP, InsightUi.GAP)
+        border = JBUI.Borders.compound(
+            JBUI.Borders.customLineTop(InsightUi.cardBorder()),
+            JBUI.Borders.empty(InsightUi.GAP)
+        )
         message.preferredSize = Dimension(0, JBUI.scale(EDITOR_HEIGHT))
+        message.border = JBUI.Borders.customLine(InsightUi.cardBorder())
 
-        commit.addActionListener { accept(AfterCommit.Stay) }
-        commitAndPush.addActionListener { accept(AfterCommit.Push) }
-        val cancel = JButton("Cancel").apply { addActionListener { hidePanel() } }
-
-        add(caption, BorderLayout.NORTH)
+        add(header(), BorderLayout.NORTH)
         add(message, BorderLayout.CENTER)
-        add(JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(6), 0)).apply {
-            isOpaque = false
-            add(cancel)
-            add(commit)
-            add(commitAndPush)
-        }, BorderLayout.SOUTH)
+        add(buttons(), BorderLayout.SOUTH)
 
-        registerKeyboardAction({ hidePanel() }, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+        registerKeyboardAction(
+            { hidePanel() },
+            KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+            WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        )
+    }
+
+    private fun header() = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+        isOpaque = false
+        add(caption, BorderLayout.WEST)
+        add(message.createToolbar(true), BorderLayout.EAST)
+    }
+
+    private fun buttons() = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0)).apply {
+        isOpaque = false
+        add(JButton("Commit").apply { addActionListener { accept(AfterCommit.Stay) } })
+        add(JButton("Commit and Push").apply { addActionListener { accept(AfterCommit.Push) } })
+        add(JButton("Cancel").apply { addActionListener { hidePanel() } })
     }
 
     /** The message survives being cancelled: a commit abandoned to look at a diff is not rewritten. */
@@ -93,6 +104,6 @@ class SessionCommitPanel(
         if (isVisible) super.getPreferredSize() else Dimension(0, 0)
 
     private companion object {
-        const val EDITOR_HEIGHT = 90
+        const val EDITOR_HEIGHT = 96
     }
 }

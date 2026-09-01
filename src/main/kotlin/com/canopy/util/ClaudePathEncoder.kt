@@ -28,6 +28,9 @@ object ClaudePathEncoder {
         return if (alt == primary) listOf(primary) else listOf(primary, alt)
     }
 
+    /** Where the CLI keeps a session's task list, which is part of the session and dies with it. */
+    fun tasksDir(): Path = Path.of(System.getProperty("user.home"), ".claude", "tasks")
+
     fun sessionsDir(): Path =
         Path.of(System.getProperty("user.home"), ".claude", "sessions")
 

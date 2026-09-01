@@ -18,6 +18,8 @@ object InsightUi {
     private const val SELECTED_TINT = 0.34
     private const val SELECTED_HOVER_TINT = 0.46
     private const val HOVER_TINT = 0.16
+    private const val RAISED_TINT = 0.10
+    private const val BORDER_TINT = 0.30
 
     private val tints = java.util.concurrent.ConcurrentHashMap<Double, Color>()
 
@@ -80,6 +82,16 @@ object InsightUi {
      */
     fun emptyBackground(): Color = ISLAND
 
+    /**
+     * A card has to be told apart from what it sits on.
+     *
+     * The list gets that for free: cards are the tool window's tone against the editor's. A card
+     * alone on a panel of its own colour is invisible, so it is lifted a step and given an edge.
+     */
+    fun raisedBackground(): Color = accentTint(RAISED_TINT)
+
+    fun cardBorder(): Color = accentTint(BORDER_TINT)
+
 }
 
 /** A panel that paints itself as a rounded island instead of a square block. */
@@ -91,12 +103,19 @@ open class IslandPanel(layout: java.awt.LayoutManager) : JPanel(layout) {
         isOpaque = false
     }
 
+    /** An outline only when one is asked for: a card in a list is told apart by its neighbours. */
+    var outlineColor: Color? = null
+
     override fun paintComponent(graphics: Graphics) {
         val g = graphics.create() as Graphics2D
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             g.color = islandColor
             g.fillRoundRect(0, 0, width - 1, height - 1, InsightUi.ARC, InsightUi.ARC)
+            outlineColor?.let {
+                g.color = it
+                g.drawRoundRect(0, 0, width - 1, height - 1, InsightUi.ARC, InsightUi.ARC)
+            }
         } finally {
             g.dispose()
         }

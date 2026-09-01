@@ -140,51 +140,55 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         return result
     }
 
+    /**
+     * Everything the session left on disk, wherever the encoder actually put it.
+     *
+     * This used to delete one guessed path. Claude Code encodes a project directory by replacing
+     * both `/` and `.`, and [ClaudePathEncoder.projectDir] replaces only `/`, so for any project
+     * with a dot in its path the delete removed nothing at all - and the next refresh, which reads
+     * every candidate directory, put the session straight back.
+     */
     fun deleteSession(sessionId: String): Boolean {
         val basePath = project.basePath ?: return false
+        val directories = ClaudePathEncoder.projectDirCandidates(basePath) +
+            runCatching {
+                ClaudePathEncoder.worktreeNames(basePath).map { ClaudePathEncoder.worktreeProjectDir(basePath, it) }
+            }.getOrDefault(emptyList())
 
-        // Find the session to determine if it's from a worktree
-        val session = cachedSessions?.find { it.sessionId == sessionId }
-        val projectDir = if (session?.worktreeName != null) {
-            ClaudePathEncoder.worktreeProjectDir(basePath, session.worktreeName)
-        } else {
-            ClaudePathEncoder.projectDir(basePath)
-        }
+        val footprint = sessionFootprint(directories, ClaudePathEncoder.tasksDir(), sessionId)
+        if (footprint.isEmpty()) log.warn("Nothing on disk for session $sessionId")
 
-        val jsonlPath = projectDir.resolve("$sessionId.jsonl")
-
-        // Before the file goes: whatever is holding its parsed contents would otherwise be able
-        // to answer for it afterwards.
-        accumulators.remove(jsonlPath)
-
-        try {
-            Files.deleteIfExists(jsonlPath)
-        } catch (e: Exception) {
-            log.warn("Failed to delete session file: $jsonlPath", e)
-            return false
-        }
-
-        // Remove session subdirectory (tool-results, subagents, etc.)
-        val sessionDir = projectDir.resolve(sessionId)
-        try {
-            if (Files.isDirectory(sessionDir)) {
-                Files.walk(sessionDir).use { paths ->
-                    for (p in paths.sorted(Comparator.reverseOrder())) {
-                        Files.deleteIfExists(p)
-                    }
-                }
+        for (path in footprint) {
+            accumulators.remove(path)
+            try {
+                Files.walk(path).use { under -> under.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+            } catch (e: Exception) {
+                log.warn("Failed to delete $path", e)
+                return false
             }
-        } catch (e: Exception) {
-            log.warn("Failed to delete session directory: $sessionDir", e)
         }
 
-        // Update cache directly — avoids race with concurrent background refresh overwriting
-        // the corrected cache before listeners fire
+        // Directly, rather than by asking for a refresh: a background scan already in flight would
+        // otherwise overwrite the corrected cache before the listeners see it.
         cachedSessions = cachedSessions?.filter { it.sessionId != sessionId }
+        SessionDigestCache.getInstance(project).retainOnly(
+            cachedSessions.orEmpty().mapNotNull { transcriptPathOf(it, basePath)?.toString() }.toSet()
+        )
         ApplicationManager.getApplication().invokeLater {
             listeners.forEach { it() }
         }
+
         return true
+    }
+
+    private fun transcriptPathOf(session: SessionDisplay, basePath: String): Path? {
+        val directories = if (session.worktreeName != null) {
+            listOf(ClaudePathEncoder.worktreeProjectDir(basePath, session.worktreeName))
+        } else {
+            ClaudePathEncoder.projectDirCandidates(basePath)
+        }
+
+        return directories.map { it.resolve("${session.sessionId}.jsonl") }.firstOrNull { Files.exists(it) }
     }
 
     /**

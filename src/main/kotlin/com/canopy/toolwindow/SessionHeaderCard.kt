@@ -10,6 +10,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Dimension
 import java.awt.FlowLayout
 import javax.swing.BoxLayout
 import javax.swing.JLabel
@@ -19,7 +20,9 @@ import javax.swing.JPanel
  * Which session is being reviewed, and whether anything it left behind needs doing.
  *
  * The same card the sidebar draws, given the room the review tab has: the state it is in, what it
- * is called, where and when it ran, and its outstanding work as counts rather than a sentence.
+ * is called, where and when it ran, and its outstanding work as counts rather than a sentence. It
+ * carries its own surface and edge, because unlike a row in a list it has no neighbours to be told
+ * apart from.
  */
 class SessionHeaderCard : JPanel(BorderLayout()) {
 
@@ -32,14 +35,19 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
     }
     private val chips = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0)).apply {
         isOpaque = false
-        border = JBUI.Borders.emptyTop(7)
+        border = JBUI.Borders.emptyTop(8)
     }
 
     init {
         isOpaque = false
         border = JBUI.Borders.empty(InsightUi.GAP, InsightUi.GAP, InsightUi.GAP / 2, InsightUi.GAP)
-        island.border = JBUI.Borders.empty(10, 12)
-        island.islandColor = InsightUi.islandBackground()
+        island.border = JBUI.Borders.empty(12, 14)
+        island.islandColor = InsightUi.raisedBackground()
+        island.outlineColor = InsightUi.cardBorder()
+
+        glyph.verticalAlignment = JLabel.TOP
+        glyph.border = JBUI.Borders.emptyTop(2)
+        glyph.preferredSize = Dimension(JBUI.scale(GLYPH_BOX), JBUI.scale(GLYPH_BOX))
 
         val text = JPanel().apply {
             isOpaque = false
@@ -82,8 +90,8 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
     }
 }
 
-private const val TITLE_SCALE = 1.1f
-private const val GLYPH_BOX = 22
+private const val TITLE_SCALE = 1.15f
+private const val GLYPH_BOX = 20
 
 /** Where it worked, how long ago, and how much was said, in that order of use. */
 internal fun placeLine(session: SessionDisplay?, nowMillis: Long = System.currentTimeMillis()): String {

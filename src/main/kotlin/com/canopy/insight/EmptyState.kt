@@ -3,14 +3,16 @@ package com.canopy.insight
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import java.awt.Component
-import java.awt.Dimension
+import java.awt.BorderLayout
+import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
-import javax.swing.BoxLayout
 import javax.swing.Icon
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.JTextPane
 import javax.swing.SwingConstants
+import javax.swing.text.SimpleAttributeSet
+import javax.swing.text.StyleConstants
 
 /**
  * What a tab says when it has nothing to show.
@@ -24,30 +26,40 @@ class EmptyState(icon: Icon, title: String, hint: String) : JPanel(GridBagLayout
     init {
         background = InsightUi.emptyBackground()
 
-        val column = JPanel().apply {
+        // The column spans the panel rather than sizing to its text, which is what keeps the hint
+        // wrapping instead of clipping and keeps it centred once the panel is narrower than it.
+        val column = JPanel(BorderLayout(0, JBUI.scale(6))).apply {
             isOpaque = false
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(JLabel(illustrationOf(icon), SwingConstants.CENTER), BorderLayout.NORTH)
+            add(JBLabel(title, SwingConstants.CENTER).apply {
+                font = font.deriveFont(java.awt.Font.BOLD, font.size2D * TITLE_SCALE)
+                foreground = UIUtil.getLabelForeground()
+            }, BorderLayout.CENTER)
+            add(wrapping(hint), BorderLayout.SOUTH)
         }
-        column.add(centred(JLabel(illustrationOf(icon))))
-        column.add(javax.swing.Box.createVerticalStrut(JBUI.scale(12)))
-        column.add(centred(JBLabel(title, SwingConstants.CENTER).apply {
-            font = font.deriveFont(java.awt.Font.BOLD, font.size2D * TITLE_SCALE)
-            foreground = UIUtil.getLabelForeground()
-        }))
-        column.add(javax.swing.Box.createVerticalStrut(JBUI.scale(4)))
-        column.add(centred(JBLabel(hint, SwingConstants.CENTER).apply {
-            foreground = UIUtil.getLabelDisabledForeground()
-            maximumSize = Dimension(JBUI.scale(HINT_WIDTH), Short.MAX_VALUE.toInt())
-        }))
 
-        add(column)
+        add(column, GridBagConstraints().apply {
+            fill = GridBagConstraints.HORIZONTAL
+            weightx = 1.0
+            insets = JBUI.insets(0, HINT_MARGIN)
+        })
     }
 
-    private fun <T : javax.swing.JComponent> centred(component: T): T = component.apply {
-        alignmentX = Component.CENTER_ALIGNMENT
+    /** A text pane rather than a label: only a styled document both wraps and centres its lines. */
+    private fun wrapping(hint: String) = JTextPane().apply {
+        isEditable = false
         isOpaque = false
+        isFocusable = false
+        border = JBUI.Borders.emptyTop(2)
+        font = UIUtil.getLabelFont()
+        foreground = UIUtil.getLabelDisabledForeground()
+        text = hint
+
+        val centred = SimpleAttributeSet()
+        StyleConstants.setAlignment(centred, StyleConstants.ALIGN_CENTER)
+        styledDocument.setParagraphAttributes(0, styledDocument.length, centred, false)
     }
 }
 
 private const val TITLE_SCALE = 1.15f
-private const val HINT_WIDTH = 280
+private const val HINT_MARGIN = 28

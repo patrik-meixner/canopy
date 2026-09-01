@@ -32,6 +32,17 @@ class SectionedChangesBrowser(
     init {
         init()
         viewer.emptyText.text = "No changes detected"
+        // Module grouping hangs a file on whichever IDEA module claims it, and every file here comes
+        // from a checkout this project has no modules for: they landed under another project's
+        // module names with ../../.. paths measured from the wrong root, and a submodule appeared
+        // nested inside its own superproject. A cross-repository review groups by repository.
+        viewer.groupingSupport.setGroupingKeysOrSkip(
+            setOf(
+                com.intellij.openapi.vcs.changes.ui.ChangesGroupingSupport.REPOSITORY_GROUPING,
+                com.intellij.openapi.vcs.changes.ui.ChangesGroupingSupport.DIRECTORY_GROUPING
+            )
+        )
+
         val preview = ReviewDiffPreview(viewer, this)
         com.intellij.openapi.util.Disposer.register(parent, preview)
         setShowDiffActionPreview(preview)
