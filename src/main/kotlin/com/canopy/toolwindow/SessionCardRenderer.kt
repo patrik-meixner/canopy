@@ -5,6 +5,7 @@ import com.canopy.insight.IslandPanel
 import com.canopy.model.SessionAttention
 import com.canopy.model.SessionDisplay
 import com.canopy.model.SessionStatus
+import com.intellij.icons.AllIcons
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -28,7 +29,8 @@ class SessionCardRenderer(
     private val getStatus: (String) -> SessionStatus,
     private val getAttention: (SessionDisplay) -> SessionAttention,
     private val getDetail: (SessionDisplay) -> String,
-    private val hoveredRow: () -> Int
+    private val hoveredRow: () -> Int,
+    private val isCloseHovered: () -> Boolean = { false }
 ) : TableCellRenderer {
 
     /** TableView repaints the returned component's background with its selection colour, which drew
@@ -43,12 +45,13 @@ class SessionCardRenderer(
     private val glyph = JLabel("", SwingConstants.CENTER)
     private val title = JLabel()
     private val meta = JLabel()
+    private val stop = JLabel()
     private val metaCache = HashMap<String, Pair<String, String>>()
 
     init {
         outer.isOpaque = true
         outer.border = JBUI.Borders.empty(2, InsightUi.GAP, 2, InsightUi.GAP)
-        island.border = JBUI.Borders.empty(6, 10)
+        island.border = JBUI.Borders.empty(6, CARD_PADDING)
         glyph.preferredSize = Dimension(JBUI.scale(20), 0)
         glyph.font = glyph.font.deriveFont(glyph.font.size2D * GLYPH_SCALE)
         meta.font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
@@ -59,8 +62,12 @@ class SessionCardRenderer(
             add(title)
             add(meta)
         }
+        stop.preferredSize = Dimension(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE)
+        stop.toolTipText = "Stop this session"
+
         island.add(glyph, BorderLayout.WEST)
         island.add(text, BorderLayout.CENTER)
+        island.add(stop, BorderLayout.EAST)
         outer.add(island, BorderLayout.CENTER)
     }
 
@@ -76,7 +83,15 @@ class SessionCardRenderer(
         val attention = getAttention(session)
 
         val isRunning = getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
-        island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow(), running = isRunning)
+        val isHovered = row == hoveredRow()
+        island.islandColor = InsightUi.cardBackground(selected, hovered = isHovered, running = isRunning)
+        // Only a running session has anything to stop, and only the row under the pointer is being
+        // acted on, so the rest of the list stays free of buttons.
+        stop.icon = if (isRunning && isHovered) {
+            if (isCloseHovered()) AllIcons.Actions.CloseHovered else AllIcons.Actions.Close
+        } else {
+            null
+        }
         val (metaText, tooltip) = cachedMeta(session)
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)

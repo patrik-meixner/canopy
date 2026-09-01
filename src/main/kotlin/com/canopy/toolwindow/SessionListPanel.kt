@@ -57,7 +57,8 @@ class SessionListPanel(
         getAttention = ::sessionAttention,
         showWorktreeColumn = worktreeMode,
         getWorktreeStatus = if (worktreeMode) { name -> worktreeStatus?.get(name) } else null,
-        hoveredRow = { hoveredRow }
+        hoveredRow = { hoveredRow },
+        isCloseHovered = { closeHovered }
     )
     private val table = object : TableView<SessionDisplay>(tableModel) {
         override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): Component {
@@ -166,18 +167,44 @@ class SessionListPanel(
 
     /** JTable has no hover state of its own, so the row under the cursor is tracked here. */
     private var hoveredRow: Int = -1
+    private var closeHovered = false
 
     /** The session the editor is showing, which survives the rows being replaced under it. */
     private var selectedSessionId: String? = null
 
     private fun trackHover() {
         val motion = object : java.awt.event.MouseAdapter() {
-            override fun mouseMoved(event: java.awt.event.MouseEvent) = setHovered(table.rowAtPoint(event.point))
+            override fun mouseMoved(event: java.awt.event.MouseEvent) {
+                setHovered(table.rowAtPoint(event.point))
+                setCloseHovered(isOverClose(event))
+            }
 
-            override fun mouseExited(event: java.awt.event.MouseEvent) = setHovered(-1)
+            override fun mouseExited(event: java.awt.event.MouseEvent) {
+                setCloseHovered(false)
+                setHovered(-1)
+            }
         }
         table.addMouseMotionListener(motion)
         table.addMouseListener(motion)
+    }
+
+    /** A press on the stop button of a running row, which is the only row that draws one. */
+    private fun isOverClose(event: MouseEvent): Boolean {
+        if (worktreeMode) return false
+
+        val row = table.rowAtPoint(event.point)
+        if (row < 0) return false
+        val session = tableModel.getItem(table.convertRowIndexToModel(row))
+        if (session.isTerminal || getStatus(session.sessionId) != SessionStatus.OPEN_IN_PLUGIN) return false
+
+        return closeHitArea(table.getCellRect(row, 0, true)).contains(event.point)
+    }
+
+    private fun setCloseHovered(over: Boolean) {
+        if (over == closeHovered) return
+
+        closeHovered = over
+        if (hoveredRow >= 0) table.repaint(table.getCellRect(hoveredRow, 0, true))
     }
 
     private fun setHovered(row: Int) {
@@ -373,6 +400,7 @@ class SessionListPanel(
                 val row = table.rowAtPoint(event.point)
                 if (row < 0) return
                 val session = tableModel.getItem(table.convertRowIndexToModel(row))
+                if (isOverClose(event)) return stopSession(session.sessionId)
                 selectedSessionId = session.sessionId
                 if (session.isTerminal) return focusTerminal(session.sessionId)
                 if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
