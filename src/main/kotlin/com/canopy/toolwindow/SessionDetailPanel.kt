@@ -42,6 +42,7 @@ class SessionDetailPanel(
     )
     private val browser = SectionedChangesBrowser(
         project,
+        this,
         onRefreshRequested = { refresh(force = true) },
         onCommitRequested = ::commitEverything,
         onPushRequested = ::pushEverything,

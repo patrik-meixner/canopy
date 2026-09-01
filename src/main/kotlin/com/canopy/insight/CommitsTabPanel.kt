@@ -56,6 +56,11 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         commits.addListSelectionListener { if (!it.valueIsAdjusting) showFilesOf(commits.selectedValuesList) }
 
         files.hideViewerBorder()
+        // The same one-tab diff the Commit window opens, so walking a commit's files never
+        // accumulates a tab per file.
+        val preview = com.canopy.toolwindow.ReviewDiffPreview(files.viewer, files)
+        com.intellij.openapi.util.Disposer.register(parent, preview)
+        files.setShowDiffActionPreview(preview)
 
         com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(parent) {
             if (isShowing && loadedRoots.isNotEmpty()) reload(loadedRoots)

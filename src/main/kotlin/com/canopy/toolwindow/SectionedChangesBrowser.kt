@@ -14,6 +14,7 @@ import javax.swing.tree.DefaultTreeModel
  */
 class SectionedChangesBrowser(
     project: Project,
+    parent: com.intellij.openapi.Disposable,
     private val onRefreshRequested: () -> Unit,
     private val onCommitRequested: () -> Unit,
     private val onPushRequested: () -> Unit,
@@ -31,6 +32,9 @@ class SectionedChangesBrowser(
     init {
         init()
         viewer.emptyText.text = "No changes detected"
+        val preview = ReviewDiffPreview(viewer, this)
+        com.intellij.openapi.util.Disposer.register(parent, preview)
+        setShowDiffActionPreview(preview)
     }
 
     override fun createToolbarActions(): List<com.intellij.openapi.actionSystem.AnAction> {
