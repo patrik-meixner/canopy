@@ -131,13 +131,23 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     fun cachedStartedAt(sessionId: String): java.time.Instant? =
         cachedSessions?.firstOrNull { it.sessionId == sessionId }?.startedAt
 
+    /**
+     * The cached list, and never a parse on the EDT.
+     *
+     * A tab icon, a row and the review header all ask for this while painting. Loading here meant
+     * the first of those paints parsed every transcript in the project - well over a gigabyte on a
+     * working machine - with the UI thread held for the duration. Painting gets whatever is known
+     * now and a refresh behind it; anything that truly needs the list is off the EDT already.
+     */
     fun getSessions(): List<SessionDisplay> {
-        var result = cachedSessions
-        if (result == null) {
-            result = loadSessions()
-            cachedSessions = result
+        cachedSessions?.let { return it }
+        if (ApplicationManager.getApplication().isDispatchThread) {
+            refresh()
+
+            return emptyList()
         }
-        return result
+
+        return loadSessions().also { cachedSessions = it }
     }
 
     /**

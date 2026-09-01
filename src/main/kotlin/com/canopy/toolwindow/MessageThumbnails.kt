@@ -37,7 +37,13 @@ object MessageThumbnails {
     }
 
     /** Only what a popup is showing right now, so a full-size decode is never cached. */
-    fun full(base64: String): Icon? = decode(base64, JBUI.scale(560))
+    fun fullInBackground(base64: String, onReady: (Icon) -> Unit) {
+        com.canopy.util.CanopyExecutor.submit {
+            val icon = decode(base64, JBUI.scale(FULL)) ?: return@submit
+
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater { onReady(icon) }
+        }
+    }
 
     private fun decode(base64: String, bound: Int): Icon? = try {
         val bytes = Base64.getDecoder().decode(base64)
@@ -65,3 +71,5 @@ internal fun boundedHeight(width: Int, height: Int, bound: Int): Int =
     if (height > width) bound else (bound * height / width).coerceAtLeast(1)
 
 private val THUMBNAIL: Int get() = JBUI.scale(72)
+
+private const val FULL = 560

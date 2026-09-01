@@ -110,9 +110,11 @@ class MessageCard(
                 add(label)
                 if (label.icon != null) return@forEach
 
-                MessageThumbnails.decodeInBackground(image) {
-                    label.icon = it
-                    label.revalidate()
+                whenFirstShown(label) {
+                    MessageThumbnails.decodeInBackground(image) {
+                        label.icon = it
+                        label.revalidate()
+                    }
                 }
             }
         }

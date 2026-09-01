@@ -74,8 +74,14 @@ object MessagePreview {
         if (message.images.isEmpty()) return null
 
         val strip = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply { isOpaque = false }
+        // Full size is a whole screenshot through ImageIO. The popup opens now and fills in.
         message.images.forEach { image ->
-            MessageThumbnails.full(image)?.let { strip.add(JBLabel(it)) }
+            val slot = JBLabel()
+            strip.add(slot)
+            MessageThumbnails.fullInBackground(image) {
+                slot.icon = it
+                slot.revalidate()
+            }
         }
 
         return ScrollPaneFactory.createScrollPane(strip, true).apply {
@@ -90,13 +96,17 @@ object ImagePreview {
     private var open: JBPopup? = null
 
     fun show(over: Component, at: Point, base64: String) {
-        val icon = MessageThumbnails.full(base64) ?: return
         hide()
 
+        val slot = JBLabel()
+        MessageThumbnails.fullInBackground(base64) {
+            slot.icon = it
+            slot.revalidate()
+        }
         val panel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = JBUI.Borders.empty(6)
-            add(JBLabel(icon))
+            add(slot)
         }
 
         open = JBPopupFactory.getInstance()

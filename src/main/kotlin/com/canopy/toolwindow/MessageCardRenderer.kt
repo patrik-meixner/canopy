@@ -59,8 +59,17 @@ class MessageCardRenderer : ListCellRenderer<SessionMessage> {
         text.text = wrappedHtml(value.text, textWidth(list))
 
         thumbnails.removeAll()
+        // A renderer runs on every paint, and ImageIO on a screenshot is not fast: decoding here
+        // held the UI thread for seconds at a time on a list full of them. Whatever is already
+        // decoded is drawn; the rest arrives and repaints the row.
         for (image in value.images.take(MAX_THUMBNAILS)) {
-            MessageThumbnails.of(image)?.let { thumbnails.add(JLabel(it)) }
+            val ready = MessageThumbnails.cached(image)
+            if (ready != null) {
+                thumbnails.add(JLabel(ready))
+                continue
+            }
+
+            MessageThumbnails.decodeInBackground(image) { list.repaint() }
         }
         thumbnails.isVisible = thumbnails.componentCount > 0
 
