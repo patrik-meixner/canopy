@@ -85,9 +85,10 @@ class SessionDetailPanel(
 
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
-        add(placeholder, PLACEHOLDER_CARD)
-        add(nothingOutstanding, CLEAN_CARD)
-        add(browser, BROWSER_CARD)
+        add(placeholder, ReviewState.NoSession.name)
+        add(JPanel().apply { isOpaque = false }, ReviewState.Collecting.name)
+        add(nothingOutstanding, ReviewState.NothingOutstanding.name)
+        add(browser, ReviewState.Changes.name)
     }
 
     init {
@@ -166,7 +167,7 @@ class SessionDetailPanel(
         val request = generation.incrementAndGet()
         val hasContent = cache[sessionId] != null
 
-        if (!hasContent) loadingPanel.startLoading()
+        if (!hasContent) showState(ReviewState.Collecting)
         com.canopy.services.RepoScopeService.getInstance(project).refreshIfStale { }
 
         CanopyExecutor.submit {
@@ -393,8 +394,7 @@ class SessionDetailPanel(
 
     /** An unchanged result must not redraw: rebuilding the tree would drop scroll and selection. */
     private fun render(changeSet: SessionChangeSet) {
-        loadingPanel.stopLoading()
-        showCard(if (changeSet.isEmpty) CLEAN_CARD else BROWSER_CARD)
+        showState(if (changeSet.isEmpty) ReviewState.NothingOutstanding else ReviewState.Changes)
 
         val signature = changeSet.signature()
         if (signature == shownSignature) return
@@ -435,16 +435,15 @@ class SessionDetailPanel(
             .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
             .any { it.sessionId == session.sessionId }
 
-    private fun showCard(name: String) {
-        (cards.layout as java.awt.CardLayout).show(cards, name)
+    /** The spinner belongs to one state, so nothing else can be underneath it while it turns. */
+    private fun showState(state: ReviewState) {
+        if (state == ReviewState.Collecting) loadingPanel.startLoading() else loadingPanel.stopLoading()
+        (cards.layout as java.awt.CardLayout).show(cards, state.name)
     }
 
     override fun dispose() = Unit
 
     private companion object {
-        const val PLACEHOLDER_CARD = "placeholder"
-        const val BROWSER_CARD = "browser"
-        const val CLEAN_CARD = "clean"
         val EMPTY_CHANGES = SessionChangeSet(emptyMap(), emptyList())
     }
 }

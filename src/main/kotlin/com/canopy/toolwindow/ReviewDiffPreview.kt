@@ -32,7 +32,7 @@ class ReviewDiffPreview(tree: ChangesTree, owner: JComponent) :
         wrapper?.presentableName?.let { "Review: $it" } ?: "Review"
 
     /**
-     * A directory opens, it does not diff.
+     * A directory opens or closes, it does not diff.
      *
      * The preview installs its own double-click handler on the tree, and it runs before the
      * browser's, so overriding the browser alone left the directory diffing as it always had.
@@ -41,7 +41,7 @@ class ReviewDiffPreview(tree: ChangesTree, owner: JComponent) :
         val branch = tree.selectionPath?.takeIf { (it.lastPathComponent as? TreeNode)?.isLeaf == false }
             ?: return super.handleDoubleClick(event)
 
-        expandSubtree(tree, branch)
+        if (tree.isExpanded(branch)) collapseSubtree(tree, branch) else expandSubtree(tree, branch)
 
         return true
     }
