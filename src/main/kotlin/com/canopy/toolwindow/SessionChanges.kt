@@ -12,11 +12,11 @@ import java.nio.file.Path
  * [isYours] separates what is still the reviewer's to act on from what has already left the machine.
  * A pushed file is history: it reads as work in progress otherwise, and there is a lot more of it.
  */
-enum class SessionChangeSection(val title: String, val hint: String, val isYours: Boolean) {
-    Uncommitted("Changes", "not committed", true),
-    Committed("Committed", "not pushed", true),
-    Pushed("Pushed", "already on the remote", false),
-    Unversioned("Unversioned Files", "not tracked by git", true)
+enum class SessionChangeSection(val title: String, val isYours: Boolean) {
+    Uncommitted("Changes", true),
+    Committed("Committed", true),
+    Pushed("Pushed", false),
+    Unversioned("Unversioned Files", true)
 }
 
 /**

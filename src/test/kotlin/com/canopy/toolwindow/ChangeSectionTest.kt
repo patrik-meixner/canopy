@@ -17,9 +17,4 @@ class ChangeSectionTest {
         assertTrue(SessionChangeSection.Committed.isYours)
         assertTrue(SessionChangeSection.Unversioned.isYours)
     }
-
-    @Test
-    fun `each section says what its state means, not just its name`() {
-        SessionChangeSection.entries.forEach { assertTrue(it.hint.isNotBlank()) }
-    }
 }
