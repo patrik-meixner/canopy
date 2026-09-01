@@ -14,7 +14,10 @@ import javax.swing.JTable
 import javax.swing.table.TableCellRenderer
 
 /** A shell belonging to the session above it: the indent is what says which session that is. */
-class TerminalCardRenderer(private val hoveredRow: () -> Int) : TableCellRenderer {
+class TerminalCardRenderer(
+    private val hoveredRow: () -> Int,
+    private val isCloseHovered: () -> Boolean = { false }
+) : TableCellRenderer {
 
     private val outer = object : JPanel(BorderLayout()) {
         override fun paintComponent(graphics: java.awt.Graphics) {
@@ -25,15 +28,18 @@ class TerminalCardRenderer(private val hoveredRow: () -> Int) : TableCellRendere
     private val island = IslandPanel(BorderLayout(JBUI.scale(6), 0))
     private val icon = JLabel(AllIcons.Debugger.Console)
     private val title = JLabel()
+    private val stop = JLabel()
 
     init {
         outer.isOpaque = true
         outer.border = JBUI.Borders.empty(0, InsightUi.GAP + INDENT, 2, InsightUi.GAP)
-        island.border = JBUI.Borders.empty(3, 8)
+        island.border = JBUI.Borders.empty(3, CARD_PADDING)
+        stop.preferredSize = java.awt.Dimension(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE)
         title.font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
 
         island.add(icon, BorderLayout.WEST)
         island.add(title, BorderLayout.CENTER)
+        island.add(stop, BorderLayout.EAST)
         outer.add(island, BorderLayout.CENTER)
     }
 
@@ -47,7 +53,13 @@ class TerminalCardRenderer(private val hoveredRow: () -> Int) : TableCellRendere
     ): Component {
         val terminal = value as? SessionDisplay ?: return outer
 
-        island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow())
+        val isHovered = row == hoveredRow()
+        island.islandColor = InsightUi.cardBackground(selected, hovered = isHovered)
+        stop.icon = when {
+            !isHovered -> null
+            isCloseHovered() -> AllIcons.Actions.CloseHovered
+            else -> AllIcons.Actions.Close
+        }
         title.text = terminal.displayName
         title.foreground = if (selected) InsightUi.cardForeground(true) else UIUtil.getLabelDisabledForeground()
 

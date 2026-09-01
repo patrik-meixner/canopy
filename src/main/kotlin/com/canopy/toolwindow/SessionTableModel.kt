@@ -42,7 +42,7 @@ private class CardColumnInfo(
 ) : ColumnInfo<SessionDisplay, SessionDisplay>("Name") {
 
     private val renderer = SessionCardRenderer(getStatus, getAttention, getDetail, hoveredRow, isCloseHovered)
-    private val terminalRenderer = TerminalCardRenderer(hoveredRow)
+    private val terminalRenderer = TerminalCardRenderer(hoveredRow, isCloseHovered)
 
     override fun valueOf(item: SessionDisplay): SessionDisplay = item
 

@@ -184,9 +184,6 @@ class SessionListPanel(
     private var hoveredRow: Int = -1
     private var closeHovered = false
 
-    /** Set while the stage is being rearranged; see [selectSession]. */
-    private var isStaging = false
-
     /** The session the editor is showing, which survives the rows being replaced under it. */
     private var selectedSessionId: String? = null
 
@@ -213,7 +210,8 @@ class SessionListPanel(
         val row = table.rowAtPoint(event.point)
         if (row < 0) return false
         val session = tableModel.getItem(table.convertRowIndexToModel(row))
-        if (session.isTerminal || getStatus(session.sessionId) != SessionStatus.OPEN_IN_PLUGIN) return false
+        val hasSomethingToStop = session.isTerminal || getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
+        if (!hasSomethingToStop) return false
 
         return closeHitArea(table.getCellRect(row, 0, true)).contains(event.point)
     }
@@ -421,7 +419,9 @@ class SessionListPanel(
                 val row = table.rowAtPoint(event.point)
                 if (row < 0) return
                 val session = tableModel.getItem(table.convertRowIndexToModel(row))
-                if (isOverClose(event)) return stopSession(session.sessionId)
+                if (isOverClose(event)) {
+                    return if (session.isTerminal) stopTerminal(session.sessionId) else stopSession(session.sessionId)
+                }
                 selectedSessionId = session.sessionId
                 if (session.isTerminal) return focusTerminal(session.sessionId)
                 if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
@@ -439,7 +439,7 @@ class SessionListPanel(
     fun selectSession(sessionId: String?) {
         // Every tab opened or closed to build the stage reports itself as the selection, so
         // following them one by one walked the highlight across the terminals on the way past.
-        if (sessionId == null || isStaging) return
+        if (sessionId == null || com.canopy.services.SessionStaging.isRearranging(project)) return
 
         selectedSessionId = sessionId
         restoreSelection(scroll = true)
@@ -748,6 +748,16 @@ class SessionListPanel(
             sessionFileFor(rowId) != null
 
     /** The tab goes with it: a tab showing a stopped agent has nothing left to show. */
+    /** A shell has nothing to resume, so taking it away is the only thing closing it can mean. */
+    private fun stopTerminal(key: String) {
+        val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
+        val shell = canopyFiles().firstOrNull { it.sessionKey == key } ?: return
+
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).closeFile(shell)
+        runtimes.stop(key)
+        reloadData()
+    }
+
     /** Its terminals belong to it, so they end with it rather than outliving what they were for. */
     private fun stopSession(rowId: String) {
         val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
@@ -784,12 +794,9 @@ class SessionListPanel(
         // below starts it.
         val plan = stagePlan(tabs, target?.sessionKey ?: session.sessionId, isAdditive)
 
-        isStaging = true
-        try {
+        com.canopy.services.SessionStaging.getInstance(project).rearranging {
             plan.close.mapNotNull(byKey::get).forEach(manager::closeFile)
             plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, false) }
-        } finally {
-            isStaging = false
         }
 
         if (target != null) manager.openFile(target, true)

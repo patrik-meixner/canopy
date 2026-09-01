@@ -161,6 +161,11 @@ class ClaudeSessionEditor(
         // IDE closing every tab on its way out is not the user taking anything off anything.
         Disposer.register(rootDisposable, Disposable {
             if (com.canopy.services.CanopyShutdown.isClosing()) return@Disposable
+            if (com.canopy.services.SessionStaging.isRearranging(project)) return@Disposable
+
+            // A shell has no transcript to come back to, so closing its tab is the end of it.
+            val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
+            if (file.isShellSession) return@Disposable runtimes.stop(file.sessionKey)
 
             file.sessionId?.let { persistence.remove(it) }
         })
