@@ -413,7 +413,7 @@ class SessionDetailPanel(
             pushed = changeSet.changes[SessionChangeSection.Pushed].orEmpty().size
         )
 
-        header.show(session, attentionOf(session), presenceOf(session), counts)
+        header.show(session, counts) { com.canopy.model.SessionState(attentionOf(session), presenceOf(session)) }
     }
 
     private fun attentionOf(session: SessionDisplay?): com.canopy.model.SessionAttention {

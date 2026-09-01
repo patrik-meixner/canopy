@@ -21,9 +21,13 @@ import javax.swing.Icon
  * so an icon that carried a fixed glyph froze there on whichever state happened to be current when
  * the tab was selected.
  */
-class GlyphIcon(private val glyphOf: () -> String, private val tint: Color? = null, boxSize: Int = BOX) : Icon {
+class GlyphIcon(
+    private val glyphOf: () -> String,
+    private val tintOf: () -> Color? = { null },
+    boxSize: Int = BOX
+) : Icon {
 
-    constructor(glyph: String, tint: Color? = null, boxSize: Int = BOX) : this({ glyph }, tint, boxSize)
+    constructor(glyph: String, tint: Color? = null, boxSize: Int = BOX) : this({ glyph }, { tint }, boxSize)
 
     private val size = JBUIScale.scale(boxSize)
 
@@ -43,7 +47,7 @@ class GlyphIcon(private val glyphOf: () -> String, private val tint: Color? = nu
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-            g.color = tint ?: component?.foreground ?: UIUtil.getLabelForeground()
+            g.color = tintOf() ?: component?.foreground ?: UIUtil.getLabelForeground()
             g.font = (component?.font ?: UIUtil.getLabelFont()).deriveFont(size * GLYPH_TO_BOX)
             val metrics = g.fontMetrics
             g.drawString(

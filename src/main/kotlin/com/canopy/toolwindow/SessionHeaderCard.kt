@@ -4,7 +4,7 @@ import com.canopy.insight.InsightUi
 import com.canopy.insight.IslandPanel
 import com.canopy.model.SessionAttention
 import com.canopy.model.SessionDisplay
-import com.canopy.model.SessionPresence
+import com.canopy.model.SessionState
 import com.canopy.model.sessionGlyph
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -60,10 +60,17 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         add(island, BorderLayout.CENTER)
     }
 
-    fun show(session: SessionDisplay?, attention: SessionAttention, presence: SessionPresence, counts: List<OutstandingCount>) {
+    /**
+     * [stateOf] is read at paint time, not here.
+     *
+     * The card is redrawn when the change set changes, which is nothing to do with what the agent
+     * is doing: a state captured here froze on whatever was true at the last scan, and the header
+     * spun on while the row, the tab and the toolbar had all gone quiet.
+     */
+    fun show(session: SessionDisplay?, counts: List<OutstandingCount>, stateOf: () -> SessionState) {
         glyph.icon = GlyphIcon(
-            { sessionGlyph(attention, presence, System.currentTimeMillis()) ?: "●" },
-            glyphColor(attention),
+            { stateOf().let { sessionGlyph(it.attention, it.presence, System.currentTimeMillis()) } ?: "●" },
+            { glyphColor(stateOf().attention) },
             GLYPH_BOX
         )
         title.text = session?.displayName?.takeIf { it.isNotBlank() } ?: "No session selected"
