@@ -156,7 +156,14 @@ class ClaudeSessionEditor(
             }
         }
 
-        Disposer.register(rootDisposable, Disposable { file.sessionId?.let { persistence.remove(it) } })
+        // A closed tab no longer means a stopped agent, and a session still running is one the
+        // next start should bring back.
+        Disposer.register(rootDisposable, Disposable {
+            val key = file.sessionId ?: file.sessionKey
+            if (com.canopy.services.SessionRuntimeService.getInstance(project).existing(key) != null) return@Disposable
+
+            file.sessionId?.let { persistence.remove(it) }
+        })
 
         // Sync tab title when session names change (e.g. after /rename)
         val nameListener: () -> Unit = {
@@ -267,44 +274,56 @@ class ClaudeSessionEditor(
         val needsLinking = isNewSession || isFork || isNewWorktree
         val tempId = if (needsLinking) "new-${System.nanoTime()}" else null
         val monitoringId = file.sessionId ?: tempId!!
+        val runtimeKey = file.sessionId ?: file.sessionKey
         val statusFile = statusService.createStatusFilePath(monitoringId)
         val notifyFile = statusService.createNotifyFilePath(monitoringId)
 
         // Deliberately not a tab badge: the terminal is "active" whenever anything reaches it,
         // including the status line redrawing itself, which lit every tab at once for no reason.
-        val onActiveChanged: (Boolean) -> Unit = { active ->
-            if (active) {
-                stopLoading()
-                if (file.isUnresponsive) showAnswering(true)
+        val view = object : com.canopy.services.SessionRuntimeView {
+            override fun onActiveChanged(isActive: Boolean) {
+                if (isActive) {
+                    stopLoading()
+                    if (file.isUnresponsive) showAnswering(true)
+                }
+                refreshTabTitle()
             }
-            refreshTabTitle()
+
+            override fun onUserInput() {
+                statusService.clearNotifyState(file.sessionId ?: monitoringId)
+                refreshTabTitle()
+                maxEffortButton?.let { if (!it.isEnabled) it.isEnabled = true }
+            }
+
+            override fun onUnresponsive() = showAnswering(false)
+
+            override fun onResponsive() = showAnswering(true)
         }
 
-        val onUserInput: () -> Unit = {
-            statusService.clearNotifyState(file.sessionId ?: monitoringId)
-            refreshTabTitle()
-            maxEffortButton?.let { if (!it.isEnabled) it.isEnabled = true }
+        val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
+        val running = runtimes.existing(runtimeKey)
+        val runtime = running ?: runtimes.create(runtimeKey) { parent, relay ->
+            when {
+                file.isShellSession -> terminalService.createShellWidget(parent, workingDir = file.workingDir)
+                isFork -> terminalService.createForkWidget(file.forkFrom!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
+                file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
+                isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
+                else -> terminalService.createNewNamedSessionWidget(file.requestedName, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
+            }
         }
+        runtime.view = view
+        Disposer.register(sessionDisposable, Disposable { if (runtime.view === view) runtime.view = null })
 
-        val onUnresponsive: () -> Unit = { showAnswering(false) }
-        val onResponsive: () -> Unit = { showAnswering(true) }
-
-        val session = when {
-            file.isShellSession -> terminalService.createShellWidget(sessionDisposable, workingDir = file.workingDir)
-            isFork -> terminalService.createForkWidget(file.forkFrom!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
-            file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
-            isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
-            else -> terminalService.createNewNamedSessionWidget(file.requestedName, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
-        }
-
+        val session = runtime.session
         ptyProcess = session.process
         focusComponent = session.widget.preferredFocusableComponent
 
         // Normal exit (0): close the tab. Abnormal exit: keep it open so the error is visible.
-        session.process.onExit().thenAccept { process ->
+        if (running == null) session.process.onExit().thenAccept { process ->
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
                 val code = process.exitValue()
+                runtimes.stop(runtimeKey)
                 if (code == 0) {
                     FileEditorManager.getInstance(project).closeFile(file)
                 } else {
@@ -368,9 +387,9 @@ class ClaudeSessionEditor(
             .schedule(::stopLoading, 5L, TimeUnit.SECONDS)
 
         // A shell tab has no Claude process behind it, so nothing would ever write a status file.
-        if (!file.isShellSession) {
+        if (running == null && !file.isShellSession) {
             statusService.startMonitoring(monitoringId, statusFile, notifyFile)
-            Disposer.register(sessionDisposable, Disposable { statusService.stopMonitoring(monitoringId) })
+            Disposer.register(runtime.disposable, Disposable { statusService.stopMonitoring(monitoringId) })
         }
 
         val statusListener: (String, ClaudeStatus?) -> Unit = { sid, status ->
@@ -407,10 +426,11 @@ class ClaudeSessionEditor(
             }
 
             override fun fileClosed(source: FileEditorManager, closedFile: VirtualFile) {
-                if (closedFile == file) {
-                    statusService.clearSession(monitoringId)
-                    file.sessionId?.let { if (it != monitoringId) statusService.clearSession(it) }
-                }
+                if (closedFile != file) return
+                if (runtimes.existing(file.sessionId ?: file.sessionKey) != null) return
+
+                statusService.clearSession(monitoringId)
+                file.sessionId?.let { if (it != monitoringId) statusService.clearSession(it) }
             }
         }
         project.messageBus.connect(sessionDisposable).subscribe(
@@ -418,7 +438,7 @@ class ClaudeSessionEditor(
         )
 
         // Link new/forked session to real session ID when it appears
-        if (needsLinking && !file.isShellSession) {
+        if (running == null && needsLinking && !file.isShellSession) {
             setupNewSessionLinking(sessionService, statusService, persistence, monitoringId, statusFile, notifyFile)
         }
     }
@@ -1350,6 +1370,8 @@ class ClaudeSessionEditor(
                         .worktreeAbsolutePath(project.basePath!!, candidate.worktreeName)
                 }
                 persistence.add(candidate.sessionId)
+                com.canopy.services.SessionRuntimeService.getInstance(project)
+                    .rekey(file.sessionKey, candidate.sessionId)
                 com.canopy.services.rememberOpenTerminals(project, "sessionLinked")
 
                 // Migrate status monitoring from temp to real session ID.
@@ -1452,6 +1474,7 @@ class ClaudeSessionEditor(
         } catch (_: Exception) {}
         ptyProcess = null
 
+        com.canopy.services.SessionRuntimeService.getInstance(project).stop(file.sessionId ?: file.sessionKey)
         Disposer.dispose(sessionDisposable)
         sessionDisposable = Disposer.newDisposable(rootDisposable, "claude-session")
 

@@ -422,6 +422,17 @@ class SessionListPanel(
                     table
                 )
             })
+            add(object : AnAction("Stop Session", "End the agent; closing its tab only hides it", AllIcons.Actions.Suspend) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val row = selectedRow()?.takeUnless { it.isTerminal } ?: return
+                    stopSession(row.sessionId)
+                }
+                override fun update(e: AnActionEvent) {
+                    val row = selectedRow()
+                    e.presentation.isEnabled = row != null && !row.isTerminal && isRunning(row.sessionId)
+                }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
             add(object : AnAction("New Terminal Here", "Open a shell that belongs to this session", AllIcons.Debugger.Console) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val row = selectedRow()?.takeUnless { it.isTerminal } ?: return
@@ -660,6 +671,20 @@ class SessionListPanel(
         com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
             .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
             .firstOrNull { !it.isShellSession && (it.sessionId == rowId || it.sessionKey == rowId) }
+
+    private fun isRunning(rowId: String): Boolean =
+        com.canopy.services.SessionRuntimeService.getInstance(project).existing(rowId) != null ||
+            sessionFileFor(rowId) != null
+
+    /** The tab goes with it: a tab showing a stopped agent has nothing left to show. */
+    private fun stopSession(rowId: String) {
+        val file = sessionFileFor(rowId)
+        val key = file?.sessionKey ?: rowId
+        com.canopy.services.SessionRuntimeService.getInstance(project).stop(key)
+        com.canopy.services.OpenSessionsPersistence.getInstance(project).remove(rowId)
+        file?.let { com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).closeFile(it) }
+        reloadData()
+    }
 
     private fun focusTerminal(key: String) {
         val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
