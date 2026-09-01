@@ -11,7 +11,6 @@ import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
-import java.awt.FlowLayout
 import javax.swing.BoxLayout
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -33,7 +32,7 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
         foreground = UIUtil.getLabelDisabledForeground()
     }
-    private val chips = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0)).apply {
+    private val chips = JPanel(BorderLayout()).apply {
         isOpaque = false
         border = JBUI.Borders.emptyTop(8)
     }
@@ -72,7 +71,7 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         toolTipText = session?.let(::tooltipFor)
 
         chips.removeAll()
-        counts.forEach { chips.add(CountChip(it)) }
+        chips.add(com.canopy.insight.rowOf(CHIP_GAP, counts.map(::CountChip)), BorderLayout.CENTER)
         chips.isVisible = counts.isNotEmpty()
         chips.revalidate()
         chips.repaint()
@@ -92,6 +91,7 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
 
 private const val TITLE_SCALE = 1.15f
 private const val GLYPH_BOX = 20
+private const val CHIP_GAP = 6
 
 /** Where it worked, how long ago, and how much was said, in that order of use. */
 internal fun placeLine(session: SessionDisplay?, nowMillis: Long = System.currentTimeMillis()): String {

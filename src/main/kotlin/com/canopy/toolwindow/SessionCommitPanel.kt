@@ -12,7 +12,6 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.FlowLayout
 import java.awt.event.KeyEvent
 import javax.swing.JButton
 import javax.swing.JPanel
@@ -72,13 +71,15 @@ class SessionCommitPanel(
         add(message.createToolbar(true), BorderLayout.EAST)
     }
 
-    private fun buttons() = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0)).apply {
-        isOpaque = false
-        add(flat("Commit") { accept(AfterCommit.Stay) })
-        // The one with a fill, as in the Commit window: the button that finishes the job.
-        add(JButton("Commit and Push").apply { addActionListener { accept(AfterCommit.Push) } })
-        add(flat("Cancel") { hidePanel() })
-    }
+    private fun buttons() = com.canopy.insight.rowOf(
+        BUTTON_GAP,
+        listOf(
+            flat("Commit") { accept(AfterCommit.Stay) },
+            // The one with a fill, as in the Commit window: the button that finishes the job.
+            JButton("Commit and Push").apply { addActionListener { accept(AfterCommit.Push) } },
+            flat("Cancel") { hidePanel() }
+        )
+    )
 
     private fun flat(text: String, onClick: () -> Unit) = JButton(text).apply {
         isContentAreaFilled = false
@@ -121,5 +122,6 @@ class SessionCommitPanel(
 
     private companion object {
         const val EDITOR_HEIGHT = 96
+        const val BUTTON_GAP = 6
     }
 }
