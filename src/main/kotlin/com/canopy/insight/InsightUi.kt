@@ -19,6 +19,7 @@ object InsightUi {
     private const val SELECTED_HOVER_TINT = 0.46
     private const val HOVER_TINT = 0.16
     private const val RAISED_TINT = 0.10
+    private const val RUNNING_TINT = 0.09
     private const val BORDER_TINT = 0.30
 
     private val tints = java.util.concurrent.ConcurrentHashMap<Double, Color>()
@@ -30,10 +31,13 @@ object InsightUi {
     }
 
     /** The card carries the accent; the strip behind it stays the list, so nothing frames the card. */
-    fun cardBackground(selected: Boolean, hovered: Boolean = false): Color = when {
+    fun cardBackground(selected: Boolean, hovered: Boolean = false, running: Boolean = false): Color = when {
         selected && hovered -> accentTint(SELECTED_HOVER_TINT)
         selected -> accentTint(SELECTED_TINT)
         hovered -> accentTint(HOVER_TINT)
+        // Alive but not on screen looks identical to stopped otherwise, and the two are the most
+        // consequential states to confuse.
+        running -> accentTint(RUNNING_TINT)
         else -> islandBackground()
     }
 

@@ -75,7 +75,8 @@ class SessionCardRenderer(
         val session = value as? SessionDisplay ?: return outer
         val attention = getAttention(session)
 
-        island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow())
+        val isRunning = getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
+        island.islandColor = InsightUi.cardBackground(selected, hovered = row == hoveredRow(), running = isRunning)
         val (metaText, tooltip) = cachedMeta(session)
         glyph.text = glyphFor(session, attention)
         glyph.foreground = glyphColor(session, attention, selected)

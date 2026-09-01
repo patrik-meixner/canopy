@@ -11,6 +11,18 @@ class SessionRuntime internal constructor(val disposable: Disposable) : SessionR
     @Volatile
     var view: SessionRuntimeView? = null
 
+    /** Typed into the agent as if from its terminal, whether or not a tab is showing one. */
+    fun sendInput(text: String) {
+        val process = session.process
+        if (!process.isAlive) return
+
+        try {
+            process.outputStream.write(text.toByteArray(Charsets.UTF_8))
+            process.outputStream.flush()
+        } catch (_: java.io.IOException) {
+        }
+    }
+
     override fun onActiveChanged(isActive: Boolean) {
         view?.onActiveChanged(isActive)
     }

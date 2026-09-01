@@ -120,11 +120,15 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         val onForkSession: (SessionDisplay) -> Unit
     )
 
-    private fun isOpenInPlugin(project: Project, sessionId: String): Boolean {
-        return FileEditorManager.getInstance(project).openFiles
-            .filterIsInstance<ClaudeSessionVirtualFile>()
-            .any { it.sessionId == sessionId }
-    }
+    /**
+     * A session runs for as long as the project holds it, whether or not a tab is showing it, so
+     * asking the open tabs would report a live agent as available the moment you closed its tab.
+     */
+    private fun isOpenInPlugin(project: Project, sessionId: String): Boolean =
+        com.canopy.services.SessionRuntimeService.getInstance(project).existing(sessionId) != null ||
+            FileEditorManager.getInstance(project).openFiles
+                .filterIsInstance<ClaudeSessionVirtualFile>()
+                .any { it.sessionId == sessionId }
 
 
     private fun openNewSession(project: Project, name: String) {

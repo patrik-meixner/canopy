@@ -453,9 +453,7 @@ class SessionDetailPanel(
     }
 
     private fun isOpenHere(session: SessionDisplay): Boolean =
-        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
-            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
-            .any { it.sessionId == session.sessionId }
+        com.canopy.services.SessionRuntimeService.getInstance(project).existing(session.sessionId) != null
 
     /**
      * The spinner belongs to one state, so nothing else can be underneath it while it turns, and
