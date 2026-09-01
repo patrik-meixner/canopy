@@ -75,6 +75,14 @@ class SessionDetailPanel(
      */
     private val header = SessionHeaderCard()
 
+    private var pending: CommitScope? = null
+    private val commitPanel = SessionCommitPanel(
+        project,
+        this,
+        onCommit = ::performCommit,
+        onCancel = { pending = null }
+    )
+
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
         add(placeholder, PLACEHOLDER_CARD)
@@ -89,6 +97,7 @@ class SessionDetailPanel(
         loadingPanel.add(cards, BorderLayout.CENTER)
         add(header, BorderLayout.NORTH)
         add(loadingPanel, BorderLayout.CENTER)
+        add(commitPanel, BorderLayout.SOUTH)
 
         com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(this) {
             if (isShowing) refresh(force = true)
@@ -202,25 +211,48 @@ class SessionDetailPanel(
         )
     }
 
-    /** Commits every repository the session touched, then re-reads so the sections move. */
-    private fun commitEverything() {
+    /** The message is written where the tree is, so what is being committed stays on screen. */
+    private fun commitEverything() = askToCommit(CommitScope.Everything)
+
+    private fun commitSelection() {
+        val paths = browser.selectedPaths()
+        if (paths.isEmpty()) return
+
+        askToCommit(CommitScope.Selection(paths))
+    }
+
+    private fun askToCommit(scope: CommitScope) {
         val sessionId = shownSessionId ?: return
 
-        // Asking first keeps resolving the repositories — which reads transcripts — off the EDT.
-        val message = com.intellij.openapi.ui.Messages.showMultilineInputDialog(
-            project,
-            "Commit message for every repository this session changed:",
-            "Commit Session Changes",
-            null,
-            null,
-            null
-        )?.trim().orEmpty()
-        if (message.isEmpty()) return
+        pending = scope
+        commitPanel.ask(commitCaption(scope, rootsOf(sessionId).size))
+    }
+
+    /** Resolving the repositories reads transcripts, so it waits until there is a message to use. */
+    private fun performCommit(message: String, after: AfterCommit) {
+        val sessionId = shownSessionId ?: return
+        val scope = pending ?: return
+        pending = null
 
         CanopyExecutor.submit {
-            val outcomes = SessionCommit.commit(rootsOf(sessionId).toList(), message, project.basePath)
+            val roots = rootsOf(sessionId)
+            val outcomes = when (scope) {
+                is CommitScope.Everything -> SessionCommit.commit(roots.toList(), message, project.basePath)
+                is CommitScope.Selection ->
+                    SessionCommit.commitPaths(groupPathsByRoot(scope.paths, roots), message, project.basePath)
+            }
+            val committed = outcomes.filter { it.ok }.map { it.root }
+            val pushed = if (after == AfterCommit.Push && committed.isNotEmpty()) {
+                SessionPush.push(committed, project.basePath)
+            } else {
+                emptyList()
+            }
+
             ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed || Disposer.isDisposed(this)) return@invokeLater
+
                 reportCommit(outcomes)
+                if (pushed.isNotEmpty()) reportPush(pushed)
                 refresh(force = true)
             }
         }
@@ -235,34 +267,6 @@ class SessionDetailPanel(
             failed.joinToString("\n\n") { "${it.root}:\n${it.detail.take(400)}" },
             "Commit Failed"
         )
-    }
-
-    private fun commitSelection() {
-        val sessionId = shownSessionId ?: return
-        val paths = browser.selectedPaths()
-        if (paths.isEmpty()) return
-
-        val message = com.intellij.openapi.ui.Messages.showMultilineInputDialog(
-            project,
-            "Commit message for the ${paths.size} selected file(s):",
-            "Commit Selected Files",
-            null,
-            null,
-            null
-        )?.trim().orEmpty()
-        if (message.isEmpty()) return
-
-        CanopyExecutor.submit {
-            val grouped = groupPathsByRoot(paths, rootsOf(sessionId))
-            val outcomes = SessionCommit.commitPaths(grouped, message, project.basePath)
-
-            ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed) return@invokeLater
-
-                reportCommit(outcomes)
-                refresh(force = true)
-            }
-        }
     }
 
     private fun pushSelection() {
