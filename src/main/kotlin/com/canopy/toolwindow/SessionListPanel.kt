@@ -184,6 +184,9 @@ class SessionListPanel(
     private var hoveredRow: Int = -1
     private var closeHovered = false
 
+    /** Set while the stage is being rearranged; see [selectSession]. */
+    private var isStaging = false
+
     /** The session the editor is showing, which survives the rows being replaced under it. */
     private var selectedSessionId: String? = null
 
@@ -434,7 +437,9 @@ class SessionListPanel(
 
     /** The list is a map of what is open; the session on screen has to stay findable on it. */
     fun selectSession(sessionId: String?) {
-        if (sessionId == null) return
+        // Every tab opened or closed to build the stage reports itself as the selection, so
+        // following them one by one walked the highlight across the terminals on the way past.
+        if (sessionId == null || isStaging) return
 
         selectedSessionId = sessionId
         restoreSelection(scroll = true)
@@ -779,8 +784,13 @@ class SessionListPanel(
         // below starts it.
         val plan = stagePlan(tabs, target?.sessionKey ?: session.sessionId, isAdditive)
 
-        plan.close.mapNotNull(byKey::get).forEach(manager::closeFile)
-        plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, false) }
+        isStaging = true
+        try {
+            plan.close.mapNotNull(byKey::get).forEach(manager::closeFile)
+            plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, false) }
+        } finally {
+            isStaging = false
+        }
 
         if (target != null) manager.openFile(target, true)
     }
