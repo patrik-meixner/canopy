@@ -57,4 +57,22 @@ class ReadFilteredTest {
 
         assertEquals(-1, count)
     }
+
+    @Test
+    fun `an overflowing read keeps the escape sequence it stopped in the middle of`() {
+        val buf = CharArray(8)
+        val readOnce = readingBack("abcde\u001b[1", "mABCDE\u001b[", "?25l")
+        val held = StringBuilder()
+        val carried = { held.toString().also { held.setLength(0) } }
+        val carry: (String) -> Unit = { held.setLength(0); held.append(it) }
+
+        val delivered = StringBuilder()
+        while (true) {
+            val count = readFiltered(buf, 0, 8, readOnce, { it }, {}, carried, carry)
+            if (count <= 0) break
+            delivered.append(buf, 0, count)
+        }
+
+        assertEquals("abcde\u001b[1mABCDE\u001b[?25l", delivered.toString())
+    }
 }
