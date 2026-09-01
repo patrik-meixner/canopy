@@ -80,8 +80,11 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         chips.removeAll()
         chips.add(com.canopy.insight.rowOf(CHIP_GAP, counts.map(::CountChip)), BorderLayout.CENTER)
         chips.isVisible = counts.isNotEmpty()
-        chips.revalidate()
-        chips.repaint()
+        // The card is what grew, so the card is what has to be measured again. Revalidating the
+        // chip row alone left the row at its new height inside a card still sized without it, and
+        // the pills were cut off by the edge.
+        revalidate()
+        repaint()
     }
 
     private fun glyphColor(attention: SessionAttention) = when (attention) {

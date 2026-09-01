@@ -96,6 +96,7 @@ class SessionDetailPanel(
 
         loadingPanel.setLoadingText("Collecting changes")
         loadingPanel.add(cards, BorderLayout.CENTER)
+        header.isVisible = false
         add(header, BorderLayout.NORTH)
         add(loadingPanel, BorderLayout.CENTER)
         add(commitPanel, BorderLayout.SOUTH)
@@ -396,14 +397,15 @@ class SessionDetailPanel(
 
     /** An unchanged result must not redraw: rebuilding the tree would drop scroll and selection. */
     private fun render(changeSet: SessionChangeSet) {
-        showState(if (changeSet.isEmpty) ReviewState.NothingOutstanding else ReviewState.Changes)
-
         val signature = changeSet.signature()
-        if (signature == shownSignature) return
+        // Filled before it is shown, so the card never appears for a paint with nothing in it.
+        if (signature != shownSignature) {
+            shownSignature = signature
+            updateHeader(changeSet)
+            browser.setSections(changeSet)
+        }
 
-        shownSignature = signature
-        updateHeader(changeSet)
-        browser.setSections(changeSet)
+        showState(if (changeSet.isEmpty) ReviewState.NothingOutstanding else ReviewState.Changes)
     }
 
     private fun updateHeader(changeSet: SessionChangeSet) {
@@ -445,9 +447,14 @@ class SessionDetailPanel(
             .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
             .any { it.sessionId == session.sessionId }
 
-    /** The spinner belongs to one state, so nothing else can be underneath it while it turns. */
+    /**
+     * The spinner belongs to one state, so nothing else can be underneath it while it turns, and
+     * the card belongs to the two that have something to put in it: an empty one over a spinner
+     * says a session is being reviewed while the review is still being read.
+     */
     private fun showState(state: ReviewState) {
         if (state == ReviewState.Collecting) loadingPanel.startLoading() else loadingPanel.stopLoading()
+        header.isVisible = state == ReviewState.Changes || state == ReviewState.NothingOutstanding
         (cards.layout as java.awt.CardLayout).show(cards, state.name)
     }
 
