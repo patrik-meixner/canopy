@@ -14,23 +14,30 @@ import javax.swing.Icon
  *
  * A fixed box is what keeps a tab and a row from resizing as the state under them changes, and it
  * is why this is an icon rather than a label's text. An empty glyph reserves the box and draws
- * nothing; a spinner frame asks for the next repaint from the paint itself, so only the glyphs
- * actually on screen cost anything.
+ * nothing.
+ *
+ * The glyph is resolved at paint time rather than when the icon is built: the editor tab strip asks
+ * for a file's icon constantly, but the main toolbar's file widget asks once and keeps what it got,
+ * so an icon that carried a fixed glyph froze there on whichever state happened to be current when
+ * the tab was selected.
  */
-class GlyphIcon(private val glyph: String, private val tint: Color? = null, boxSize: Int = BOX) : Icon {
+class GlyphIcon(private val glyphOf: () -> String, private val tint: Color? = null, boxSize: Int = BOX) : Icon {
+
+    constructor(glyph: String, tint: Color? = null, boxSize: Int = BOX) : this({ glyph }, tint, boxSize)
 
     private val size = JBUIScale.scale(boxSize)
-    private val spins = isSpinnerFrame(glyph)
 
     override fun getIconWidth(): Int = size
 
     override fun getIconHeight(): Int = size
 
     override fun paintIcon(component: Component?, graphics: Graphics, x: Int, y: Int) {
+        val glyph = glyphOf()
+        // Asking for the next repaint from the paint itself keeps the cost to the glyphs actually
+        // on screen: a spinner at its own frame rate, anything else only often enough to notice a
+        // state it cannot be told about.
+        component?.repaint(if (isSpinnerFrame(glyph)) SPINNER_FRAME_MS else IDLE_RECHECK_MS)
         if (glyph.isEmpty()) return
-
-        val drawn = if (spins) spinnerFrame(System.currentTimeMillis()) else glyph
-        if (spins) component?.repaint(SPINNER_FRAME_MS)
 
         val g = graphics.create() as Graphics2D
         try {
@@ -40,8 +47,8 @@ class GlyphIcon(private val glyph: String, private val tint: Color? = null, boxS
             g.font = (component?.font ?: UIUtil.getLabelFont()).deriveFont(size * GLYPH_TO_BOX)
             val metrics = g.fontMetrics
             g.drawString(
-                drawn,
-                x + (size - metrics.stringWidth(drawn)) / 2f,
+                glyph,
+                x + (size - metrics.stringWidth(glyph)) / 2f,
                 y + (size - metrics.height) / 2f + metrics.ascent
             )
         } finally {
@@ -51,6 +58,7 @@ class GlyphIcon(private val glyph: String, private val tint: Color? = null, boxS
 }
 
 private const val BOX = 16
+private const val IDLE_RECHECK_MS = 1_000L
 
 /** Matches the weight the same glyph has in the session list, so the two read as one thing. */
 private const val GLYPH_TO_BOX = 0.9f

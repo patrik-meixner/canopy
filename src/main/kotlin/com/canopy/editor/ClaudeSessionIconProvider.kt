@@ -18,7 +18,7 @@ class ClaudeSessionIconProvider : FileIconProvider {
     override fun getIcon(file: VirtualFile, flags: Int, project: Project?): Icon? {
         if (file !is ClaudeSessionVirtualFile) return null
 
-        val badge = badgeFor(project?.let { file.statusGlyph(it) })
+        val badge = GlyphIcon({ project?.let { file.statusGlyph(it) }.orEmpty() })
         val agent = if (file.isShellSession) SHELL_ICON else CLAUDE_ICON
 
         return if (file.isWorktreeSession) RowIcon(agent, TREE_ICON, badge) else RowIcon(agent, badge)
@@ -29,12 +29,5 @@ class ClaudeSessionIconProvider : FileIconProvider {
         private val CLAUDE_ICON = IconLoader.getIcon("/icons/claude.svg", ClaudeSessionIconProvider::class.java)
         private val SHELL_ICON: Icon = com.intellij.icons.AllIcons.Debugger.Console
         val TREE_ICON: Icon = IconLoader.getIcon("/icons/worktree.svg", ClaudeSessionIconProvider::class.java)
-
-        // Colours are read from the component at paint time, so one instance per glyph is safe to
-        // share across every tab. The empty string is the idle placeholder.
-        private val badges = HashMap<String, GlyphIcon>()
-
-        @Synchronized
-        private fun badgeFor(glyph: String?): GlyphIcon = badges.getOrPut(glyph.orEmpty()) { GlyphIcon(glyph.orEmpty()) }
     }
 }
