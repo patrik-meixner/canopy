@@ -193,7 +193,7 @@ class SessionListPanel(
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
         table.setShowGrid(false)
         table.intercellSpacing = java.awt.Dimension(0, 0)
-        table.rowHeight = if (worktreeMode) JBUI.scale(26) else JBUI.scale(46)
+        table.rowHeight = if (worktreeMode) JBUI.scale(26) else CARD_ROW_HEIGHT
         // One column called "Name" is a header that says nothing; the worktree mode has real ones.
         if (!worktreeMode) table.tableHeader = null
 
@@ -373,9 +373,10 @@ class SessionListPanel(
                 val row = table.rowAtPoint(event.point)
                 if (row < 0) return
                 val session = tableModel.getItem(table.convertRowIndexToModel(row))
+                selectedSessionId = session.sessionId
+                if (session.isTerminal) return focusTerminal(session.sessionId)
                 if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
 
-                selectedSessionId = session.sessionId
                 onSessionSelected(session)
             }
         })
@@ -420,6 +421,18 @@ class SessionListPanel(
                     ),
                     table
                 )
+            })
+            add(object : AnAction("New Terminal Here", "Open a shell that belongs to this session", AllIcons.Debugger.Console) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val row = selectedRow()?.takeUnless { it.isTerminal } ?: return
+                    if (sessionFileFor(row.sessionId) == null) openClaudeSession(project, row)
+
+                    com.canopy.editor.openTerminalFor(project, sessionFileFor(row.sessionId))
+                }
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedRow()?.isTerminal == false
+                }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
             add(object : AnAction("Fork Session", "Create a new session branching from this one", AllIcons.Actions.SplitHorizontally) {
                 override fun actionPerformed(e: AnActionEvent) {
@@ -579,7 +592,7 @@ class SessionListPanel(
      * A draft has no transcript, no id and nothing on disk, so everything that acts on a session -
      * fork, delete, resume, rename, reply - has nothing to act on and stays off.
      */
-    private fun selectedSession(): SessionDisplay? = selectedRow()?.takeUnless { it.isDraft }
+    private fun selectedSession(): SessionDisplay? = selectedRow()?.takeUnless { it.isDraft || it.isTerminal }
 
     private fun selectedRow(): SessionDisplay? {
         val row = table.selectedRow
@@ -624,6 +637,37 @@ class SessionListPanel(
             .map { DraftSource(it.sessionKey, it.baseName) }
 
         return draftRows(open, project.basePath.orEmpty(), System.currentTimeMillis())
+    }
+
+    /**
+     * A draft's row is keyed on its tab and a started session's on its id, so the key a shell
+     * stored is translated through whatever its session has become since.
+     */
+    private fun openTerminals(): List<TerminalSource> {
+        if (worktreeMode) return emptyList()
+
+        val open = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
+            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+        val startedByKey = open.mapNotNull { file -> file.sessionId?.let { file.sessionKey to it } }.toMap()
+
+        return open.filter { it.isShellSession }.mapNotNull { shell ->
+            val ownerKey = shell.ownerSessionKey ?: return@mapNotNull null
+            TerminalSource(shell.sessionKey, shell.baseName, startedByKey[ownerKey] ?: ownerKey)
+        }
+    }
+
+    private fun sessionFileFor(rowId: String): com.canopy.editor.ClaudeSessionVirtualFile? =
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
+            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .firstOrNull { !it.isShellSession && (it.sessionId == rowId || it.sessionKey == rowId) }
+
+    private fun focusTerminal(key: String) {
+        val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+        val shell = manager.openFiles
+            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .firstOrNull { it.sessionKey == key } ?: return
+
+        manager.openFile(shell, true)
     }
 
     private fun reloadData() {
@@ -729,12 +773,25 @@ class SessionListPanel(
         }
         val page = com.canopy.insight.pageful(filtered, limit)
         moreRow.show(page.remaining, SESSION_PAGE)
-        tableModel.items = page.shown
+        // Attached after paging, so a session's shells never take a slot from another session.
+        tableModel.items = withTerminalRows(
+            page.shown, openTerminals(), project.basePath.orEmpty(), System.currentTimeMillis()
+        )
+        applyRowHeights()
         // Replacing the rows drops the selection, and the rows are replaced whenever an agent
         // writes, so the session being reviewed has to be put back on every reload.
         restoreSelection()
     }
 
+    private fun applyRowHeights() {
+        if (worktreeMode) return
+
+        (0 until table.rowCount).forEach { row ->
+            val isTerminal = tableModel.getItem(table.convertRowIndexToModel(row)).isTerminal
+            val height = if (isTerminal) TerminalCardRenderer.ROW_HEIGHT else CARD_ROW_HEIGHT
+            if (table.getRowHeight(row) != height) table.setRowHeight(row, height)
+        }
+    }
 
     /**
      * Only the rows that are spinning repaint, and only while the list is on screen, so an idle
@@ -773,6 +830,9 @@ class SessionListPanel(
 
     /** Opening or closing a tab adds or removes a draft row, which is a different list, not a repaint. */
     fun refreshRows() = reloadData()
+
+    /** Redraws the rows from the tabs alone, without re-reading a single transcript. */
+    fun refreshFromTabs() = applyFilter()
 
     /**
      * Recompute the orphaned-worktree list off the EDT (dir scan + `git worktree list`).
@@ -1036,6 +1096,8 @@ private class PurgeDialog(
 private const val MIN_TRANSCRIPT_QUERY = 2
 
 private const val SESSION_PAGE = 30
+
+private val CARD_ROW_HEIGHT = JBUI.scale(46)
 
 /** How often the spinning rows are worked out again, and the timer's rate while there are none. */
 private const val SPIN_RESCAN_MS = 500L

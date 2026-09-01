@@ -40,10 +40,12 @@ private class CardColumnInfo(
 ) : ColumnInfo<SessionDisplay, SessionDisplay>("Name") {
 
     private val renderer = SessionCardRenderer(getStatus, getAttention, getDetail, hoveredRow)
+    private val terminalRenderer = TerminalCardRenderer(hoveredRow)
 
     override fun valueOf(item: SessionDisplay): SessionDisplay = item
 
-    override fun getRenderer(item: SessionDisplay?): javax.swing.table.TableCellRenderer = renderer
+    override fun getRenderer(item: SessionDisplay?): javax.swing.table.TableCellRenderer =
+        if (item?.isTerminal == true) terminalRenderer else renderer
 }
 
 private class StatusColumnInfo(

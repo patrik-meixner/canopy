@@ -107,6 +107,10 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         project.messageBus.connect(sessionsPanel).subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER, editorListener
         )
+        project.messageBus.connect(sessionsPanel).subscribe(
+            com.canopy.services.CanopyTabsListener.TOPIC,
+            com.canopy.services.CanopyTabsListener { sessionsPanel.refreshFromTabs() }
+        )
 
     }
 

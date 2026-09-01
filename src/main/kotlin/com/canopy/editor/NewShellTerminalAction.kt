@@ -11,17 +11,13 @@ class NewShellTerminalAction : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        val file = ClaudeSessionVirtualFile("Terminal", isShellSession = true).apply {
-            workingDir = project.basePath
-        }
-
-        FileEditorManager.getInstance(project).openFile(file, true)
+        openTerminalFor(project, ownerOnScreen(project))
     }
 
     override fun update(event: AnActionEvent) {
         event.presentation.icon = AllIcons.General.Add
         event.presentation.text = "New Terminal"
-        event.presentation.description = "Open a shell tab and pick the agent to run yourself"
+        event.presentation.description = "Open a shell in the session on screen, or a loose one when none is"
         event.presentation.isEnabledAndVisible = event.project != null
     }
 

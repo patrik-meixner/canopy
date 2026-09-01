@@ -22,7 +22,9 @@ class ClaudeSessionVirtualFile(
     var sessionId: String? = null,
     val forkFrom: String? = null,
     val newWorktreeName: String? = null,
-    val isShellSession: Boolean = false
+    val isShellSession: Boolean = false,
+    /** For a shell, the immutable key of the session tab it was opened from. */
+    val ownerSessionKey: String? = null
 ) : LightVirtualFile(name, ClaudeSessionFileType, "") {
 
     /** Stable key used for VFS URL resolution so tabs survive drag-and-drop. */

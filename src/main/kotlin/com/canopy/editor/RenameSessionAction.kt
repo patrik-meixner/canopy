@@ -26,6 +26,7 @@ class RenameSessionAction : AnAction(), DumbAware {
             file.sessionId?.let { SessionInput.send(project, it, "/rename $name\r") }
             (FileEditorManager.getInstance(project) as? com.intellij.openapi.fileEditor.ex.FileEditorManagerEx)
                 ?.updateFilePresentation(file)
+            project.messageBus.syncPublisher(com.canopy.services.CanopyTabsListener.TOPIC).tabsChanged()
         }
     }
 
