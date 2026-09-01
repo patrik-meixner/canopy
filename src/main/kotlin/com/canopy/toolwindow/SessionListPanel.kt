@@ -405,6 +405,10 @@ class SessionListPanel(
                 if (session.isTerminal) return focusTerminal(session.sessionId)
                 if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
 
+                activate(session, isAdditive = event.isMetaDown)
+                // A draft is keyed on its tab, and opening it by row id would start a second session.
+                if (session.isDraft) return
+
                 onSessionSelected(session)
             }
         })
@@ -449,6 +453,15 @@ class SessionListPanel(
                     ),
                     table
                 )
+            })
+            add(object : AnAction("Add to Stage", "Show this session beside the ones already open", AllIcons.General.Add) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    selectedSession()?.let { activate(it, isAdditive = true) }
+                }
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = selectedSession() != null
+                }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
             add(object : AnAction("Stop Session", "End the agent; closing its tab only hides it", AllIcons.Actions.Suspend) {
                 override fun actionPerformed(e: AnActionEvent) {
@@ -712,6 +725,32 @@ class SessionListPanel(
         com.canopy.services.OpenSessionsPersistence.getInstance(project).remove(rowId)
         file?.let { com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).closeFile(it) }
         reloadData()
+    }
+
+    /**
+     * Puts a session on the stage, with its terminals, and takes the others off unless asked to
+     * keep them. Coming off the stage is not stopping: the agents behind those tabs go on running.
+     */
+    private fun activate(session: SessionDisplay, isAdditive: Boolean) {
+        val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+        val known = com.canopy.services.SessionRuntimeService.getInstance(project).all().map { it.file }
+        val openKeys = manager.openFiles.filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .map { it.sessionKey }
+            .toSet()
+        val target = known.firstOrNull {
+            !it.isShellSession && (it.sessionId == session.sessionId || it.sessionKey == session.sessionId)
+        }
+
+        val tabs = known.map { StageTab(it.sessionKey, it.isShellSession, it.ownerSessionKey, it.sessionKey in openKeys) }
+        val byKey = known.associateBy { it.sessionKey }
+        // A session with no agent yet matches nothing, so the plan clears the stage and the open
+        // below starts it.
+        val plan = stagePlan(tabs, target?.sessionKey ?: session.sessionId, isAdditive)
+
+        plan.close.mapNotNull(byKey::get).forEach(manager::closeFile)
+        plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, false) }
+
+        if (target != null) manager.openFile(target, true)
     }
 
     private fun focusTerminal(key: String) {

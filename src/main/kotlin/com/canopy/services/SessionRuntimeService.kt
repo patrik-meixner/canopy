@@ -17,13 +17,20 @@ class SessionRuntimeService : Disposable {
 
     fun existing(key: String): SessionRuntime? = runtimes[key]
 
+    /** Every agent the project is holding, whether or not a tab is showing it. */
+    fun all(): List<SessionRuntime> = runtimes.values.toList()
+
     /**
      * The view is handed to the caller before the process exists, because output can arrive while
      * the terminal is still being built.
      */
-    fun create(key: String, start: (Disposable, SessionRuntimeView) -> TerminalSession): SessionRuntime {
+    fun create(
+        key: String,
+        file: com.canopy.editor.ClaudeSessionVirtualFile,
+        start: (Disposable, SessionRuntimeView) -> TerminalSession
+    ): SessionRuntime {
         val disposable = Disposer.newDisposable(this, "canopy-runtime-$key")
-        val runtime = SessionRuntime(disposable)
+        val runtime = SessionRuntime(file, disposable)
         runtime.session = start(disposable, runtime)
         runtimes[key] = runtime
 

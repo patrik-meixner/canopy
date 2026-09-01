@@ -156,11 +156,10 @@ class ClaudeSessionEditor(
             }
         }
 
-        // A closed tab no longer means a stopped agent, and a session still running is one the
-        // next start should bring back.
+        // The stage is the set of open tabs, so taking a session off it must be remembered; the
+        // IDE closing every tab on its way out is not the user taking anything off anything.
         Disposer.register(rootDisposable, Disposable {
-            val key = file.sessionId ?: file.sessionKey
-            if (com.canopy.services.SessionRuntimeService.getInstance(project).existing(key) != null) return@Disposable
+            if (com.canopy.services.CanopyShutdown.isClosing()) return@Disposable
 
             file.sessionId?.let { persistence.remove(it) }
         })
@@ -302,7 +301,7 @@ class ClaudeSessionEditor(
 
         val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
         val running = runtimes.existing(runtimeKey)
-        val runtime = running ?: runtimes.create(runtimeKey) { parent, relay ->
+        val runtime = running ?: runtimes.create(runtimeKey, file) { parent, relay ->
             when {
                 file.isShellSession -> terminalService.createShellWidget(parent, workingDir = file.workingDir)
                 isFork -> terminalService.createForkWidget(file.forkFrom!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)

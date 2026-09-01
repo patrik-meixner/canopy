@@ -3,7 +3,10 @@ package com.canopy.services
 import com.intellij.openapi.Disposable
 
 /** An agent and its terminal, owned by the project rather than by whichever tab is showing them. */
-class SessionRuntime internal constructor(val disposable: Disposable) : SessionRuntimeView {
+class SessionRuntime internal constructor(
+    val file: com.canopy.editor.ClaudeSessionVirtualFile,
+    val disposable: Disposable
+) : SessionRuntimeView {
 
     lateinit var session: TerminalSession
         internal set
