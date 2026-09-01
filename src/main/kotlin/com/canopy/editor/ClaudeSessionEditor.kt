@@ -275,13 +275,7 @@ class ClaudeSessionEditor(
         val onActiveChanged: (Boolean) -> Unit = { active ->
             if (active) {
                 stopLoading()
-                if (file.isUnresponsive) {
-                    file.isUnresponsive = false
-                    reconnectButton?.let {
-                        it.icon = AllIcons.Actions.Refresh
-                        it.toolTipText = "Reconnect — close and resume this session"
-                    }
-                }
+                if (file.isUnresponsive) showAnswering(true)
             }
             refreshTabTitle()
         }
@@ -292,21 +286,15 @@ class ClaudeSessionEditor(
             maxEffortButton?.let { if (!it.isEnabled) it.isEnabled = true }
         }
 
-        val onUnresponsive: () -> Unit = {
-            file.isUnresponsive = true
-            reconnectButton?.let {
-                it.toolTipText = "Session unresponsive — click to reconnect"
-                it.icon = AllIcons.General.Error
-            }
-            refreshTabTitle()
-        }
+        val onUnresponsive: () -> Unit = { showAnswering(false) }
+        val onResponsive: () -> Unit = { showAnswering(true) }
 
         val session = when {
             file.isShellSession -> terminalService.createShellWidget(sessionDisposable, workingDir = file.workingDir)
-            isFork -> terminalService.createForkWidget(file.forkFrom!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
-            file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
-            isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
-            else -> terminalService.createNewNamedSessionWidget(file.requestedName, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
+            isFork -> terminalService.createForkWidget(file.forkFrom!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
+            file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
+            isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
+            else -> terminalService.createNewNamedSessionWidget(file.requestedName, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
         }
 
         ptyProcess = session.process
@@ -1510,6 +1498,19 @@ class ClaudeSessionEditor(
                 com.intellij.openapi.wm.IdeFocusManager.getInstance(project).requestFocus(fc, true)
             }
         }
+    }
+
+    private fun showAnswering(answering: Boolean) {
+        file.isUnresponsive = !answering
+        reconnectButton?.let {
+            it.icon = if (answering) AllIcons.Actions.Refresh else AllIcons.General.Error
+            it.toolTipText = if (answering) {
+                "Reconnect — close and resume this session"
+            } else {
+                "Session unresponsive — click to reconnect"
+            }
+        }
+        refreshTabTitle()
     }
 
     private fun refreshTabTitle(force: Boolean = false) {

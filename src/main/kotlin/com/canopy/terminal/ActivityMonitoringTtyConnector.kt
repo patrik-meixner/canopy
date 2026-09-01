@@ -30,7 +30,8 @@ class ActivityMonitoringTtyConnector(
     private val echoTimeoutMs: Long = 3000,
     private val onActiveChanged: (active: Boolean) -> Unit,
     private val onUserInput: (() -> Unit)? = null,
-    private val onUnresponsive: (() -> Unit)? = null
+    private val onUnresponsive: (() -> Unit)? = null,
+    private val onResponsive: (() -> Unit)? = null
 ) : FilteringPtyConnector(process, charset) {
 
     private val log = Logger.getInstance(ActivityMonitoringTtyConnector::class.java)
@@ -58,8 +59,12 @@ class ActivityMonitoringTtyConnector(
             lastReadCount = count
             totalReads++
             totalReadChars += count
+            // Answering again is news too. This used to be kept to itself, and whoever was told
+            // the session had stopped answering was never told it had started again unless the
+            // output happened to have gone quiet first.
             if (unresponsiveNotified) {
                 unresponsiveNotified = false
+                onResponsive?.let { cb -> ApplicationManager.getApplication().invokeLater(cb) }
             }
             if (System.currentTimeMillis() - lastWriteMs > echoWindowMs) {
                 if (!active) {

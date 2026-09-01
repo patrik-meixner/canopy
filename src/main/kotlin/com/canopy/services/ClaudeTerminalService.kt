@@ -32,12 +32,13 @@ class ClaudeTerminalService(private val project: Project) {
         notifyFile: Path? = null,
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
-        onUnresponsive: (() -> Unit)? = null
+        onUnresponsive: (() -> Unit)? = null,
+        onResponsive: (() -> Unit)? = null
     ): TerminalSession {
         return createWidget(
             arrayOf("claude", "--resume", sessionId),
             parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive        )
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive        )
     }
 
     fun createForkWidget(
@@ -48,12 +49,13 @@ class ClaudeTerminalService(private val project: Project) {
         notifyFile: Path? = null,
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
-        onUnresponsive: (() -> Unit)? = null
+        onUnresponsive: (() -> Unit)? = null,
+        onResponsive: (() -> Unit)? = null
     ): TerminalSession {
         return createWidget(
             arrayOf("claude", "--resume", forkFromSessionId, "--fork-session"),
             parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive        )
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive        )
     }
 
     fun createNewWorktreeWidget(
@@ -64,12 +66,13 @@ class ClaudeTerminalService(private val project: Project) {
         notifyFile: Path? = null,
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
-        onUnresponsive: (() -> Unit)? = null
+        onUnresponsive: (() -> Unit)? = null,
+        onResponsive: (() -> Unit)? = null
     ): TerminalSession {
         return createWidget(
             arrayOf("claude", "--worktree", worktreeName, "--name", worktreeName),
             parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive        )
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive        )
     }
 
     fun createNewNamedSessionWidget(
@@ -80,12 +83,13 @@ class ClaudeTerminalService(private val project: Project) {
         notifyFile: Path? = null,
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
-        onUnresponsive: (() -> Unit)? = null
+        onUnresponsive: (() -> Unit)? = null,
+        onResponsive: (() -> Unit)? = null
     ): TerminalSession {
         val command = if (name.isNullOrBlank()) arrayOf("claude") else arrayOf("claude", "--name", name)
 
         return createWidget(command, parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
     }
 
     /**
@@ -108,6 +112,7 @@ class ClaudeTerminalService(private val project: Project) {
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null,
+        onResponsive: (() -> Unit)? = null,
         isShell: Boolean = false
     ): TerminalSession {
         val env = com.canopy.util.ProcessHelper.augmentedEnv()
@@ -192,7 +197,7 @@ class ClaudeTerminalService(private val project: Project) {
         val monitoring = com.canopy.settings.CanopySettings.getInstance().state.detectAgentActivity
         val connector = if (wrappedOnActiveChanged != null && monitoring) {
             val echoTimeout = com.canopy.settings.CanopySettings.getInstance().state.echoTimeoutMs.toLong()
-            ActivityMonitoringTtyConnector(ptyProcess, StandardCharsets.UTF_8, echoTimeoutMs = echoTimeout, onActiveChanged = wrappedOnActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
+            ActivityMonitoringTtyConnector(ptyProcess, StandardCharsets.UTF_8, echoTimeoutMs = echoTimeout, onActiveChanged = wrappedOnActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
         } else {
             FilteringPtyConnector(ptyProcess, StandardCharsets.UTF_8)
         }
