@@ -123,7 +123,9 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
 
 
     private fun openNewSession(project: Project, name: String) {
-        val file = ClaudeSessionVirtualFile(name)
+        val file = ClaudeSessionVirtualFile(name.ifBlank { com.canopy.editor.UNNAMED_SESSION_TITLE }).apply {
+            requestedName = name.ifBlank { null }
+        }
         FileEditorManager.getInstance(project).openFile(file, true)
     }
 

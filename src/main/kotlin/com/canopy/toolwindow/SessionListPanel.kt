@@ -244,27 +244,20 @@ class SessionListPanel(
         centerPanel.isOpaque = false
         table.isOpaque = false
 
-        val (actionTitle, actionDesc, actionIcon, dialogPrompt, dialogTitle) = if (worktreeMode) {
-            ActionMeta("New Worktree", "Start a new Claude session in a worktree", com.canopy.editor.ClaudeSessionIconProvider.TREE_ICON, "Worktree name:", "New Worktree Session")
-        } else {
-            ActionMeta("New Session", "Start a new Claude session", AllIcons.General.Add, "Session name:", "New Claude Session")
-        }
-        val newSessionAction = object : AnAction(actionTitle, actionDesc, actionIcon) {
-            override fun actionPerformed(e: AnActionEvent) {
-                if (worktreeMode) {
+        // A worktree has to be named before it can exist; a session names itself from what it is
+        // asked, and can be renamed afterwards, so asking first only stands between + and a prompt.
+        val newSessionAction = if (worktreeMode) {
+            object : AnAction("New Worktree", "Start a new Claude session in a worktree", com.canopy.editor.ClaudeSessionIconProvider.TREE_ICON) {
+                override fun actionPerformed(e: AnActionEvent) {
                     val dialog = WorktreeNameDialog(project)
-                    if (dialog.showAndGet()) {
-                        dialog.enteredName?.takeIf { it.isNotEmpty() }?.let { onNewSession(it) }
-                    }
-                } else {
-                    val name = Messages.showInputDialog(
-                        project,
-                        dialogPrompt,
-                        dialogTitle,
-                        Messages.getQuestionIcon()
-                    )?.trim().orEmpty()
-                    if (name.isNotEmpty()) onNewSession(name)
+                    if (!dialog.showAndGet()) return
+
+                    dialog.enteredName?.takeIf { it.isNotEmpty() }?.let { onNewSession(it) }
                 }
+            }
+        } else {
+            object : AnAction("New Session", "Start a Claude session in this project", AllIcons.General.Add) {
+                override fun actionPerformed(e: AnActionEvent) = onNewSession("")
             }
         }
         val refreshAction = object : AnAction("Refresh", "Refresh session list", AllIcons.Actions.Refresh) {
@@ -897,13 +890,6 @@ class SessionListPanel(
         const val ORPHAN_SWEEP_MIN_MS = 15_000L
     }
 
-    private data class ActionMeta(
-        val title: String,
-        val desc: String,
-        val icon: Icon,
-        val prompt: String,
-        val dialogTitle: String
-    )
 }
 
 private class PurgeDialog(

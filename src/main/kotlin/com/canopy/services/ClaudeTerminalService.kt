@@ -73,7 +73,7 @@ class ClaudeTerminalService(private val project: Project) {
     }
 
     fun createNewNamedSessionWidget(
-        name: String,
+        name: String?,
         parent: Disposable,
         workingDir: String? = null,
         statusFile: Path? = null,
@@ -82,7 +82,9 @@ class ClaudeTerminalService(private val project: Project) {
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null
     ): TerminalSession {
-        return createWidget(arrayOf("claude", "--name", name), parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
+        val command = if (name.isNullOrBlank()) arrayOf("claude") else arrayOf("claude", "--name", name)
+
+        return createWidget(command, parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
             onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
     }
 

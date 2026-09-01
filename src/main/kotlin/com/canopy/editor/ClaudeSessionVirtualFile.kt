@@ -33,6 +33,9 @@ class ClaudeSessionVirtualFile(
         ?: "new-${System.nanoTime()}"
 
     var baseName: String = name
+
+    /** What the user called the session, when they called it anything: Claude names it otherwise. */
+    var requestedName: String? = null
     var workingDir: String? = null
     var isWorktreeSession: Boolean = newWorktreeName != null
     var modelId: String? = null

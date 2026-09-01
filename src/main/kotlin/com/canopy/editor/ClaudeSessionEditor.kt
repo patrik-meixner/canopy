@@ -306,7 +306,7 @@ class ClaudeSessionEditor(
             isFork -> terminalService.createForkWidget(file.forkFrom!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
             file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
             isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
-            else -> terminalService.createNewNamedSessionWidget(file.baseName, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
+            else -> terminalService.createNewNamedSessionWidget(file.requestedName, sessionDisposable, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive)
         }
 
         ptyProcess = session.process

@@ -148,6 +148,9 @@
             <action id="Canopy.NewShellTerminal" class="com.canopy.editor.NewShellTerminalAction">
                 <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
             </action>
+            <action id="Canopy.NewClaudeSession" class="com.canopy.editor.NewClaudeSessionAction">
+                <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
+            </action>
         </group>
     </actions>
 
