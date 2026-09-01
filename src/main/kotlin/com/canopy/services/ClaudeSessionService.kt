@@ -524,7 +524,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             }
 
             if (type == "user" && acc.firstPrompt == null) {
-                acc.firstPrompt = text.ifEmpty { null }
+                acc.firstPrompt = text.ifEmpty { null }?.let(::openingWords)
                 acc.gitBranch = obj.get("gitBranch")?.asString
             }
 

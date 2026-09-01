@@ -44,12 +44,21 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
     private var state = State()
     private val byPath = HashMap<String, Entry>()
 
-    override fun getState(): State = state
+    /**
+     * A copy: entries are added from the thread that parses transcripts, and the platform
+     * serializes whatever this returns on its own. Handing over the live list let a save walk it
+     * while it was being written to.
+     */
+    override fun getState(): State = State().apply { entries = ArrayList(state.entries) }
 
     override fun loadState(loaded: State) {
         state = loaded
         byPath.clear()
-        loaded.entries.forEach { byPath[it.path] = it }
+        loaded.entries.forEach {
+            // Written before prompts were capped: cut on the way in so the next save is small.
+            it.firstPrompt = openingWords(it.firstPrompt)
+            byPath[it.path] = it
+        }
     }
 
     fun get(path: String, size: Long, modifiedAtMillis: Long, projectPath: String): SessionDisplay? {
@@ -81,7 +90,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         entry.sessionModifiedMillis = session.modified.toEpochMilli()
         entry.sessionId = session.sessionId
         entry.name = session.name
-        entry.firstPrompt = session.firstPrompt
+        entry.firstPrompt = openingWords(session.firstPrompt)
         entry.messageCount = session.messageCount
         entry.gitBranch = session.gitBranch
         entry.worktreeName = session.worktreeName
