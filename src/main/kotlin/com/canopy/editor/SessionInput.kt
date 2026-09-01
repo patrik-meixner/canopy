@@ -35,12 +35,12 @@ object SessionInput {
         editorFor(project, sessionId)?.sendToTerminal(ACCEPT_DEFAULT)
     }
 
-    fun promptAndReply(project: Project, sessionId: String, sessionName: String) {
+    fun promptAndReply(project: Project, sessionId: String, sessionName: String, over: java.awt.Component?) {
         val editor = editorFor(project, sessionId) ?: return
-        val typed = Messages.showInputDialog(project, "Message", "Reply to $sessionName", null) ?: return
-        val payload = replyPayload(typed) ?: return
 
-        editor.sendToTerminal(payload)
+        askInline(over, "Reply to $sessionName:") { typed ->
+            replyPayload(typed)?.let(editor::sendToTerminal)
+        }
     }
 
     private fun editorFor(project: Project, sessionId: String): ClaudeSessionEditor? =

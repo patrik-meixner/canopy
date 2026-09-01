@@ -398,6 +398,20 @@ class SessionListPanel(
 
     private fun setupContextMenu() {
         val group = DefaultActionGroup().apply {
+            add(object : AnAction("Rename Session", "Give this session a name of your own", AllIcons.Actions.Edit) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val session = selectedSession() ?: return
+
+                    com.canopy.editor.askInline(table, "Session name:", session.displayName) { name ->
+                        com.canopy.editor.SessionInput.send(project, session.sessionId, "/rename ${'$'}name\r")
+                    }
+                }
+                override fun update(e: AnActionEvent) {
+                    val session = selectedSession()
+                    e.presentation.isEnabled = session != null && com.canopy.editor.SessionInput.canSend(project, session.sessionId)
+                }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
             add(object : AnAction("Fork Session", "Create a new session branching from this one", AllIcons.Actions.SplitHorizontally) {
                 override fun actionPerformed(e: AnActionEvent) {
                     selectedSession()?.let { onForkSession(it) }
@@ -410,7 +424,7 @@ class SessionListPanel(
             add(object : AnAction("Reply Without Opening", "Type an answer straight into a session that is waiting", AllIcons.Actions.Execute) {
                 override fun actionPerformed(e: AnActionEvent) {
                     val session = selectedSession() ?: return
-                    com.canopy.editor.SessionInput.promptAndReply(project, session.sessionId, session.displayName)
+                    com.canopy.editor.SessionInput.promptAndReply(project, session.sessionId, session.displayName, table)
                 }
                 override fun update(e: AnActionEvent) {
                     val session = selectedSession()

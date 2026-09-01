@@ -67,7 +67,7 @@ object SessionAttentionNotifier {
                 override fun actionPerformed(event: AnActionEvent) = SessionInput.approve(project, sessionId)
             })
             .addAction(object : DumbAwareAction("Reply\u2026") {
-                override fun actionPerformed(event: AnActionEvent) = SessionInput.promptAndReply(project, sessionId, name)
+                override fun actionPerformed(event: AnActionEvent) = SessionInput.promptAndReply(project, sessionId, name, over = null)
             })
             .notify(project)
     }

@@ -151,6 +151,10 @@
             <action id="Canopy.NewClaudeSession" class="com.canopy.editor.NewClaudeSessionAction">
                 <add-to-group group-id="EditorTabsEntryPoint" anchor="first"/>
             </action>
+            <action id="Canopy.RenameSession" class="com.canopy.editor.RenameSessionAction">
+                <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
+                <keyboard-shortcut keymap="$default" first-keystroke="shift F6"/>
+            </action>
         </group>
     </actions>
 
