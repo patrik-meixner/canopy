@@ -4,7 +4,9 @@ import com.canopy.insight.InsightUi
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vcs.VcsConfiguration
 import com.intellij.openapi.vcs.ui.CommitMessage
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -25,7 +27,7 @@ import javax.swing.KeyStroke
  * it out, because that is where the habit was learned.
  */
 class SessionCommitPanel(
-    project: Project,
+    private val project: Project,
     parent: Disposable,
     private val onCommit: (message: String, after: AfterCommit) -> Unit,
     private val onCancel: () -> Unit
@@ -34,6 +36,8 @@ class SessionCommitPanel(
     // No toolbar of its own: the Commit window puts one above the editor, horizontally, next to
     // what it is about. Left to itself the editor stacks it vertically down its right edge.
     private val message = CommitMessage(project, false, false, true)
+    private val lastCommitMessage: String? get() = VcsConfiguration.getInstance(project).lastNonEmptyCommitMessage
+
     private val caption = JBLabel().apply {
         foreground = UIUtil.getLabelDisabledForeground()
         font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
@@ -42,12 +46,14 @@ class SessionCommitPanel(
     init {
         Disposer.register(parent, message)
         isVisible = false
+        // The same ground the tree above it stands on, and the same hairline the editor draws for
+        // itself, so the panel reads as the bottom of one surface rather than a strip stuck on.
+        background = InsightUi.emptyBackground()
         border = JBUI.Borders.compound(
-            JBUI.Borders.customLineTop(InsightUi.cardBorder()),
+            JBUI.Borders.customLineTop(JBColor.border()),
             JBUI.Borders.empty(InsightUi.GAP)
         )
         message.preferredSize = Dimension(0, JBUI.scale(EDITOR_HEIGHT))
-        message.border = JBUI.Borders.customLine(InsightUi.cardBorder())
 
         add(header(), BorderLayout.NORTH)
         add(message, BorderLayout.CENTER)
@@ -68,14 +74,23 @@ class SessionCommitPanel(
 
     private fun buttons() = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0)).apply {
         isOpaque = false
-        add(JButton("Commit").apply { addActionListener { accept(AfterCommit.Stay) } })
+        add(flat("Commit") { accept(AfterCommit.Stay) })
+        // The one with a fill, as in the Commit window: the button that finishes the job.
         add(JButton("Commit and Push").apply { addActionListener { accept(AfterCommit.Push) } })
-        add(JButton("Cancel").apply { addActionListener { hidePanel() } })
+        add(flat("Cancel") { hidePanel() })
+    }
+
+    private fun flat(text: String, onClick: () -> Unit) = JButton(text).apply {
+        isContentAreaFilled = false
+        isFocusPainted = false
+        addActionListener { onClick() }
     }
 
     /** The message survives being cancelled: a commit abandoned to look at a diff is not rewritten. */
     fun ask(text: String) {
         caption.text = text
+        // What the Commit window offers: the last message you wrote, ready to be edited or typed over.
+        if (message.text.isEmpty()) message.setText(lastCommitMessage.orEmpty())
         isVisible = true
         revalidate()
         message.requestFocusInMessage()
@@ -94,6 +109,7 @@ class SessionCommitPanel(
         val typed = message.text.trim()
         if (typed.isEmpty()) return message.requestFocusInMessage()
 
+        VcsConfiguration.getInstance(project).saveCommitMessage(typed)
         message.setText("")
         isVisible = false
         revalidate()
