@@ -100,4 +100,36 @@ class ShellCommandPathsTest {
     fun `a bare home directory is not a working tree`() {
         assertEquals(emptyList<String>(), pathsInCommand("ls /Users/dev"))
     }
+
+    @Test
+    fun `reading somebody else's repository does not claim it`() {
+        val command = "grep -rn TODO /Users/dev/projects/other-repo/src"
+
+        assertEquals(emptyList<String>(), pathsInCommand(command))
+    }
+
+    @Test
+    fun `walking the disk to find something does not claim what it found`() {
+        assertEquals(emptyList<String>(), pathsInCommand("find /Users/dev/projects -maxdepth 3 -name canopy"))
+    }
+
+    @Test
+    fun `a redirection into a file is a write`() {
+        assertEquals(listOf("/Users/dev/projects/canopy/note.txt"), pathsInCommand("echo hi > /Users/dev/projects/canopy/note.txt"))
+    }
+
+    @Test
+    fun `stderr redirected onto stdout is not a write`() {
+        assertEquals(emptyList<String>(), pathsInCommand("cat /Users/dev/projects/other/log.txt 2>&1"))
+    }
+
+    @Test
+    fun `an in-place sed is a write`() {
+        assertEquals(listOf("/Users/dev/projects/canopy/build.gradle.kts"), pathsInCommand("sed -i '' 's/a/b/' /Users/dev/projects/canopy/build.gradle.kts"))
+    }
+
+    @Test
+    fun `committing in a repository is working in it`() {
+        assertEquals(listOf("/Users/dev/projects/canopy/src"), pathsInCommand("git add /Users/dev/projects/canopy/src && git commit -m x"))
+    }
 }

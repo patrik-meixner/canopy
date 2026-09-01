@@ -46,9 +46,25 @@ private fun pathFromInput(input: JsonObject?): String? {
         ?.takeIf { it.isNotBlank() }
 }
 
-/** Absolute paths named anywhere in a shell command; a directory that is not a repository is dropped later. */
+private val WRITING_VERB = Regex(
+    """(^|[;&|(`]\s*|\s)(sudo\s+)?(sed\s+-\S*i|perl\s+-\S*i|awk\s+-i|tee|mv|cp|rm|rmdir|mkdir|touch|ln|install|patch|dd|chmod|chown|rsync|unzip|tar|""" +
+        """git\s+(add|commit|apply|am|checkout|restore|rm|mv|stash|reset|revert|merge|rebase|cherry-pick|clean|init|clone|worktree))\b"""
+)
+
+/** A redirection, but not `2>&1`, `1>&2` or a `->` inside a string. */
+private val REDIRECTION = Regex("""(?<![0-9&\-])>""")
+
+/**
+ * Absolute paths a shell command wrote to, and nothing it merely looked at.
+ *
+ * An agent edits through the shell far more often than through the edit tools, so these paths are
+ * what attributes a repository to a session at all. Taking every path a command names attributed
+ * whatever the agent grepped, found or listed - a session that ran one `find` across the disk then
+ * claimed every repository it walked past.
+ */
 internal fun pathsInCommand(command: String?): List<String> {
     if (command.isNullOrBlank()) return emptyList()
+    if (!WRITING_VERB.containsMatchIn(command) && !REDIRECTION.containsMatchIn(command)) return emptyList()
 
     return ABSOLUTE_PATH.findAll(command).map { it.value }.distinct().toList()
 }
