@@ -28,6 +28,8 @@ class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
         addTab(toolWindow, "Plan", "tab-plan", PlanTabPanel(project, parent))
         addTab(toolWindow, "Messages", "tab-messages", MessagesTabPanel(project, parent))
         addTab(toolWindow, "Activity", "tab-activity", ActivityTabPanel(project, parent))
+
+        toolWindow.setTitleActions(listOf(SelectTabAction(toolWindow)))
     }
 
     /** The review follows the selected session, the same way every other tab here does. */
