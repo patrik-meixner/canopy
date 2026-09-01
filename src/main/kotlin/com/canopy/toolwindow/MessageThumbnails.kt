@@ -4,7 +4,6 @@ import com.intellij.util.ui.JBUI
 import java.awt.Image
 import java.io.ByteArrayInputStream
 import java.util.Base64
-import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 import javax.swing.Icon
 import javax.swing.ImageIcon
@@ -17,9 +16,26 @@ import javax.swing.ImageIcon
  */
 object MessageThumbnails {
 
-    private val cache = ConcurrentHashMap<String, Icon>()
+    /**
+     * Bounded and access ordered: a decoded thumbnail is an image in memory, and a session full of
+     * screenshots would otherwise keep every one ever looked at for as long as the IDE runs.
+     */
+    private val cache = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Icon>(REMEMBERED, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, Icon>) = size > REMEMBERED
+        }
+    )
 
-    fun of(base64: String): Icon? = cache.getOrPut(key(base64)) { decode(base64, THUMBNAIL) ?: EMPTY }.takeIf { it != EMPTY }
+    fun of(base64: String): Icon? {
+        val key = key(base64)
+        val known = cache[key]
+        if (known != null) return known.takeIf { it != EMPTY }
+
+        val decoded = decode(base64, THUMBNAIL) ?: EMPTY
+        cache[key] = decoded
+
+        return decoded.takeIf { it != EMPTY }
+    }
 
     /** What is already decoded, for the thread that must not decode. */
     fun cached(base64: String): Icon? = cache[key(base64)]?.takeIf { it != EMPTY }
@@ -73,3 +89,5 @@ internal fun boundedHeight(width: Int, height: Int, bound: Int): Int =
 private val THUMBNAIL: Int get() = JBUI.scale(72)
 
 private const val FULL = 560
+
+private const val REMEMBERED = 200

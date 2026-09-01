@@ -281,15 +281,30 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         }
     }
 
-    /** A transcript's directory says which worktree it belongs to; nothing else has to be read. */
-    private fun worktreeNameOf(path: Path, basePath: String): String? {
-        val directory = path.parent ?: return null
+    /**
+     * A transcript's directory says which worktree it belongs to; nothing else has to be read.
+     *
+     * Asked once per transcript, and a sweep covers every transcript in the project - which meant
+     * listing the worktree directory sixty times to answer the same question sixty ways. The map is
+     * built once and held briefly: worktrees appear on human timescales, sweeps in bursts.
+     */
+    private fun worktreeNameOf(path: Path, basePath: String): String? =
+        worktreesByProjectDir(basePath)[path.parent]
 
-        return runCatching {
-            ClaudePathEncoder.worktreeNames(basePath).firstOrNull {
-                ClaudePathEncoder.worktreeProjectDir(basePath, it) == directory
-            }
-        }.getOrNull()
+    @Volatile private var worktreeDirs: Map<Path, String> = emptyMap()
+    @Volatile private var worktreeDirsAt = 0L
+
+    private fun worktreesByProjectDir(basePath: String): Map<Path, String> {
+        val now = System.currentTimeMillis()
+        if (now - worktreeDirsAt < WORKTREE_MAP_TTL_MS) return worktreeDirs
+
+        worktreeDirsAt = now
+        worktreeDirs = runCatching {
+            ClaudePathEncoder.worktreeNames(basePath)
+                .associateBy { ClaudePathEncoder.worktreeProjectDir(basePath, it) }
+        }.getOrDefault(emptyMap())
+
+        return worktreeDirs
     }
 
     fun startWatching() {
@@ -298,9 +313,12 @@ class ClaudeSessionService(private val project: Project) : Disposable {
 
         project.messageBus.connect(this)
             .subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
+                // Every VFS batch in the IDE arrives here, and a build produces thousands: what
+                // does not change between them is worked out once, above.
+                private val projectDirStrs = projectDirs.map { it.toString() }
+                private val sessionsDirStr = ClaudePathEncoder.sessionsDir().toString()
+
                 override fun after(events: MutableList<out VFileEvent>) {
-                    val projectDirStrs = projectDirs.map { it.toString() }
-                    val sessionsDirStr = ClaudePathEncoder.sessionsDir().toString()
                     val transcripts = events.mapNotNullTo(HashSet()) { event ->
                         val path = event.path
                         if (!path.endsWith(".jsonl") || projectDirStrs.none { path.startsWith(it) }) {
@@ -576,3 +594,4 @@ class ClaudeSessionService(private val project: Project) : Disposable {
 }
 
 private const val POLL_MS = 5_000
+private const val WORKTREE_MAP_TTL_MS = 2_000L

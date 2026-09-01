@@ -26,7 +26,9 @@ class WorkspaceChangeNotifier(project: Project) : Disposable {
         project.messageBus.connect(this).subscribe(
             VirtualFileManager.VFS_CHANGES,
             object : BulkFileListener {
-                override fun after(events: List<VFileEvent>) = schedule()
+                override fun after(events: List<VFileEvent>) {
+                    if (events.any { changesWorkingTree(it.path) }) schedule()
+                }
             }
         )
     }

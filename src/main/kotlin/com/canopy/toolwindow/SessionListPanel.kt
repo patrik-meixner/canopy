@@ -107,6 +107,8 @@ class SessionListPanel(
     @Volatile private var panelVisible = false
     @Volatile private var lastOrphanSweep = 0L
     private val spinner = javax.swing.Timer(SPINNER_FRAME_MS.toInt()) { repaintWorkingRows() }
+    private var spinningRows: List<Int> = emptyList()
+    private var spinningFoundAt = 0L
     private val changeListener: () -> Unit = { reloadData() }
 
     // Orphaned-worktree section (worktree mode only): dirs under .claude/worktrees/ with no session.
@@ -738,18 +740,32 @@ class SessionListPanel(
      * Only the rows that are spinning repaint, and only while the list is on screen, so an idle
      * project pays nothing for the animation.
      */
+    /**
+     * Repaints the glyph of whatever is spinning, and costs nothing while nothing is.
+     *
+     * This used to work out which rows were spinning on every frame: forty rows through the
+     * attention rules nine times a second, on the EDT, whether or not any agent was running. The
+     * answer only changes when the data does, so it is worked out a couple of times a second, and
+     * the timer drops to that rate whenever the answer is none.
+     */
     private fun repaintWorkingRows() {
         if (!table.isShowing) return
 
-        val spinning = (0 until tableModel.rowCount).filter { row ->
-            val attention = sessionAttention(tableModel.getItem(row))
-            attention == com.canopy.model.SessionAttention.Working ||
-                attention == com.canopy.model.SessionAttention.Compacting
+        val now = System.currentTimeMillis()
+        if (now - spinningFoundAt >= SPIN_RESCAN_MS) {
+            spinningFoundAt = now
+            spinningRows = (0 until tableModel.rowCount).filter { row ->
+                val attention = sessionAttention(tableModel.getItem(row))
+                attention == com.canopy.model.SessionAttention.Working ||
+                    attention == com.canopy.model.SessionAttention.Compacting
+            }
+            spinner.delay = if (spinningRows.isEmpty()) SPIN_RESCAN_MS.toInt() else SPINNER_FRAME_MS.toInt()
         }
-        if (spinning.isEmpty()) return
+        if (spinningRows.isEmpty()) return
 
         // Only the strip the glyph occupies: the rest of the card has not changed.
-        spinning.forEach { row ->
+        for (row in spinningRows) {
+            if (row >= table.rowCount) continue
             val cell = table.getCellRect(row, 0, true)
             table.repaint(cell.x, cell.y, GLYPH_STRIP_WIDTH, cell.height)
         }
@@ -1020,5 +1036,8 @@ private class PurgeDialog(
 private const val MIN_TRANSCRIPT_QUERY = 2
 
 private const val SESSION_PAGE = 30
+
+/** How often the spinning rows are worked out again, and the timer's rate while there are none. */
+private const val SPIN_RESCAN_MS = 500L
 
 private val GLYPH_STRIP_WIDTH = JBUI.scale(44)
