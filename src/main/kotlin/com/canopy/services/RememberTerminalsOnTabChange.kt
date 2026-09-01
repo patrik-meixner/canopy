@@ -7,8 +7,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 
 /**
- * Opening and renaming are followed, closing is not: the IDE closes every tab on its way out, and
- * a snapshot taken then would save an empty list over the one worth keeping.
+ * A close is followed only while the IDE is staying up. Shutdown closes every tab before anything
+ * gets to save, so following those would write an empty list over the one worth keeping.
  */
 class RememberTerminalsOnTabChange(private val project: Project) : FileEditorManagerListener, CanopyTabsListener {
 
@@ -16,6 +16,13 @@ class RememberTerminalsOnTabChange(private val project: Project) : FileEditorMan
         if (file !is ClaudeSessionVirtualFile) return
 
         rememberOpenTerminals(project, "fileOpened")
+    }
+
+    override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+        if (file !is ClaudeSessionVirtualFile) return
+        if (CanopyShutdown.isClosing()) return
+
+        rememberOpenTerminals(project, "fileClosed")
     }
 
     override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {

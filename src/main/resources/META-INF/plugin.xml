@@ -128,9 +128,12 @@
             displayName="Canopy"
         />
     </extensions>
+    <applicationListeners>
+        <listener class="com.canopy.services.CanopyShutdownFlag"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+
     <projectListeners>
-        <listener class="com.canopy.services.RememberTerminalsOnClose"
-                  topic="com.intellij.openapi.project.ProjectCloseListener"/>
         <listener class="com.canopy.services.RememberTerminalsOnTabChange"
                   topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
         <listener class="com.canopy.services.RememberTerminalsOnTabChange"
