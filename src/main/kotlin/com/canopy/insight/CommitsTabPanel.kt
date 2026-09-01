@@ -32,6 +32,14 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     private var loadedFor: String? = null
     private var loadedRoots: List<Pair<String, String>> = emptyList()
     private var collected: List<CommitEntry> = emptyList()
+    /**
+     * What was last read for each session, shown the moment you come back to it.
+     *
+     * Every open and every switch used to leave the list empty until git had finished walking the
+     * log of each repository. The answer rarely changes between two looks; when it has, the list
+     * is replaced behind you.
+     */
+    private val known = LinkedHashMap<String, List<CommitEntry>>()
     private var limit = COMMIT_PAGE
     private val split = JBSplitter(true, "canopy.commits.split", 0.45f)
     private val body = ContentOrEmpty(
@@ -109,7 +117,14 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         loadedFor = signature
         loadedRoots = roots
 
+        // Cache first, git behind it.
+        known[session]?.let { show(it) }
         reload(roots)
+    }
+
+    private fun show(commits: List<CommitEntry>) {
+        collected = commits
+        showPage()
     }
 
     private fun showPage() {
@@ -145,8 +160,11 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
 
-                this.collected = collected
-                showPage()
+                show(collected)
+                selectedSession()?.sessionId?.let { id ->
+                    known[id] = collected
+                    if (known.size > REMEMBERED) known.remove(known.keys.first())
+                }
             }
         }
     }
@@ -199,3 +217,4 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
 }
 
 private const val COMMIT_PAGE = 50
+private const val REMEMBERED = 8

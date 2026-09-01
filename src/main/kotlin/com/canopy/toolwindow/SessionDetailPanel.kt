@@ -53,8 +53,18 @@ class SessionDetailPanel(
         onPushSelectionRequested = ::pushSelection
     ).apply { border = JBUI.Borders.empty() }
 
-    /** Recomputing on every tab switch made going back and forth re-run git each time. */
-    private val cache = java.util.concurrent.ConcurrentHashMap<String, SessionChangeSet>()
+    /**
+     * Recomputing on every tab switch made going back and forth re-run git each time, so the last
+     * answer for a session is shown at once and confirmed behind you.
+     *
+     * Bounded: a change set holds a revision per file, and a day of review visits a lot of
+     * sessions. Access ordered, so what falls out is what nobody has come back to.
+     */
+    private val cache = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, SessionChangeSet>(REMEMBERED, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, SessionChangeSet>) = size > REMEMBERED
+        }
+    )
 
     /** Bumped per request so a slow scan for a session you already moved off cannot overwrite the view. */
     private val generation = AtomicLong()
@@ -461,6 +471,7 @@ class SessionDetailPanel(
     override fun dispose() = Unit
 
     private companion object {
+        const val REMEMBERED = 8
         val EMPTY_CHANGES = SessionChangeSet(emptyMap(), emptyList())
     }
 }

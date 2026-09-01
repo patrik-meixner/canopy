@@ -29,12 +29,28 @@ class SessionInsightService(private val project: Project) : Disposable {
     }
     private val remembered = HashMap<String, SessionInsight>()
 
+    @Volatile private var transcript: Path? = null
     @Volatile private var sessionId: String? = null
     @Volatile private var workingDir: String? = null
     @Volatile private var watchers = 0
     @Volatile private var taskSignature = ""
     @Volatile var insight = SessionInsight()
         private set
+
+    init {
+        // Event driven rather than polled: the tab follows the transcript as it is written instead
+        // of finding out up to two seconds later. The tick below stays as a backstop for a write
+        // the VFS does not report, and costs a stat when nothing has changed.
+        project.messageBus.connect(this).subscribe(
+            com.intellij.openapi.vfs.VirtualFileManager.VFS_CHANGES,
+            object : com.intellij.openapi.vfs.newvfs.BulkFileListener {
+                override fun after(events: List<com.intellij.openapi.vfs.newvfs.events.VFileEvent>) {
+                    val mine = transcript?.toString() ?: return
+                    if (watchers > 0 && events.any { it.path == mine }) refreshSoon()
+                }
+            }
+        )
+    }
 
     fun addListener(parent: Disposable, listener: (SessionInsight) -> Unit) {
         synchronized(listeners) { listeners.add(listener) }
@@ -68,7 +84,7 @@ class SessionInsightService(private val project: Project) : Disposable {
 
     fun refresh() {
         val id = sessionId ?: return
-        val transcript = transcriptOf(id) ?: return
+        val transcript = transcriptOf(id)?.also { this.transcript = it } ?: return
         val reader = synchronized(readers) { readers.getOrPut(id) { SessionInsightReader() } }
 
         val fresh = reader.read(transcript)
@@ -124,7 +140,8 @@ class SessionInsightService(private val project: Project) : Disposable {
     }
 
     companion object {
-        private const val REFRESH_MS = 2000
+        /** Only a backstop now: writes arrive as events, so this exists for the ones that do not. */
+        private const val REFRESH_MS = 5000
         private const val REMEMBERED = 4
 
         fun getInstance(project: Project): SessionInsightService =
