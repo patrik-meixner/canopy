@@ -86,18 +86,20 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
 
         val editorListener = object : FileEditorManagerListener {
             override fun selectionChanged(event: FileEditorManagerEvent) {
-                sessionsPanel.selectSession((event.newFile as? ClaudeSessionVirtualFile)?.sessionId)
+                // A tab that has not started has no session id, and its row is keyed on the tab.
+                val file = event.newFile as? ClaudeSessionVirtualFile ?: return
+                sessionsPanel.selectSession(file.sessionId ?: file.sessionKey)
             }
 
             override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
                 if (file is ClaudeSessionVirtualFile) {
-                    sessionsPanel.refreshStatuses()
+                    sessionsPanel.refreshRows()
                     repoTreePanel.refresh(force = true)
                 }
             }
             override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
                 if (file is ClaudeSessionVirtualFile) {
-                    sessionsPanel.refreshStatuses()
+                    sessionsPanel.refreshRows()
                     repoTreePanel.refresh(force = true)
                 }
             }

@@ -141,6 +141,8 @@ private fun escape(text: String): String =
 
 /** Where it worked, how long ago, and what it is costing, in that order of use. */
 internal fun metaLine(session: SessionDisplay, detail: String, nowMillis: Long = System.currentTimeMillis()): String {
+    // Nothing has happened in it yet, so an age and a repository would both be inventions.
+    if (session.isDraft) return "Not started yet"
     val age = relativeAge(session.modified.toEpochMilli(), nowMillis)
 
     return listOfNotNull(placesFor(session), age, detail.takeIf { it.isNotBlank() }).joinToString("   ")

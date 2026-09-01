@@ -571,7 +571,15 @@ class SessionListPanel(
             getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
     )
 
-    private fun selectedSession(): SessionDisplay? {
+    /**
+     * The selected session, or null when the selected row is only an open tab.
+     *
+     * A draft has no transcript, no id and nothing on disk, so everything that acts on a session -
+     * fork, delete, resume, rename, reply - has nothing to act on and stays off.
+     */
+    private fun selectedSession(): SessionDisplay? = selectedRow()?.takeUnless { it.isDraft }
+
+    private fun selectedRow(): SessionDisplay? {
         val row = table.selectedRow
         if (row < 0) return null
         return tableModel.getItem(table.convertRowIndexToModel(row))
@@ -582,6 +590,40 @@ class SessionListPanel(
      * while the list is still empty; afterwards refreshes swap the rows underneath silently,
      * because a transcript write triggers this on every message.
      */
+    /**
+     * The draft row is keyed on its tab; the real row is keyed on the session.
+     *
+     * The moment a session starts, the draft stops being one and its row is replaced by the real
+     * one - so a selection still pointing at the tab's key would find nothing and go blank. For a
+     * session opened from the list the two keys are the same and this changes nothing.
+     */
+    private fun followLinkedDraft() {
+        val key = selectedSessionId ?: return
+        val linked = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
+            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .firstOrNull { it.sessionKey == key }
+            ?.sessionId ?: return
+
+        selectedSessionId = linked
+    }
+
+    /**
+     * A tab that is open and has not started yet, as a row.
+     *
+     * Worktree mode lists sessions belonging to a worktree, and a draft belongs to none until it
+     * has run, so it only ever appears in the plain list.
+     */
+    private fun openDrafts(): List<SessionDisplay> {
+        if (worktreeMode) return emptyList()
+
+        val open = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
+            .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
+            .filter { it.sessionId == null && !it.isShellSession }
+            .map { DraftSource(it.sessionKey, it.baseName) }
+
+        return draftRows(open, project.basePath.orEmpty(), System.currentTimeMillis())
+    }
+
     private fun reloadData() {
         if (allSessions.isEmpty()) loadingPanel.startLoading()
 
@@ -598,11 +640,14 @@ class SessionListPanel(
         loadingPanel.stopLoading()
         // Most recent by default: a row that moves as its agent changes state means the list
         // reorders itself under the pointer, and the glyph already says what is blocked.
-        allSessions = if (com.canopy.settings.CanopySettings.getInstance().state.sortAttentionFirst) {
+        val sorted = if (com.canopy.settings.CanopySettings.getInstance().state.sortAttentionFirst) {
             discovered.sortedWith(compareBy<SessionDisplay> { sessionAttention(it).rank }.thenByDescending { it.modified })
         } else {
             discovered.sortedByDescending { it.lastPromptAt ?: it.modified }
         }
+        // Always first: a session you have just started is the one you are about to type into.
+        allSessions = openDrafts() + sorted
+        followLinkedDraft()
         applyFilter()
         if (worktreeMode) {
             refreshOrphans()
@@ -710,11 +755,8 @@ class SessionListPanel(
         }
     }
 
-    fun refreshStatuses() {
-        ApplicationManager.getApplication().invokeLater {
-            tableModel.fireTableDataChanged()
-        }
-    }
+    /** Opening or closing a tab adds or removes a draft row, which is a different list, not a repaint. */
+    fun refreshRows() = reloadData()
 
     /**
      * Recompute the orphaned-worktree list off the EDT (dir scan + `git worktree list`).

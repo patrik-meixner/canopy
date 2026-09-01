@@ -15,7 +15,9 @@ data class SessionDisplay(
     val startedAt: Instant? = null,
     val tail: TranscriptTail? = null,
     /** When you last said something here. The list orders on this so an agent writing cannot move it. */
-    val lastPromptAt: Instant? = null
+    val lastPromptAt: Instant? = null,
+    /** A tab that is open but has not started: it has no transcript and nothing to act on yet. */
+    val isDraft: Boolean = false
 ) {
     val displayName: String
         get() = name
