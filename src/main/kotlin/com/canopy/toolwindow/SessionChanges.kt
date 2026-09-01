@@ -145,7 +145,9 @@ object SessionChanges {
     private fun untracked(root: String): List<FilePath> {
         val output = git(root, "ls-files", "--others", "--exclude-standard") ?: return emptyList()
 
-        return output.lines().filter { it.isNotBlank() }.map { localPath(root, it) }
+        return output.lines()
+            .filter { it.isNotBlank() && !isOperatingSystemJunk(it) }
+            .map { localPath(root, it) }
     }
 
     private fun upstreamOf(root: String): String? =
