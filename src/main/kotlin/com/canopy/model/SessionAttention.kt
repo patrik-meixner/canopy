@@ -50,6 +50,7 @@ fun sessionAttentionOf(notifyState: String?): SessionAttention = when {
     notifyState == "permission_prompt" -> SessionAttention.NeedsPermission
     notifyState == "idle_prompt" -> SessionAttention.WaitingForInput
     notifyState == "compact" -> SessionAttention.Compacting
+    notifyState == "working" -> SessionAttention.Working
     notifyState.startsWith("tool:") -> SessionAttention.Working
     else -> SessionAttention.None
 }

@@ -105,6 +105,9 @@ class ClaudeStatusService(private val project: Project) : Disposable {
             appendLine("    Notification)")
             appendLine("      state=\$(echo \"\$input\" | sed -n 's/.*\"notification_type\":\"\\([^\"]*\\)\".*/\\1/p')")
             appendLine("      ;;")
+            appendLine("    UserPromptSubmit)")
+            appendLine("      state=\"working\"")
+            appendLine("      ;;")
             appendLine("    PreToolUse)")
             appendLine("      tool=\$(echo \"\$input\" | sed -n 's/.*\"tool_name\":\"\\([^\"]*\\)\".*/\\1/p')")
             appendLine("      state=\"tool:\$tool\"")
@@ -188,6 +191,10 @@ class ClaudeStatusService(private val project: Project) : Disposable {
                 add("hooks", hookEntry.deepCopy())
             })
         }
+        // The one event that fires when a turn starts. Between the last PostToolUse writing "clear"
+        // and the first PreToolUse of the next turn, the agent is thinking and writes nothing at
+        // all - no hook, no transcript record - so the only other way to know was to wait for it.
+        hooks.add("UserPromptSubmit", compactRule.deepCopy())
         hooks.add("PreCompact", compactRule)
         hooks.add("PostCompact", compactRule.deepCopy())
 

@@ -50,3 +50,21 @@ class SessionAttentionTest {
 }
 
 private const val LONG_AFTER_ANY_TOOL = 24L * 60 * 60 * 1000
+
+class NotifyStateTest {
+
+    @Test
+    fun `a submitted prompt is the agent working, before it has run anything`() {
+        assertEquals(SessionAttention.Working, sessionAttentionOf("working"))
+    }
+
+    @Test
+    fun `a tool call is working too`() {
+        assertEquals(SessionAttention.Working, sessionAttentionOf("tool:Bash"))
+    }
+
+    @Test
+    fun `a cleared state falls through to the transcript rather than claiming anything`() {
+        assertEquals(SessionAttention.None, sessionAttentionOf("clear"))
+    }
+}
