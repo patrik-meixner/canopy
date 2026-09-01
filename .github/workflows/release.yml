@@ -23,10 +23,14 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          FIRST_RELEASE_COMMITS: 40
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
           if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ github.ref_name }}" ]; then
-            NOTES=$(git log --format="- %s" HEAD)
+            # No earlier tag to measure from. Unbounded, this puts the whole history into the
+            # marketplace notes, and a published version cannot be edited afterwards.
+            NOTES=$(git log --format="- %s" -n "$FIRST_RELEASE_COMMITS" HEAD)
           else
             NOTES=$(git log --format="- %s" "${PREV_TAG}..HEAD")
           fi
