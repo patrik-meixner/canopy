@@ -65,15 +65,21 @@ object SessionChanges {
      * [since] bounds the commit sections to the session's own window. Without it a long-lived team
      * branch reports its entire divergence from the base — thousands of files nobody wrote today.
      */
-    fun collect(root: String, since: java.time.Instant?, isOwn: (String) -> Boolean = { true }): SessionChangeSet {
+    /** Elsewhere is shown for the repository the session was run from; one it only reached into is reviewed for its own work alone. */
+    fun collect(
+        root: String,
+        since: java.time.Instant?,
+        isOwn: (String) -> Boolean = { true },
+        showElsewhere: Boolean = true
+    ): SessionChangeSet {
         val sharedTip = sharedWithRemote(root)
         val (own, elsewhere) = diff(root, "HEAD", null).partition { isOwn(pathOfChange(it)) }
 
         return SessionChangeSet(
             changes = mapOf(
                 SessionChangeSection.Uncommitted to own,
-                SessionChangeSection.Elsewhere to elsewhere,
-                SessionChangeSection.Committed to unpushedRange(root, sharedTip),
+                SessionChangeSection.Elsewhere to if (showElsewhere) elsewhere else emptyList(),
+                SessionChangeSection.Committed to unpushedRange(root, sharedTip, since),
                 SessionChangeSection.Pushed to pushedRange(root, sharedTip, since)
             ).filterValues { it.isNotEmpty() },
             unversioned = untracked(root).filter { isOwn(it.path) },
@@ -88,11 +94,17 @@ object SessionChanges {
         return git(root, "merge-base", "HEAD", upstream)?.trim()?.ifEmpty { null }
     }
 
-    private fun unpushedRange(root: String, sharedTip: String?): List<Change> {
+    /** Bounded to the session like [pushedRange]: unbounded, a rebased branch is its whole history. */
+    private fun unpushedRange(root: String, sharedTip: String?, since: java.time.Instant?): List<Change> {
         val from = commitRangeStart(sharedTip, detectBase(root)) ?: return emptyList()
+        val sessionStart = sessionStartPoint(root, since) ?: return emptyList()
+        val start = if (isAncestor(root, from, sessionStart)) sessionStart else from
 
-        return diff(root, from, "HEAD")
+        return diff(root, start, "HEAD")
     }
+
+    private fun isAncestor(root: String, ancestor: String, descendant: String): Boolean =
+        git(root, "merge-base", "--is-ancestor", ancestor, descendant) != null
 
     /**
      * Where "committed but not shared" starts: the remote's tip when there is one, otherwise the

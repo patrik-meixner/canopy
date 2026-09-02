@@ -54,6 +54,10 @@ private val WRITING_VERB = Regex(
 /** A redirection, but not `2>&1`, `1>&2` or a `->` inside a string. */
 private val REDIRECTION = Regex("""(?<![0-9&\-])>""")
 
+private val CLAUSE_BREAK = Regex("""\r?\n|;|&&|\|\||\|""")
+
+private val CHANGE_DIRECTORY = Regex("""(^|[;&|(`]\s*|\s)cd\s+["']?(/(?:Users|home|opt|srv|var|tmp|private)/[A-Za-z0-9._@%+-]+(?:/[A-Za-z0-9._@%+-]+)*)""")
+
 /**
  * Absolute paths a shell command wrote to, and nothing it merely looked at.
  *
@@ -61,10 +65,31 @@ private val REDIRECTION = Regex("""(?<![0-9&\-])>""")
  * what attributes a repository to a session at all. Taking every path a command names attributed
  * whatever the agent grepped, found or listed - a session that ran one `find` across the disk then
  * claimed every repository it walked past.
+ *
+ * A `cd` to an absolute directory stands for the relative writes that follow it, which is every
+ * heredoc and `sed -i file` an agent runs after changing directory.
  */
 internal fun pathsInCommand(command: String?): List<String> {
     if (command.isNullOrBlank()) return emptyList()
-    if (!WRITING_VERB.containsMatchIn(command) && !REDIRECTION.containsMatchIn(command)) return emptyList()
 
-    return ABSOLUTE_PATH.findAll(command).map { it.value }.distinct().toList()
+    val clauses = command.split(CLAUSE_BREAK)
+    val written = clauses.flatMap(::pathsWrittenBy)
+    if (written.isEmpty() && clauses.none(::isWriting)) return emptyList()
+
+    val workedIn = CHANGE_DIRECTORY.findAll(command).map { it.groupValues[2] }
+    return (workedIn + written).distinct().toList()
+}
+
+private fun isWriting(clause: String): Boolean =
+    WRITING_VERB.containsMatchIn(clause) || REDIRECTION.containsMatchIn(clause)
+
+private fun pathsWrittenBy(clause: String): List<String> {
+    val redirection = REDIRECTION.find(clause)
+    val scope = when {
+        redirection != null -> clause.substring(redirection.range.last + 1)
+        WRITING_VERB.containsMatchIn(clause) -> clause
+        else -> return emptyList()
+    }
+
+    return ABSOLUTE_PATH.findAll(scope).map { it.value }.toList()
 }

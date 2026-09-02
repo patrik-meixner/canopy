@@ -227,11 +227,18 @@ class SessionDetailPanel(
         val written = session?.sessionId
             ?.let { com.canopy.services.SessionFileIndex.getInstance(project).pathsFor(it) }
             .orEmpty()
+        val ownDirectories = ownDirectoriesOf(session)
+        val startedAt = session?.startedAt?.toEpochMilli()
         val isOwn: (String) -> Boolean = { path ->
-            isSessionsOwnChange(path, written, session?.workingDirectory)
+            isSessionsOwnChange(path, written, ownDirectories, startedAt, ::lastModifiedMillis)
         }
+        val launchRoot = session?.workingDirectory?.let { com.canopy.util.GitRootCache.rootOf(java.nio.file.Path.of(it)) }
         val collected = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
-            .invokeAll(scope.roots.map { root -> java.util.concurrent.Callable { SessionChanges.collect(root, scope.since, isOwn) } })
+            .invokeAll(scope.roots.map { root ->
+                java.util.concurrent.Callable {
+                    SessionChanges.collect(root, scope.since, isOwn, showElsewhere = launchRoot == null || root == launchRoot)
+                }
+            })
             .map { it.get() }
 
         return SessionChangeSet(
@@ -242,6 +249,19 @@ class SessionDetailPanel(
             pushedCommits = collected.flatMap { it.pushedCommits }.sortedByDescending { it.commit.atMillis }
         )
     }
+
+    /** The launch repository is deliberately absent: inside it the launch directory is the boundary. */
+    private fun ownDirectoriesOf(session: SessionDisplay?): List<String> {
+        if (session == null) return emptyList()
+        val launchDirectory = session.workingDirectory
+        val launchRoot = launchDirectory?.let { com.canopy.util.GitRootCache.rootOf(java.nio.file.Path.of(it)) }
+        val otherRoots = session.touchedRoots.keys.filter { it != launchRoot }
+
+        return listOfNotNull(launchDirectory) + otherRoots
+    }
+
+    private fun lastModifiedMillis(path: String): Long? =
+        runCatching { java.nio.file.Files.getLastModifiedTime(java.nio.file.Path.of(path)).toMillis() }.getOrNull()
 
     /** The message is written where the tree is, so what is being committed stays on screen. */
     private fun commitEverything() = askToCommit(CommitScope.Everything)
