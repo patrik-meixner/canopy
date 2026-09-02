@@ -45,11 +45,19 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
     private val byPath = HashMap<String, Entry>()
 
     /**
-     * A copy: entries are added from the thread that parses transcripts, and the platform
-     * serializes whatever this returns on its own. Handing over the live list let a save walk it
-     * while it was being written to.
+     * The digests worth keeping, which is not the ones being rewritten.
+     *
+     * An entry is only used again if the transcript's size and timestamp still match, so an entry
+     * for a session an agent is working in is guaranteed stale by the next start. Returning it
+     * anyway changed this state on every transcript write, and the platform saved the whole file
+     * each time: an IDE that never stopped saying it was saving settings.
+     *
+     * A copy, too: entries are added from the thread that parses transcripts, and handing over the
+     * live list let a save walk it while it was being written to.
      */
-    override fun getState(): State = State().apply { entries = ArrayList(state.entries) }
+    override fun getState(): State = State().apply {
+        entries = ArrayList(settledEntries(state.entries, System.currentTimeMillis()))
+    }
 
     override fun loadState(loaded: State) {
         state = loaded
