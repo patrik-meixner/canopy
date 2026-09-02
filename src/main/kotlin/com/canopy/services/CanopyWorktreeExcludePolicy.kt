@@ -13,11 +13,8 @@ class CanopyWorktreeExcludePolicy(private val project: Project) : DirectoryIndex
     override fun getExcludeUrlsForProject(): Array<String> {
         if (!CanopySettings.getInstance().state.excludeWorktreesFromIndex) return emptyArray()
 
-        val roots = listOfNotNull(project.basePath) +
-            com.intellij.openapi.roots.ProjectRootManager.getInstance(project)
-                .contentRoots
-                .mapNotNull { it.canonicalPath }
+        val base = project.basePath ?: return emptyArray()
 
-        return worktreeExcludeUrls(roots.distinct()).toTypedArray()
+        return worktreeExcludeUrls(base).toTypedArray()
     }
 }
