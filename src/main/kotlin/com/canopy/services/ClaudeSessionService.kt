@@ -55,6 +55,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         var customTitle: String? = null
         var messageCount = 0
         var gitBranch: String? = null
+        var workingDirectory: String? = null
         var lastTimestamp: Instant = Instant.EPOCH
         var firstTimestamp: Instant? = null
         var turnTail: com.canopy.model.TranscriptTail? = null
@@ -82,6 +83,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             customTitle = null
             messageCount = 0
             gitBranch = null
+            workingDirectory = null
             lastTimestamp = Instant.EPOCH
             firstTimestamp = null
             turnTail = null
@@ -500,6 +502,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 projectPath = project.basePath ?: "",
                 worktreeName = worktreeName,
                 touchedRoots = acc.rootsOfTouched(),
+                workingDirectory = acc.workingDirectory,
                 startedAt = acc.firstTimestamp,
                 tail = acc.turnTail,
                 lastPromptAt = acc.lastPromptAt
@@ -544,6 +547,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             if (type == "user" && acc.firstPrompt == null) {
                 acc.firstPrompt = text.ifEmpty { null }?.let(::openingWords)
                 acc.gitBranch = obj.get("gitBranch")?.asString
+            obj.get("cwd")?.asString?.let { acc.workingDirectory = it }
             }
 
             // Track latest timestamp

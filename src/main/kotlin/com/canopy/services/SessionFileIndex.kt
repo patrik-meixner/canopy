@@ -26,6 +26,9 @@ class SessionFileIndex {
     }
 
     @Synchronized
+    fun pathsFor(sessionId: String): Set<String> = paths[sessionId].orEmpty()
+
+    @Synchronized
     fun overlapsFor(sessionId: String): Map<String, List<String>> = overlaps(sessionId, LinkedHashMap(paths))
 
     companion object {

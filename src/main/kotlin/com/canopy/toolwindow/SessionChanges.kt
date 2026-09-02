@@ -14,6 +14,7 @@ import java.nio.file.Path
  */
 enum class SessionChangeSection(val title: String, val isYours: Boolean) {
     Uncommitted("Changes", true),
+    Elsewhere("Elsewhere in this repository", false),
     Committed("Committed", true),
     Pushed("Pushed", false),
     Unversioned("Unversioned Files", true)
@@ -50,6 +51,9 @@ data class SessionChangeSet(
         change.afterRevision?.file?.path ?: change.beforeRevision?.file?.path.orEmpty()
 }
 
+private fun pathOfChange(change: Change): String =
+    change.afterRevision?.file?.path ?: change.beforeRevision?.file?.path.orEmpty()
+
 object SessionChanges {
 
     private const val GIT_TIMEOUT_MS = 20_000L
@@ -58,16 +62,18 @@ object SessionChanges {
      * [since] bounds the commit sections to the session's own window. Without it a long-lived team
      * branch reports its entire divergence from the base — thousands of files nobody wrote today.
      */
-    fun collect(root: String, since: java.time.Instant?): SessionChangeSet {
+    fun collect(root: String, since: java.time.Instant?, isOwn: (String) -> Boolean = { true }): SessionChangeSet {
         val sharedTip = sharedWithRemote(root)
+        val (own, elsewhere) = diff(root, "HEAD", null).partition { isOwn(pathOfChange(it)) }
 
         return SessionChangeSet(
             changes = mapOf(
-                SessionChangeSection.Uncommitted to diff(root, "HEAD", null),
+                SessionChangeSection.Uncommitted to own,
+                SessionChangeSection.Elsewhere to elsewhere,
                 SessionChangeSection.Committed to unpushedRange(root, sharedTip),
                 SessionChangeSection.Pushed to pushedRange(root, sharedTip, since)
             ).filterValues { it.isNotEmpty() },
-            unversioned = untracked(root),
+            unversioned = untracked(root).filter { isOwn(it.path) },
             pushedCommits = pushedCommits(root, sharedTip, since)
         )
     }

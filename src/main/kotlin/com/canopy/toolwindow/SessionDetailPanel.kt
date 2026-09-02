@@ -224,8 +224,14 @@ class SessionDetailPanel(
         // Around five git processes per repository, and a session routinely spans six of them.
         // Run sequentially that is the half second before the tree appears; they are waiting on
         // the disk, not on each other.
+        val written = session?.sessionId
+            ?.let { com.canopy.services.SessionFileIndex.getInstance(project).pathsFor(it) }
+            .orEmpty()
+        val isOwn: (String) -> Boolean = { path ->
+            isSessionsOwnChange(path, written, session?.workingDirectory)
+        }
         val collected = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
-            .invokeAll(scope.roots.map { root -> java.util.concurrent.Callable { SessionChanges.collect(root, scope.since) } })
+            .invokeAll(scope.roots.map { root -> java.util.concurrent.Callable { SessionChanges.collect(root, scope.since, isOwn) } })
             .map { it.get() }
 
         return SessionChangeSet(
