@@ -18,7 +18,12 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
     private val state get() = CanopySettings.getInstance().state
 
+    /** What the index was last built against, so a change to it can ask for the rescan it needs. */
+    private var excludedWorktreesWhenOpened = true
+
     override fun createPanel(): DialogPanel = panel {
+        excludedWorktreesWhenOpened = state.excludeWorktreesFromIndex
+
         group("Session list") {
             row {
                 checkBox("Notify me when an agent needs permission").bindSelected(state::notifyWhenBlocked)
@@ -71,7 +76,7 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
         group("Worktrees") {
             row {
                 checkBox("Keep worktrees out of the index").bindSelected(state::excludeWorktreesFromIndex)
-            }.rowComment("A worktree is a second copy of code the IDE has already indexed, and nobody edits in one. Leaving them in costs a full repository each and puts every file in Find in Files twice. Submodules are untouched. Takes effect after Invalidate Caches or the next start.")
+            }.rowComment("A worktree is a second copy of code the IDE has already indexed, and nobody edits in one. Leaving them in costs a full repository each and puts every file in Find in Files twice. Submodules are untouched. Changing this rescans the project.")
 
 
             row("Sweep no more often than every") {
@@ -147,6 +152,28 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
     override fun apply() {
         super.apply()
         refreshOpenSessionChrome()
+        if (state.excludeWorktreesFromIndex != excludedWorktreesWhenOpened) rescanRoots()
+        excludedWorktreesWhenOpened = state.excludeWorktreesFromIndex
+    }
+
+    /**
+     * What a directory is excluded from is decided while the index is built, so the setting used to
+     * mean nothing until the next Invalidate Caches - and a box that says one thing while the index
+     * does the other is worse than no box.
+     */
+    private fun rescanRoots() {
+        for (project in ProjectManager.getInstance().openProjects) {
+            if (project.isDisposed) continue
+
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                com.intellij.openapi.application.WriteAction.run<RuntimeException> {
+                    com.intellij.openapi.roots.ex.ProjectRootManagerEx.getInstanceEx(project).makeRootsChange(
+                        com.intellij.openapi.util.EmptyRunnable.getInstance(),
+                        com.intellij.openapi.project.RootsChangeRescanningInfo.TOTAL_RESCAN
+                    )
+                }
+            }
+        }
     }
 
     private fun refreshOpenSessionChrome() {
