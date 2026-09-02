@@ -17,10 +17,12 @@ import java.util.concurrent.CopyOnWriteArrayList
  * commit rewrites several files inside .git and an agent writes in bursts.
  */
 @Service(Service.Level.PROJECT)
-class WorkspaceChangeNotifier(project: Project) : Disposable {
+class WorkspaceChangeNotifier(private val project: Project) : Disposable {
 
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
+    private val gitAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    private var gitStamps: Map<String, Long> = emptyMap()
 
     init {
         project.messageBus.connect(this).subscribe(
@@ -34,8 +36,26 @@ class WorkspaceChangeNotifier(project: Project) : Disposable {
     }
 
     fun addListener(parent: Disposable, listener: () -> Unit) {
+        val wasEmpty = listeners.isEmpty()
         listeners.add(listener)
         Disposer.register(parent, Disposable { listeners.remove(listener) })
+
+        if (wasEmpty) pollGitState()
+    }
+
+    /** Three stat calls per repository, which is what it costs to see a commit nothing announced. */
+    private fun pollGitState() {
+        if (gitAlarm.isDisposed) return
+
+        gitAlarm.addRequest({
+            if (listeners.isNotEmpty()) {
+                val stamps = RepoScopeService.getInstance(project).cachedScopes()
+                    .associate { it.root to gitStateStamp(it.root) }
+                if (gitStamps.isNotEmpty() && stamps != gitStamps) schedule()
+                gitStamps = stamps
+            }
+            pollGitState()
+        }, GIT_POLL_MS)
     }
 
     private fun schedule() {
@@ -49,6 +69,9 @@ class WorkspaceChangeNotifier(project: Project) : Disposable {
 
     companion object {
         private const val DEBOUNCE_MS = 700
+
+        /** Slow enough to cost nothing, quick enough that a commit is on screen before you look. */
+        private const val GIT_POLL_MS = 2_000
 
         fun getInstance(project: Project): WorkspaceChangeNotifier =
             project.getService(WorkspaceChangeNotifier::class.java)
