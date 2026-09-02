@@ -58,6 +58,9 @@ object SessionChanges {
 
     private const val GIT_TIMEOUT_MS = 20_000L
 
+    /** Far more commits than a session makes, and short enough that a long branch costs nothing. */
+    private const val SESSION_COMMIT_LIMIT = 200
+
     /**
      * [since] bounds the commit sections to the session's own window. Without it a long-lived team
      * branch reports its entire divergence from the base — thousands of files nobody wrote today.
@@ -120,8 +123,8 @@ object SessionChanges {
     /** The commit the session started from: the parent of its oldest commit inside the window. */
     private fun sessionStartPoint(root: String, since: java.time.Instant?): String? {
         if (since == null) return null
-        val commits = git(root, "log", "--since=${since}", "--format=%H", "HEAD") ?: return null
-        val oldest = commits.lines().filter { it.isNotBlank() }.lastOrNull() ?: return null
+        val log = git(root, "log", "--format=%H %at", "-n", "$SESSION_COMMIT_LIMIT", "HEAD") ?: return null
+        val oldest = oldestCommitOfSession(parseAuthoredCommits(log), since.epochSecond) ?: return null
 
         return git(root, "rev-parse", "--verify", "--quiet", "$oldest^")?.trim()?.ifEmpty { null } ?: oldest
     }
