@@ -3,30 +3,41 @@ package com.canopy.services
 import java.nio.file.Files
 import java.nio.file.Path
 
-private const val CLAUDE_DIRECTORY = ".claude"
-private const val WORKTREES_DIRECTORY = "worktrees"
-private const val SUBMODULE_DEPTH = 3
+private const val WORKTREE_MARKER = "/.git/worktrees/"
+private const val SEARCH_DEPTH = 3
 
 /**
- * Every worktree directory under [root], as VFS urls.
+ * Every git worktree under [root], as VFS urls, found by what a worktree is rather than by where
+ * anyone happened to put it.
  *
  * A worktree is a second checkout of code that is already indexed once, so indexing it buys
- * nothing and costs a full copy of the repository. Nobody edits in one either: the agent does,
- * and the diff is read from git.
+ * nothing and costs a full copy of the repository. Nobody edits in one either: the agent does, and
+ * the diff is read from git.
  *
- * The tree is walked rather than asked of the project model, because this answers a question the
- * index asks while it is being built and reaching back into it would be asking the half-built
- * thing about itself.
+ * A worktree's `.git` is a file naming a directory under `.git/worktrees/`; a submodule's is a
+ * file too, but it names one under `.git/modules/`, and a submodule is real code somebody edits.
+ * The difference between them is that one path segment.
+ *
+ * The tree is walked rather than asked of git or of the project model: this answers a question the
+ * index asks while it is being built, so it can neither block on a process nor reach back into the
+ * half-built thing to ask about itself.
  */
 fun worktreeExcludeUrls(root: String): List<String> {
     val base = Path.of(root)
     if (!Files.isDirectory(base)) return emptyList()
 
-    return Files.walk(base, SUBMODULE_DEPTH).use { paths ->
-        paths.filter { it.fileName?.toString() == CLAUDE_DIRECTORY && Files.isDirectory(it) }
-            .map { it.resolve(WORKTREES_DIRECTORY) }
-            .filter { Files.isDirectory(it) }
+    return Files.walk(base, SEARCH_DEPTH).use { paths ->
+        paths.filter { isWorktreeCheckout(it) }
             .map { "file://${it.toAbsolutePath()}" }
             .toList()
     }
+}
+
+private fun isWorktreeCheckout(directory: Path): Boolean {
+    val git = directory.resolve(".git")
+    if (!Files.isRegularFile(git)) return false
+
+    val pointer = runCatching { Files.readString(git) }.getOrNull() ?: return false
+
+    return WORKTREE_MARKER in pointer
 }
