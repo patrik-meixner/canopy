@@ -412,7 +412,9 @@ class ClaudeSessionEditor(
         }
 
         val statusListener: (String, ClaudeStatus?) -> Unit = { sid, status ->
-            if (sid == monitoringId || sid == file.sessionId) {
+            if (sid == monitoringId || sid == file.sessionId) ApplicationManager.getApplication().invokeLater {
+                if (isDisposed.get()) return@invokeLater
+
                 file.modelId = status?.modelId
                 file.modelName = status?.modelName
                 file.contextPercent = status?.contextRemainingPercent
@@ -558,15 +560,15 @@ class ClaudeSessionEditor(
             toolTipText = "No session changes to commit"
         }
 
-        val gitRefreshInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
-        fun refresh() {
+        val gate = com.canopy.util.RefreshGate(TOOLBAR_REFRESH_FLOOR_MS)
+        fun refresh(isForced: Boolean = false) {
             val gitDir = resolveGitDir() ?: return
             // A brand-new worktree dir may not exist yet (the CLI creates it async). Until
             // its `.git` link is in place, `git -C <dir>` would walk up to the parent
             // project repo and report the wrong branch ("main"), so skip — the new-worktree
             // dir poll re-fires refresh() the moment the worktree appears.
             if (!java.io.File(gitDir, ".git").exists()) return
-            if (!gitRefreshInFlight.compareAndSet(false, true)) return
+            if (!gate.tryStart(isForced)) return
             com.canopy.util.CanopyExecutor.submit {
                 try {
                     val branch = execGit(gitDir, "branch", "--show-current").trim()
@@ -606,12 +608,12 @@ class ClaudeSessionEditor(
                     }
                 } catch (_: Exception) {
                 } finally {
-                    gitRefreshInFlight.set(false)
+                    gate.finish()
                 }
             }
         }
 
-        refresh()
+        refresh(isForced = true)
 
         // Refresh on status updates (proxy for session activity)
         val statusService = ClaudeStatusService.getInstance(project)
@@ -780,8 +782,8 @@ class ClaudeSessionEditor(
         }
         updateOpenButtons()
 
-        val wtRefreshInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
-        fun refreshBranchStatus() {
+        val gate = com.canopy.util.RefreshGate(TOOLBAR_REFRESH_FLOOR_MS)
+        fun refreshBranchStatus(isForced: Boolean = false) {
             ApplicationManager.getApplication().invokeLater { updateOpenButtons() }
             val worktreePath = file.workingDir
             if (worktreePath == null || projectPath == null) return
@@ -797,12 +799,12 @@ class ClaudeSessionEditor(
                 }
                 return
             }
-            if (!wtRefreshInFlight.compareAndSet(false, true)) return
+            if (!gate.tryStart(isForced)) return
             com.canopy.util.CanopyExecutor.submit {
                 val info = try {
                     WorktreeInspector.status(worktreePath, projectPath)
                 } finally {
-                    wtRefreshInFlight.set(false)
+                    gate.finish()
                 }
                 ApplicationManager.getApplication().invokeLater {
                     info.wtBranch?.let { currentWtBranch = it }
@@ -927,7 +929,7 @@ class ClaudeSessionEditor(
                     // a failure leaves the button reading "Update\u2026" and disabled until the next
                     // status tick.
                     ApplicationManager.getApplication().invokeLater { updateButton.text = UPDATE_LABEL }
-                    refreshBranchStatus()
+                    refreshBranchStatus(isForced = true)
                 }
             }
         }
@@ -965,12 +967,12 @@ class ClaudeSessionEditor(
                     }
                 } finally {
                     ApplicationManager.getApplication().invokeLater { mergeButton.text = MERGE_LABEL }
-                    refreshBranchStatus()
+                    refreshBranchStatus(isForced = true)
                 }
             }
         }
 
-        refreshBranchStatus()
+        refreshBranchStatus(isForced = true)
 
         // Refresh when session status changes (proxy for activity)
         val statusService = ClaudeStatusService.getInstance(project)
@@ -1031,14 +1033,14 @@ class ClaudeSessionEditor(
      * while Claude is working); this fills the gap when Claude is idle but external
      * state (commits in the terminal, remote pulls, finished rebases) can drift.
      */
-    private fun wireToolbarRefresh(refresh: () -> Unit) {
+    private fun wireToolbarRefresh(refresh: (isForced: Boolean) -> Unit) {
         val refreshAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.POOLED_THREAD, sessionDisposable)
         lateinit var tick: Runnable
         tick = Runnable {
             // Only the visible tab polls. A background tab's toolbar is repainted by the
             // selection listener below the moment it comes to the front, so nothing is stale
             // by the time anyone can see it.
-            if (tabShowing) refresh()
+            if (tabShowing) refresh(false)
             val sec = com.canopy.settings.CanopySettings.getInstance().state.branchStatusRefreshSeconds
             if (sec > 0 && !refreshAlarm.isDisposed) {
                 refreshAlarm.addRequest(tick, sec * 1000)
@@ -1051,7 +1053,7 @@ class ClaudeSessionEditor(
 
         val selectionListener = object : FileEditorManagerListener {
             override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
-                if (event.newFile == file) refresh()
+                if (event.newFile == file) refresh(true)
             }
         }
         project.messageBus.connect(sessionDisposable).subscribe(
@@ -1070,7 +1072,7 @@ class ClaudeSessionEditor(
      * No-ops for anything that isn't a not-yet-created new worktree (no workingDir, dir
      * already present, or already linked), so it's safe to wire from every toolbar.
      */
-    private fun wireNewWorktreeDirPoll(refresh: () -> Unit) {
+    private fun wireNewWorktreeDirPoll(refresh: (isForced: Boolean) -> Unit) {
         val worktreeDir = file.workingDir ?: return
         if (file.sessionId != null) return
         if (java.io.File(worktreeDir).isDirectory) return
@@ -1079,7 +1081,7 @@ class ClaudeSessionEditor(
         val attempts = java.util.concurrent.atomic.AtomicInteger(0)
         lateinit var tick: Runnable
         tick = Runnable {
-            refresh()
+            refresh(true)
             // Stop once the worktree exists (refresh above just rendered it), once linking
             // wired the normal triggers, or after a backstop cap (~30s) so an abandoned
             // creation doesn't poll forever.
@@ -1599,6 +1601,9 @@ class ClaudeSessionEditor(
 
         private const val GIT_TIMEOUT_MS = 15_000L
         private const val GIT_OUTPUT_LIMIT = 400
+
+        /** Status lines change several times a turn; a toolbar that ran git on each one ran it constantly. */
+        private const val TOOLBAR_REFRESH_FLOOR_MS = 5_000L
 
         // Worktree toolbar button labels. A running operation appends [BUSY_SUFFIX]; the label is
         // restored in a finally so it can't stick on a failure or an early return.
