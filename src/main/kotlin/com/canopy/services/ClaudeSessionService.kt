@@ -196,9 +196,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         SessionDigestCache.getInstance(project).retainOnly(
             cachedSessions.orEmpty().mapNotNull { transcriptPathOf(it, basePath)?.toString() }.toSet()
         )
-        ApplicationManager.getApplication().invokeLater {
-            listeners.forEach { it() }
-        }
+        notifyListeners()
 
         return true
     }
@@ -235,11 +233,11 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         }
         CanopyExecutor.submit {
             try {
-                cachedSessions = loadSessions()
-                refreshExternalSessions()
-                ApplicationManager.getApplication().invokeLater {
-                    listeners.forEach { it() }
-                }
+                val fresh = loadSessions()
+                val sessionsChanged = fresh != cachedSessions
+                cachedSessions = fresh
+                val externalsChanged = refreshExternalSessions()
+                if (sessionsChanged || externalsChanged) notifyListeners()
             } finally {
                 lastRefreshAt = System.currentTimeMillis()
                 refreshInFlight.set(false)
@@ -291,9 +289,16 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         if (reparsed.isEmpty() && removedIds.isEmpty()) return
 
         val byId = reparsed.associateBy { it.sessionId }
-        cachedSessions = (current.filterNot { it.sessionId in byId || it.sessionId in removedIds } + reparsed)
+        val updated = (current.filterNot { it.sessionId in byId || it.sessionId in removedIds } + reparsed)
             .sortedByDescending { it.lastPromptAt ?: it.modified }
+        if (updated == current) return
 
+        cachedSessions = updated
+        notifyListeners()
+    }
+
+    /** Every listener rebuilds something on screen, so nothing is said until something has changed. */
+    private fun notifyListeners() {
         ApplicationManager.getApplication().invokeLater {
             listeners.forEach { it() }
         }
@@ -398,13 +403,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         } catch (_: Exception) {
         }
 
-        // Refresh external session detection
-        val changed = refreshExternalSessions()
-        if (changed) {
-            ApplicationManager.getApplication().invokeLater {
-                listeners.forEach { it() }
-            }
-        }
+        if (refreshExternalSessions()) notifyListeners()
 
         if (!pollAlarm.isDisposed) {
             pollAlarm.addRequest(::checkForChanges, POLL_MS)

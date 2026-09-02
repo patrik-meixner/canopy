@@ -123,6 +123,7 @@ class SessionListPanel(
     @Volatile private var panelVisible = false
     @Volatile private var lastOrphanSweep = 0L
     private val spinner = javax.swing.Timer(SPINNER_FRAME_MS.toInt()) { repaintWorkingRows() }
+    private val reloadAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.SWING_THREAD, this)
     private var spinningRows: List<Int> = emptyList()
     private var spinningFoundAt = 0L
     private val changeListener: () -> Unit = { reloadData() }
@@ -819,7 +820,15 @@ class SessionListPanel(
         manager.openFile(shell, true)
     }
 
+    /** Tabs open and close in bursts and every agent's write announces itself: one rebuild per burst. */
     private fun reloadData() {
+        if (reloadAlarm.isDisposed) return
+
+        reloadAlarm.cancelAllRequests()
+        reloadAlarm.addRequest(::reloadNow, RELOAD_COALESCE_MS)
+    }
+
+    private fun reloadNow() {
         if (allSessions.isEmpty()) loadingPanel.startLoading()
 
         com.canopy.util.CanopyExecutor.submit {
@@ -1245,6 +1254,8 @@ private class PurgeDialog(
 private const val MIN_TRANSCRIPT_QUERY = 2
 
 private const val SESSION_PAGE = 30
+
+private const val RELOAD_COALESCE_MS = 100
 
 private val CARD_ROW_HEIGHT = JBUI.scale(46)
 
