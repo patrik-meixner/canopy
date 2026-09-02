@@ -3,8 +3,8 @@ package com.canopy.services
 import java.nio.file.Files
 import java.nio.file.Path
 
-private const val WORKTREE_MARKER = "/.git/worktrees/"
-private const val SEARCH_DEPTH = 3
+private const val WORKTREE_MARKER = "/worktrees/"
+private const val SEARCH_DEPTH = 4
 
 /**
  * Every git worktree under [root], as VFS urls, found by what a worktree is rather than by where
@@ -14,9 +14,10 @@ private const val SEARCH_DEPTH = 3
  * nothing and costs a full copy of the repository. Nobody edits in one either: the agent does, and
  * the diff is read from git.
  *
- * A worktree's `.git` is a file naming a directory under `.git/worktrees/`; a submodule's is a
- * file too, but it names one under `.git/modules/`, and a submodule is real code somebody edits.
- * The difference between them is that one path segment.
+ * A worktree's `.git` is a file naming a directory with a `worktrees` segment in it: `.git/
+ * worktrees/x` for the top-level repository, `.git/modules/<submodule>/worktrees/x` for a
+ * worktree of a submodule. A submodule's own checkout is a file too, but it names `.git/modules/
+ * <submodule>` with no such segment - and a submodule is real code somebody edits.
  *
  * The tree is walked rather than asked of git or of the project model: this answers a question the
  * index asks while it is being built, so it can neither block on a process nor reach back into the

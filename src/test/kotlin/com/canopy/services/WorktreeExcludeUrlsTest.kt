@@ -29,6 +29,14 @@ class WorktreeExcludeUrlsTest {
     }
 
     @Test
+    fun `a worktree of a submodule is excluded too`() {
+        val root = Files.createTempDirectory("canopy-sub-wt")
+        checkout(root, "dmm/.worktrees/review", "$root/.git/modules/dmm/worktrees/review")
+
+        assertEquals(listOf("file://$root/dmm/.worktrees/review"), worktreeExcludeUrls(root.toString()))
+    }
+
+    @Test
     fun `a submodule is left alone`() {
         val root = Files.createTempDirectory("canopy-super")
         checkout(root, "libs/shared", "$root/.git/modules/libs/shared")
