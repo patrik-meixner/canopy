@@ -112,6 +112,16 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     fun isExternallyOpen(sessionId: String): Boolean =
         sessionId in externalSessionIds
 
+    @Volatile private var lastRefreshAt = 0L
+
+    private fun refreshAfterFloor() {
+        val waited = System.currentTimeMillis() - lastRefreshAt
+        if (waited >= REFRESH_FLOOR_MS) return refresh()
+
+        com.intellij.util.concurrency.AppExecutorUtil.getAppScheduledExecutorService()
+            .schedule(::refresh, REFRESH_FLOOR_MS - waited, java.util.concurrent.TimeUnit.MILLISECONDS)
+    }
+
     fun addChangeListener(listener: () -> Unit) {
         listeners.add(listener)
     }
@@ -212,6 +222,11 @@ class ClaudeSessionService(private val project: Project) : Disposable {
      *
      * Overlapping requests coalesce — a call arriving mid-pass sets a flag that schedules
      * exactly one more pass afterwards, rather than queueing a pass per event.
+     *
+     * Coalescing alone is not a limit: the next pass started the instant the last one ended, so a
+     * transcript being appended to kept the parse and the table rebuild that follows it running
+     * back to back for as long as an agent was talking. A floor between passes is what makes the
+     * cost proportional to time rather than to how fast the machine can go round.
      */
     fun refresh() {
         if (!refreshInFlight.compareAndSet(false, true)) {
@@ -226,9 +241,10 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                     listeners.forEach { it() }
                 }
             } finally {
+                lastRefreshAt = System.currentTimeMillis()
                 refreshInFlight.set(false)
                 // State changed while we were working: run once more, not once per event.
-                if (refreshQueued.compareAndSet(true, false)) refresh()
+                if (refreshQueued.compareAndSet(true, false)) refreshAfterFloor()
             }
         }
     }
@@ -589,6 +605,9 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     }
 
     companion object {
+
+        /** The shortest gap between two full session sweeps, however fast transcripts arrive. */
+        private const val REFRESH_FLOOR_MS = 750L
         /** Floor between `ps`-based external-session sweeps. */
         private const val EXTERNAL_SWEEP_MIN_MS = 4_000L
 
