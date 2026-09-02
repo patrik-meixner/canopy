@@ -43,6 +43,8 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
 
     private var state = State()
     private val byPath = HashMap<String, Entry>()
+    /** Entries are written by the parse thread and read by the save thread. */
+    private val lock = Any()
 
     /**
      * The digests worth keeping, which is not the ones being rewritten.
@@ -55,11 +57,11 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
      * A copy, too: entries are added from the thread that parses transcripts, and handing over the
      * live list let a save walk it while it was being written to.
      */
-    override fun getState(): State = State().apply {
-        entries = ArrayList(settledEntries(state.entries, System.currentTimeMillis()))
+    override fun getState(): State = synchronized(lock) {
+        State().apply { entries = ArrayList(settledEntries(state.entries, System.currentTimeMillis())) }
     }
 
-    override fun loadState(loaded: State) {
+    override fun loadState(loaded: State) = synchronized(lock) {
         state = loaded
         byPath.clear()
         loaded.entries.forEach {
@@ -70,7 +72,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
     }
 
     fun get(path: String, size: Long, modifiedAtMillis: Long, projectPath: String): SessionDisplay? {
-        val entry = byPath[path] ?: return null
+        val entry = synchronized(lock) { byPath[path] } ?: return null
         if (entry.size != size || entry.modifiedAtMillis != modifiedAtMillis) return null
 
         return SessionDisplay(
@@ -89,7 +91,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         )
     }
 
-    fun put(path: String, size: Long, modifiedAtMillis: Long, session: SessionDisplay) {
+    fun put(path: String, size: Long, modifiedAtMillis: Long, session: SessionDisplay) = synchronized(lock) {
         val entry = byPath.getOrPut(path) { Entry().also { state.entries.add(it) } }
 
         entry.path = path
@@ -109,7 +111,7 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
     }
 
     /** Drops entries for transcripts that no longer exist, so the file cannot grow without bound. */
-    fun retainOnly(paths: Set<String>) {
+    fun retainOnly(paths: Set<String>) = synchronized(lock) {
         state.entries.removeIf { it.path !in paths }
         byPath.keys.retainAll(paths)
     }
