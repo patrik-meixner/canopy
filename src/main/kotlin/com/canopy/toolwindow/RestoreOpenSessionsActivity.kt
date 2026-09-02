@@ -17,6 +17,13 @@ class RestoreOpenSessionsActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
         val persistence = OpenSessionsPersistence.getInstance(project)
+        // Before the early return below: the stripe is worth restoring even with no session to open.
+        if (persistence.wasToolWindowVisible) {
+            ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) showCanopy(project)
+            }
+        }
+
         val savedIds = persistence.getAll()
         if (savedIds.isEmpty()) return
 
@@ -44,6 +51,13 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         val base = project.basePath ?: return session.workingDirectory
 
         return com.canopy.util.ClaudePathEncoder.worktreeAbsolutePath(base, worktree)
+    }
+
+    /** Shown, not activated: the stripe comes back as you left it without taking the caret. */
+    private fun showCanopy(project: Project) {
+        com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+            .getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)
+            ?.show()
     }
 
     /** Whatever is opened last wins the selection, and the last thing opened is a terminal. */

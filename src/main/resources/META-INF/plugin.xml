@@ -139,6 +139,8 @@
                   topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
         <listener class="com.canopy.services.RememberTerminalsOnTabChange"
                   topic="com.canopy.services.CanopyTabsListener"/>
+        <listener class="com.canopy.services.RememberActiveToolWindow"
+                  topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"/>
     </projectListeners>
 
     <actions>
