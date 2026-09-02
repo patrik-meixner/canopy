@@ -21,22 +21,21 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         if (savedIds.isEmpty()) return
 
         val sessions = ClaudeSessionService.getInstance(project).getSessions().associateBy { it.sessionId }
-        val restored = savedIds.mapNotNull(sessions::get)
-        val terminals = persistence.getTerminals()
+        // One session, not the stage as it stood. Every other one would be a resumed agent nobody
+        // asked for on a machine that has just started, and they are one click away in the list.
+        val first = savedIds.firstNotNullOfOrNull(sessions::get) ?: return
+        val terminals = persistence.getTerminals().filter { it.ownerSessionId == first.sessionId }
 
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
 
-            restored.forEach { openClaudeSession(project, it) }
+            openClaudeSession(project, first)
             terminals.forEach { reopenTerminal(project, it) }
-            restored.firstOrNull()?.let { focusFirst(project, it) }
+            focusFirst(project, first)
         }
     }
 
-    /**
-     * Whatever is opened last wins the selection, and the last thing opened is somebody's terminal.
-     * The session that was first on the stage is what the stage should open on.
-     */
+    /** Whatever is opened last wins the selection, and the last thing opened is a terminal. */
     private fun focusFirst(project: Project, session: com.canopy.model.SessionDisplay) {
         val file = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
             .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
