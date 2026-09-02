@@ -40,10 +40,19 @@ class RestoreOpenSessionsActivity : ProjectActivity {
             focusFirst(project, first)
             // The rest come back working rather than on screen: listed, answerable, and one click
             // from a tab, without a stack of them opening over the project you just wanted to see.
-            restored.drop(1).forEach {
-                com.canopy.services.startSessionDetached(project, it, workingDirectoryOf(project, it))
-            }
+            // One a second, because each is a node process starting while the IDE is still indexing.
+            restored.drop(1).forEachIndexed { index, session -> restoreDetachedLater(project, session, index + 1) }
         }
+    }
+
+    private fun restoreDetachedLater(project: Project, session: com.canopy.model.SessionDisplay, position: Int) {
+        com.intellij.util.concurrency.AppExecutorUtil.getAppScheduledExecutorService().schedule({
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+
+                com.canopy.services.startSessionDetached(project, session, workingDirectoryOf(project, session))
+            }
+        }, position * RESTORE_STAGGER_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
     }
 
     private fun workingDirectoryOf(project: Project, session: com.canopy.model.SessionDisplay): String? {
@@ -81,3 +90,5 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         com.canopy.editor.openTerminalFor(project, owner, terminal.name)
     }
 }
+
+private const val RESTORE_STAGGER_MS = 1_000L
