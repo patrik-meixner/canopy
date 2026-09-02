@@ -156,24 +156,8 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
         excludedWorktreesWhenOpened = state.excludeWorktreesFromIndex
     }
 
-    /**
-     * What a directory is excluded from is decided while the index is built, so the setting used to
-     * mean nothing until the next Invalidate Caches - and a box that says one thing while the index
-     * does the other is worse than no box.
-     */
     private fun rescanRoots() {
-        for (project in ProjectManager.getInstance().openProjects) {
-            if (project.isDisposed) continue
-
-            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
-                com.intellij.openapi.application.WriteAction.run<RuntimeException> {
-                    com.intellij.openapi.roots.ex.ProjectRootManagerEx.getInstanceEx(project).makeRootsChange(
-                        com.intellij.openapi.util.EmptyRunnable.getInstance(),
-                        com.intellij.openapi.project.RootsChangeRescanningInfo.TOTAL_RESCAN
-                    )
-                }
-            }
-        }
+        ProjectManager.getInstance().openProjects.forEach { com.canopy.services.requestRootsRescan(it) }
     }
 
     private fun refreshOpenSessionChrome() {

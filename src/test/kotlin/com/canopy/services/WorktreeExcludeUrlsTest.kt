@@ -37,6 +37,14 @@ class WorktreeExcludeUrlsTest {
     }
 
     @Test
+    fun `node_modules is never walked, however worktree-shaped something inside it looks`() {
+        val root = Files.createTempDirectory("canopy-nm")
+        checkout(root, "node_modules/some-package", "$root/.git/worktrees/some-package")
+
+        assertEquals(emptyList<String>(), worktreeExcludeUrls(root.toString()))
+    }
+
+    @Test
     fun `a submodule is left alone`() {
         val root = Files.createTempDirectory("canopy-super")
         checkout(root, "libs/shared", "$root/.git/modules/libs/shared")
