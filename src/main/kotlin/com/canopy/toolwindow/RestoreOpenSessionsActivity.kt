@@ -21,9 +21,8 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         if (savedIds.isEmpty()) return
 
         val sessions = ClaudeSessionService.getInstance(project).getSessions().associateBy { it.sessionId }
-        // One session, not the stage as it stood. Every other one would be a resumed agent nobody
-        // asked for on a machine that has just started, and they are one click away in the list.
-        val first = savedIds.firstNotNullOfOrNull(sessions::get) ?: return
+        val restored = savedIds.mapNotNull(sessions::get)
+        val first = restored.firstOrNull() ?: return
         val terminals = persistence.getTerminals().filter { it.ownerSessionId == first.sessionId }
 
         ApplicationManager.getApplication().invokeLater {
@@ -32,7 +31,19 @@ class RestoreOpenSessionsActivity : ProjectActivity {
             openClaudeSession(project, first)
             terminals.forEach { reopenTerminal(project, it) }
             focusFirst(project, first)
+            // The rest come back working rather than on screen: listed, answerable, and one click
+            // from a tab, without a stack of them opening over the project you just wanted to see.
+            restored.drop(1).forEach {
+                com.canopy.services.startSessionDetached(project, it, workingDirectoryOf(project, it))
+            }
         }
+    }
+
+    private fun workingDirectoryOf(project: Project, session: com.canopy.model.SessionDisplay): String? {
+        val worktree = session.worktreeName ?: return session.workingDirectory
+        val base = project.basePath ?: return session.workingDirectory
+
+        return com.canopy.util.ClaudePathEncoder.worktreeAbsolutePath(base, worktree)
     }
 
     /** Whatever is opened last wins the selection, and the last thing opened is a terminal. */
