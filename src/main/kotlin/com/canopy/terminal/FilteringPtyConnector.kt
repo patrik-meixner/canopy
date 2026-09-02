@@ -22,7 +22,7 @@ open class FilteringPtyConnector(
     var onFirstOutput: (() -> Unit)? = null
 
     companion object {
-        private val UNSUPPORTED = unsupportedSequences
+        private val UNSUPPORTED = unsupportedSequences(isSynchronizedOutputSupported())
     }
 
     override fun write(bytes: ByteArray) {
@@ -49,14 +49,3 @@ open class FilteringPtyConnector(
         carry = { held = it }
     )
 }
-
-/**
- * The kitty keyboard pop is `CSI < u`. Matching a bare `CSI u` instead swallows DECRC, which is how
- * a TUI restores a cursor it saved, so the stream loses a sequence the terminal does support.
- */
-internal val unsupportedSequences = Regex(
-    "\u001b\\[\\?2026[hl]" +
-        "|\u001b\\[>\\d+(?:;\\d+)*u" +
-        "|\u001b\\[<u" +
-        "|\u001b\\[>\\d+(?:;\\d+)*m"
-)
