@@ -56,6 +56,12 @@ class TranscriptTailTest {
     }
 
     @Test
+    fun `an interrupt is the user taking the turn back`() {
+        assertEquals(TranscriptTail.Interrupted, tailOf("user", "[Request interrupted by user]"))
+        assertEquals(TranscriptTail.Interrupted, tailOf("user", "[Request interrupted by user for tool use]"))
+    }
+
+    @Test
     fun `a record that is neither side of the conversation leaves the tail alone`() {
         assertEquals(null, tailOf("frame-link", ""))
     }

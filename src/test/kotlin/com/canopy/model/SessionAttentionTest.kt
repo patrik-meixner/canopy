@@ -25,6 +25,27 @@ class SessionAttentionTest {
     }
 
     @Test
+    fun `a tool state the user interrupted is waiting for input, not working for ten minutes`() {
+        val attention = sessionAttentionFor("tool:Bash", isRunning = true, tail = TranscriptTail.Interrupted, idleForMillis = 1_000)
+
+        assertEquals(SessionAttention.WaitingForInput, attention)
+    }
+
+    @Test
+    fun `a permission prompt the user interrupted is gone with the turn`() {
+        val attention = sessionAttentionFor("permission_prompt", isRunning = true, tail = TranscriptTail.Interrupted, idleForMillis = 1_000)
+
+        assertEquals(SessionAttention.WaitingForInput, attention)
+    }
+
+    @Test
+    fun `an interrupted session that is not running is simply idle`() {
+        val attention = sessionAttentionFor("tool:Bash", isRunning = false, tail = TranscriptTail.Interrupted, idleForMillis = 1_000)
+
+        assertEquals(SessionAttention.None, attention)
+    }
+
+    @Test
     fun `a permission prompt never goes stale, because nothing else will clear it`() {
         val attention = sessionAttentionFor(
             "permission_prompt",

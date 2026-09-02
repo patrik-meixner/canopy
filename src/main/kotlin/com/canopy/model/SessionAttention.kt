@@ -31,15 +31,22 @@ fun sessionAttentionFor(
     tail: TranscriptTail?,
     idleForMillis: Long = 0
 ): SessionAttention {
-    val reported = notifyState?.let(::sessionAttentionOf)
-    // A turn interrupted mid-tool never runs the hook that would clear the state, so the session
-    // reads as working for as long as it exists. Its transcript standing still says otherwise.
-    if (reported != null && !(reported == SessionAttention.Working && idleForMillis > WORKING_GOES_STALE_MS)) {
-        return reported
-    }
+    val reported = notifyState?.let(::sessionAttentionOf)?.takeUnless { it.isOutlivedBy(tail, idleForMillis) }
+    if (reported != null) return reported
     if (!isRunning) return SessionAttention.None
 
     return if (tail == TranscriptTail.AgentsTurn) SessionAttention.Working else SessionAttention.WaitingForInput
+}
+
+/**
+ * An interrupt never runs the hook that would clear a mid-turn state, so the transcript has to: its
+ * interrupt marker ends the turn, and a transcript standing still for long enough says the same.
+ */
+private fun SessionAttention.isOutlivedBy(tail: TranscriptTail?, idleForMillis: Long): Boolean {
+    val isMidTurn = this == SessionAttention.Working || this == SessionAttention.NeedsPermission
+    if (isMidTurn && tail == TranscriptTail.Interrupted) return true
+
+    return this == SessionAttention.Working && idleForMillis > WORKING_GOES_STALE_MS
 }
 
 /**
