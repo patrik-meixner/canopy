@@ -47,6 +47,9 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
 
         @JvmField var restoreSessions: SessionRestore = SessionRestore.All
 
+        /** Whether the sidebar was open when the IDE last closed, for every project rather than one. */
+        @JvmField var sidebarWasOpen: Boolean = false
+
         @JvmField var recentSessionDays: Int = 14
 
         @JvmField var sortAttentionFirst: Boolean = false

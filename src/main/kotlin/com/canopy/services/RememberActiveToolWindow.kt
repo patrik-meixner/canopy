@@ -24,6 +24,6 @@ class RememberActiveToolWindow(private val project: Project) : ToolWindowManager
         if (!persistence.isTrackingToolWindow || CanopyShutdown.isClosing()) return
         val canopy = toolWindowManager.getToolWindow(CANOPY_TOOL_WINDOW) ?: return
 
-        persistence.wasToolWindowVisible = canopy.isVisible
+        com.canopy.settings.CanopySettings.getInstance().state.sidebarWasOpen = canopy.isVisible
     }
 }

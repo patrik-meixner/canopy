@@ -21,9 +21,6 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
         @JvmField
         var terminals: MutableList<RememberedTerminal> = mutableListOf()
 
-        @JvmField
-        var toolWindowVisible: Boolean = false
-
     }
 
     private var myState = State()
@@ -54,10 +51,6 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
      */
     @Volatile
     var isTrackingToolWindow = false
-
-    var wasToolWindowVisible: Boolean
-        get() = myState.toolWindowVisible
-        set(value) { myState.toolWindowVisible = value }
 
     fun rememberTerminals(terminals: List<RememberedTerminal>) {
         myState.terminals = terminals.toMutableList()

@@ -17,7 +17,7 @@ class RestoreOpenSessionsActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
         val persistence = OpenSessionsPersistence.getInstance(project)
-        showCanopy(project, persistence.wasToolWindowVisible)
+        showCanopy(project, com.canopy.settings.CanopySettings.getInstance().state.sidebarWasOpen)
 
         val savedIds = persistence.getAll()
         if (savedIds.isEmpty()) return
