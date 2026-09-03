@@ -23,11 +23,25 @@ class RememberActiveToolWindow(private val project: Project) : ToolWindowManager
      * opens its own default before the restore runs, and hides everything on the way out.
      */
     private fun remember(toolWindowManager: ToolWindowManager) {
-        val persistence = OpenSessionsPersistence.getInstance(project)
-        if (!persistence.isTrackingToolWindow || CanopyShutdown.isClosing()) return
+        if (CanopyShutdown.isClosing()) return
         val canopy = toolWindowManager.getToolWindow(CANOPY_TOOL_WINDOW) ?: return
+        val settings = com.canopy.settings.CanopySettings.getInstance().state
+        val restore = SidebarRestore.getInstance(project)
 
-        com.canopy.settings.CanopySettings.getInstance().state.sidebarWasOpen = canopy.isVisible
-        LOG.info("Canopy: sidebar ${if (canopy.isVisible) "open" else "closed"} — remembered for the next start")
+        when (sidebarAction(restore.isSettling, settings.sidebarWasOpen, canopy.isVisible)) {
+            SidebarAction.Ignore -> return
+            SidebarAction.Reopen -> {
+                if (!restore.takeAttempt()) return
+
+                LOG.info("Canopy: the sidebar was closed while ${project.name} was still opening — putting it back")
+                com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                    if (!project.isDisposed) canopy.activate(null, false)
+                }
+            }
+            SidebarAction.Record -> {
+                settings.sidebarWasOpen = canopy.isVisible
+                LOG.info("Canopy: sidebar ${if (canopy.isVisible) "open" else "closed"} — remembered for the next start")
+            }
+        }
     }
 }

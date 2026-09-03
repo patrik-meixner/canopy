@@ -66,12 +66,14 @@ class RestoreOpenSessionsActivity : ProjectActivity {
             if (project.isDisposed) return@invokeLater
 
             val canopy = manager.getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)
-            if (wasVisible) canopy?.activate(null, false)
+            if (wasVisible) {
+                com.canopy.services.SidebarRestore.getInstance(project).begin()
+                canopy?.activate(null, false)
+            }
             LOG.info(
                 "Canopy: restoring sidebar in ${project.name} — remembered=$wasVisible, " +
                     "toolWindow=${if (canopy == null) "not registered" else "visible=${canopy.isVisible}"}"
             )
-            OpenSessionsPersistence.getInstance(project).isTrackingToolWindow = true
         }
     }
 
