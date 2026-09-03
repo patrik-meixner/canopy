@@ -42,6 +42,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     private class SessionAccumulator {
         val tail = com.canopy.util.JsonlTailReader()
         var firstPrompt: String? = null
+        var firstAgentText: String? = null
         var customTitle: String? = null
         var messageCount = 0
         var gitBranch: String? = null
@@ -67,6 +68,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
 
         fun reset() {
             firstPrompt = null
+            firstAgentText = null
             customTitle = null
             messageCount = 0
             gitBranch = null
@@ -412,7 +414,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 log.warn("Failed to read session file: $path", e)
             }
 
-            val firstPrompt = acc.firstPrompt ?: return null
+            val opening = sessionOpeningLine(acc.firstPrompt, acc.firstAgentText) ?: return null
 
             val modified = if (acc.lastTimestamp == Instant.EPOCH) {
                 Instant.ofEpochMilli(Files.getLastModifiedTime(path).toMillis())
@@ -423,7 +425,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             val session = SessionDisplay(
                 sessionId = sessionId,
                 name = acc.customTitle,
-                firstPrompt = firstPrompt,
+                firstPrompt = opening,
                 messageCount = acc.messageCount,
                 modified = modified,
                 gitBranch = acc.gitBranch,
@@ -470,10 +472,17 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 acc.customTitle = obj.get("customTitle")?.asString
             }
 
+            if (type == "assistant" && acc.firstAgentText == null && text.isNotBlank()) {
+                acc.firstAgentText = openingWords(text)
+            }
+
             if (type == "user" && acc.firstPrompt == null) {
                 acc.firstPrompt = text.ifEmpty { null }?.let(::openingWords)
+            }
+
+            if (acc.gitBranch == null) {
                 acc.gitBranch = obj.get("gitBranch")?.asString
-            obj.get("cwd")?.asString?.let { acc.workingDirectory = it }
+                obj.get("cwd")?.asString?.let { acc.workingDirectory = it }
             }
 
             val ts = obj.get("timestamp")
