@@ -220,23 +220,24 @@ class SessionDetailPanel(
      * reviewed instead of claiming the session changed nothing.
      */
     private fun collectChanges(session: SessionDisplay?): SessionChangeSet {
-        val scope = changeScopeFor(session, workspaceRoots())
-        // Around five git processes per repository, and a session routinely spans six of them.
-        // Run sequentially that is the half second before the tree appears; they are waiting on
-        // the disk, not on each other.
-        val written = session?.sessionId
-            ?.let { com.canopy.services.SessionFileIndex.getInstance(project).pathsFor(it) }
-            .orEmpty()
-        val ownDirectories = ownDirectoriesOf(session?.workingDirectory, written) { java.nio.file.Files.isDirectory(java.nio.file.Path.of(it)) }
-        val startedAt = session?.startedAt?.toEpochMilli()
-        val isOwn: (String) -> Boolean = { path ->
-            isSessionsOwnChange(path, written, ownDirectories, startedAt, ::lastModifiedMillis)
-        }
+        val ledger = session?.sessionId?.let(com.canopy.session.SessionLedger::read)
         val launchRoot = session?.workingDirectory?.let { com.canopy.util.GitRootCache.rootOf(java.nio.file.Path.of(it)) }
+        val scope = if (ledger == null) {
+            changeScopeFor(session, workspaceRoots())
+        } else {
+            ChangeScope(ledger.roots + setOfNotNull(launchRoot), session.startedAt)
+        }
+        val isOwn = ledger?.let { evidence -> { path: String -> evidence.owns(path) } } ?: estimatedOwnership(session)
         val collected = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
             .invokeAll(scope.roots.map { root ->
                 java.util.concurrent.Callable {
-                    SessionChanges.collect(root, scope.since, isOwn, showElsewhere = launchRoot == null || root == launchRoot)
+                    SessionChanges.collect(
+                        root,
+                        scope.since,
+                        isOwn,
+                        showElsewhere = launchRoot == null || root == launchRoot,
+                        ownCommits = ledger?.commits
+                    )
                 }
             })
             .map { it.get() }
@@ -246,8 +247,23 @@ class SessionDetailPanel(
                 collected.flatMap { it.changes[section].orEmpty() }
             }.filterValues { it.isNotEmpty() },
             unversioned = if (com.canopy.settings.CanopySettings.getInstance().state.showUnversionedInDetail) collected.flatMap { it.unversioned } else emptyList(),
-            pushedCommits = collected.flatMap { it.pushedCommits }.sortedByDescending { it.commit.atMillis }
+            pushedCommits = collected.flatMap { it.pushedCommits }.sortedByDescending { it.commit.atMillis },
+            isEstimated = ledger == null
         )
+    }
+
+    /**
+     * Without a ledger the transcript is all there is: the paths it names, the directories the shell
+     * wrote in, and the date, which is what tells two sessions in one repository apart.
+     */
+    private fun estimatedOwnership(session: SessionDisplay?): (String) -> Boolean {
+        val written = session?.sessionId
+            ?.let { com.canopy.services.SessionFileIndex.getInstance(project).pathsFor(it) }
+            .orEmpty()
+        val ownDirectories = ownDirectoriesOf(session?.workingDirectory, written) { java.nio.file.Files.isDirectory(java.nio.file.Path.of(it)) }
+        val startedAt = session?.startedAt?.toEpochMilli()
+
+        return { path -> isSessionsOwnChange(path, written, ownDirectories, startedAt, ::lastModifiedMillis) }
     }
 
     private fun lastModifiedMillis(path: String): Long? =
@@ -459,7 +475,7 @@ class SessionDetailPanel(
 
         // Resolved again on every paint, not captured: a SessionDisplay is a snapshot, and reading
         // a frozen one at paint time is the same staleness as freezing the state itself.
-        header.show(session, counts) { currentState() }
+        header.show(session, counts, isEstimated = changeSet.isEstimated) { currentState() }
     }
 
     private fun currentState(): com.canopy.model.SessionState {
@@ -506,7 +522,7 @@ class SessionDetailPanel(
 
     private companion object {
         const val REMEMBERED = 8
-        val EMPTY_CHANGES = SessionChangeSet(emptyMap(), emptyList())
+        val EMPTY_CHANGES = SessionChangeSet(emptyMap(), emptyList(), isEstimated = true)
     }
 }
 

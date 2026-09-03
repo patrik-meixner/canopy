@@ -36,6 +36,12 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         isOpaque = false
         border = JBUI.Borders.emptyTop(8)
     }
+    private val evidence = JLabel(ESTIMATED_NOTE).apply {
+        font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
+        foreground = UIUtil.getLabelDisabledForeground()
+        toolTipText = ESTIMATED_TOOLTIP
+        isVisible = false
+    }
 
     init {
         isOpaque = false
@@ -53,6 +59,7 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             add(title.leftAligned())
             add(place.leftAligned())
+            add(evidence.leftAligned())
             add(chips.leftAligned())
         }
         island.add(glyph, BorderLayout.WEST)
@@ -67,7 +74,7 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
      * is doing: a state captured here froze on whatever was true at the last scan, and the header
      * spun on while the row, the tab and the toolbar had all gone quiet.
      */
-    fun show(session: SessionDisplay?, counts: List<OutstandingCount>, stateOf: () -> SessionState) {
+    fun show(session: SessionDisplay?, counts: List<OutstandingCount>, isEstimated: Boolean, stateOf: () -> SessionState) {
         glyph.icon = GlyphIcon(
             { stateOf().let { sessionGlyph(it.attention, it.presence, System.currentTimeMillis()) } ?: "●" },
             { glyphColor(stateOf().attention) },
@@ -75,6 +82,7 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         )
         title.text = session?.displayName?.takeIf { it.isNotBlank() } ?: "No session selected"
         place.text = placeLine(session)
+        evidence.isVisible = isEstimated && session != null
         toolTipText = session?.let(::tooltipFor)
 
         chips.removeAll()
@@ -113,3 +121,8 @@ internal fun placeLine(session: SessionDisplay?, nowMillis: Long = System.curren
         "${session.messageCount} messages"
     ).joinToString("   ")
 }
+
+private const val ESTIMATED_NOTE = "Estimated from the transcript"
+private const val ESTIMATED_TOOLTIP = "This session was started outside Canopy, or before its hooks kept a ledger, " +
+    "so which files are its own is read from the tools it called and the dates on the files. " +
+    "Sessions started here from now on record every change exactly."

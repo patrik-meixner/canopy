@@ -29,6 +29,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     private val listeners = CopyOnWriteArrayList<(String, ClaudeStatus?) -> Unit>()
     private var wrapperScript: Path? = null
     private var notifyScript: Path? = null
+    private var ledgerScript: Path? = null
     private val installedVersion = AtomicReference<String?>(null)
     private val publishedVersion = AtomicReference<String?>(null)
     @Volatile private var lastInstalledCheck = 0L
@@ -134,10 +135,30 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     }
 
     /**
+     * The ledger hook as a shell command: the bundled script, run by whatever python3 is on the
+     * path, and nothing at all where there is none, so a machine without it still runs the agent.
+     */
+    @Synchronized
+    fun getLedgerCommand(): String {
+        val script = ledgerScript?.takeIf { Files.exists(it) } ?: installLedgerScript().also { ledgerScript = it }
+
+        return "command -v python3 >/dev/null 2>&1 && python3 \"$script\"; exit 0"
+    }
+
+    private fun installLedgerScript(): Path {
+        val script = Files.createTempFile("canopy-ledger-", ".py")
+        val source = ClaudeStatusService::class.java.getResourceAsStream(LEDGER_RESOURCE)
+            ?: error("Missing bundled resource $LEDGER_RESOURCE")
+        source.use { Files.copy(it, script, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
+
+        return script
+    }
+
+    /**
      * Creates a temporary settings file that overrides statusLine.command
      * and adds Notification hooks for idle/permission detection.
      */
-    fun createOverrideSettingsFile(wrapperPath: Path, notifyPath: Path): Path {
+    fun createOverrideSettingsFile(wrapperPath: Path, notifyPath: Path, ledgerCommand: String): Path {
         val file = Files.createTempFile("canopy-settings-", ".json")
         val root = JsonObject()
 
@@ -151,7 +172,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         }
         root.add("statusLine", statusLine)
 
-        root.add("hooks", canopyHooks(notifyPath.toAbsolutePath().toString()))
+        root.add("hooks", canopyHooks(notifyPath.toAbsolutePath().toString(), ledgerCommand))
 
         Files.writeString(file, gson.toJson(mergeSettings(userSettings(), root)) + "\n")
         return file
@@ -422,6 +443,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     override fun dispose() {
         wrapperScript?.let { try { Files.deleteIfExists(it) } catch (_: Exception) {} }
         notifyScript?.let { try { Files.deleteIfExists(it) } catch (_: Exception) {} }
+        ledgerScript?.let { try { Files.deleteIfExists(it) } catch (_: Exception) {} }
         for (sessionId in monitoredSessions.keys) {
             try { Files.deleteIfExists(createStatusFilePath(sessionId)) } catch (_: Exception) {}
             try { Files.deleteIfExists(createNotifyFilePath(sessionId)) } catch (_: Exception) {}
@@ -434,6 +456,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     }
 
     companion object {
+        private const val LEDGER_RESOURCE = "/hooks/canopy-ledger.py"
         private const val GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/anthropics/claude-code/releases/latest"
         private const val INSTALLED_CHECK_INTERVAL_MS = 5 * 60 * 1000L  // 5 minutes
         private const val PUBLISHED_CHECK_INTERVAL_MS = 30 * 60 * 1000L // 30 minutes

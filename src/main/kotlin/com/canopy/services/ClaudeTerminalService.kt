@@ -141,8 +141,9 @@ class ClaudeTerminalService(private val project: Project) {
             val statusService = ClaudeStatusService.getInstance(project)
             val wrapperPath = statusService.getWrapperScriptPath()
             val notifyScriptPath = statusService.getNotifyScriptPath()
-            val overridePath = statusService.createOverrideSettingsFile(wrapperPath, notifyScriptPath)
+            val overridePath = statusService.createOverrideSettingsFile(wrapperPath, notifyScriptPath, statusService.getLedgerCommand())
 
+            env["CANOPY_LEDGER_DIR"] = com.canopy.session.SessionLedger.directory().toString()
             env["CANOPY_STATUS_FILE"] = statusFile.toAbsolutePath().toString()
             env["CANOPY_NOTIFY_FILE"] = notifyFile?.toAbsolutePath()?.toString() ?: ""
             env["CANOPY_ORIGINAL_STATUSLINE"] = statusService.discoverOriginalStatusLineCommand() ?: ""

@@ -7,7 +7,11 @@ import kotlin.test.assertTrue
 
 class CanopyHooksTest {
 
-    private val hooks = canopyHooks("/tmp/notify.sh")
+    private val hooks = canopyHooks("/tmp/notify.sh", "/tmp/ledger.sh")
+
+    private fun commandsOf(event: String) = hooks.getAsJsonArray(event).flatMap { rule ->
+        rule.asJsonObject.getAsJsonArray("hooks").map { it.asJsonObject.get("command").asString }
+    }
 
     @Test
     fun `a turn opens on a prompt and closes on stop`() {
@@ -16,9 +20,21 @@ class CanopyHooksTest {
     }
 
     @Test
-    fun `a tool finishing is not the end of a turn`() {
-        assertFalse(hooks.has("PostToolUse"))
+    fun `a tool finishing is not the end of a turn, only a line in the ledger`() {
+        assertEquals(listOf("/tmp/ledger.sh"), commandsOf("PostToolUse"))
         assertFalse(hooks.has("PostToolUseFailure"))
+    }
+
+    @Test
+    fun `the ledger hears only about tools that can write`() {
+        val matchers = hooks.getAsJsonArray("PostToolUse").map { it.asJsonObject.get("matcher").asString }
+
+        assertEquals(listOf("^(Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__.*)$"), matchers)
+    }
+
+    @Test
+    fun `the ledger takes its baseline when the session starts`() {
+        assertEquals(listOf("/tmp/ledger.sh"), commandsOf("SessionStart"))
     }
 
     @Test
@@ -30,8 +46,8 @@ class CanopyHooksTest {
     fun `every tool re-asserts the turn, whoever started it`() {
         val rules = hooks.getAsJsonArray("PreToolUse")
 
-        assertEquals(1, rules.size())
         assertEquals(".*", rules[0].asJsonObject.get("matcher").asString)
+        assertEquals(listOf("/tmp/notify.sh", "/tmp/ledger.sh"), commandsOf("PreToolUse"))
     }
 
     @Test
@@ -50,6 +66,6 @@ class CanopyHooksTest {
         }
 
         assertTrue(commands.isNotEmpty())
-        assertTrue(commands.all { it == "/tmp/notify.sh" })
+        assertTrue(commands.all { it == "/tmp/notify.sh" || it == "/tmp/ledger.sh" })
     }
 }

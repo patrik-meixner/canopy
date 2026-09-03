@@ -28,7 +28,9 @@ data class SessionChangeSet(
     val changes: Map<SessionChangeSection, List<Change>>,
     val unversioned: List<FilePath>,
     /** Pushed work grouped the way it was made: a hundred files are a handful of commits. */
-    val pushedCommits: List<CommitWithChanges> = emptyList()
+    val pushedCommits: List<CommitWithChanges> = emptyList(),
+    /** Read from the transcript rather than the hooks' ledger, so a file's owner is a judgement, not a record. */
+    val isEstimated: Boolean = false
 ) {
     val isEmpty: Boolean get() = changes.isEmpty() && unversioned.isEmpty()
 
@@ -63,29 +65,53 @@ object SessionChanges {
 
     /**
      * [since] bounds the commit sections to the session's own window. Without it a long-lived team
-     * branch reports its entire divergence from the base — thousands of files nobody wrote today.
+     * branch reports its entire divergence from the base: thousands of files nobody wrote today.
+     *
+     * Elsewhere is shown for the repository the session was run from; one it only reached into is
+     * reviewed for its own work alone. With [ownCommits] known, the commit sections hold the files
+     * those commits touched and no other; without, every file committed in the window.
      */
-    /** Elsewhere is shown for the repository the session was run from; one it only reached into is reviewed for its own work alone. */
     fun collect(
         root: String,
         since: java.time.Instant?,
         isOwn: (String) -> Boolean = { true },
-        showElsewhere: Boolean = true
+        showElsewhere: Boolean = true,
+        ownCommits: Set<String>? = null
     ): SessionChangeSet {
         val sharedTip = sharedWithRemote(root)
         val sessionStart = sessionStartPoint(root, since)
+        val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
         val (own, elsewhere) = diff(root, "HEAD", null).partition { isOwn(pathOfChange(it)) }
+
+        val unpushedFrom = unpushedStart(root, sharedTip, sessionStart)
+        val committed = unpushedFrom?.let { diff(root, it, "HEAD") }.orEmpty()
+        val unpushedCommits = if (ownCommits == null || unpushedFrom == null) emptyList() else SessionCommits.withChanges(root, repository, "$unpushedFrom..HEAD")
+
+        val pushedRange = if (sharedTip != null && sessionStart != null) sessionStart to sharedTip else null
+        val pushed = pushedRange?.let { (from, to) -> diff(root, from, to) }.orEmpty()
+        val pushedCommits = pushedRange?.let { (from, to) -> SessionCommits.withChanges(root, repository, "$from..$to") }.orEmpty()
 
         return SessionChangeSet(
             changes = mapOf(
                 SessionChangeSection.Uncommitted to own,
                 SessionChangeSection.Elsewhere to if (showElsewhere) elsewhere else emptyList(),
-                SessionChangeSection.Committed to unpushedRange(root, sharedTip, sessionStart),
-                SessionChangeSection.Pushed to pushedRange(root, sharedTip, sessionStart)
+                SessionChangeSection.Committed to touchedByOwnCommits(committed, unpushedCommits, ownCommits),
+                SessionChangeSection.Pushed to touchedByOwnCommits(pushed, pushedCommits, ownCommits)
             ).filterValues { it.isNotEmpty() },
             unversioned = untracked(root).filter { isOwn(it.path) },
-            pushedCommits = pushedCommits(root, sharedTip, sessionStart)
+            pushedCommits = pushedCommits.filter { ownCommits == null || it.commit.sha in ownCommits }
         )
+    }
+
+    private fun touchedByOwnCommits(
+        changes: List<Change>,
+        commits: List<CommitWithChanges>,
+        ownCommits: Set<String>?
+    ): List<Change> {
+        if (ownCommits == null) return changes
+        val touched = commits.filter { it.commit.sha in ownCommits }.flatMap { it.changes }.mapTo(HashSet(), ::pathOfChange)
+
+        return changes.filter { pathOfChange(it) in touched }
     }
 
     /** Newest commit that is both on HEAD and on the remote; everything after it is unpushed. */
@@ -95,13 +121,12 @@ object SessionChanges {
         return git(root, "merge-base", "HEAD", upstream)?.trim()?.ifEmpty { null }
     }
 
-    /** Bounded to the session like [pushedRange]: unbounded, a rebased branch is its whole history. */
-    private fun unpushedRange(root: String, sharedTip: String?, sessionStart: String?): List<Change> {
-        if (sessionStart == null) return emptyList()
-        val from = commitRangeStart(sharedTip, detectBase(root)) ?: return emptyList()
-        val start = if (isAncestor(root, from, sessionStart)) sessionStart else from
+    /** Bounded to the session like the pushed range: unbounded, a rebased branch is its whole history. */
+    private fun unpushedStart(root: String, sharedTip: String?, sessionStart: String?): String? {
+        if (sessionStart == null) return null
+        val from = commitRangeStart(sharedTip, detectBase(root)) ?: return null
 
-        return diff(root, start, "HEAD")
+        return if (isAncestor(root, from, sessionStart)) sessionStart else from
     }
 
     private fun isAncestor(root: String, ancestor: String, descendant: String): Boolean =
@@ -109,23 +134,9 @@ object SessionChanges {
 
     /**
      * Where "committed but not shared" starts: the remote's tip when there is one, otherwise the
-     * base branch — a branch that was never pushed has all of its commits unshared.
+     * base branch - a branch that was never pushed has all of its commits unshared.
      */
     internal fun commitRangeStart(sharedTip: String?, base: String?): String? = sharedTip ?: base
-
-    /** The same range as [pushedRange], read per commit so the section can be grouped by them. */
-    private fun pushedCommits(root: String, sharedTip: String?, sessionStart: String?): List<CommitWithChanges> {
-        if (sharedTip == null || sessionStart == null) return emptyList()
-        val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
-
-        return SessionCommits.withChanges(root, repository, "$sessionStart..$sharedTip")
-    }
-
-    private fun pushedRange(root: String, sharedTip: String?, sessionStart: String?): List<Change> {
-        if (sharedTip == null || sessionStart == null) return emptyList()
-
-        return diff(root, sessionStart, sharedTip)
-    }
 
     /** The commit the session started from: the parent of its oldest commit inside the window. */
     private fun sessionStartPoint(root: String, since: java.time.Instant?): String? {
