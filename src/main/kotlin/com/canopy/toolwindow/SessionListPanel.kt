@@ -717,9 +717,6 @@ class SessionListPanel(
         }
 
         stageTo(target?.sessionKey ?: session.sessionId, isAdditive)
-        if (target == null) return
-
-        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(target, true)
     }
 
     private fun stageTo(targetKey: String, isAdditive: Boolean) {
@@ -732,9 +729,11 @@ class SessionListPanel(
         val byKey = known.associateBy { it.sessionKey }
         val plan = stagePlan(tabs, targetKey, isAdditive)
 
+        // Opened before the others close, so the strip never empties and reflows twice on the way past.
         com.canopy.services.SessionStaging.getInstance(project).rearranging {
+            plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, it.sessionKey == targetKey) }
+            byKey[targetKey]?.takeIf { it.sessionKey !in plan.open }?.let { manager.openFile(it, true) }
             plan.close.mapNotNull(byKey::get).forEach(manager::closeFile)
-            plan.open.mapNotNull(byKey::get).forEach { manager.openFile(it, false) }
         }
     }
 

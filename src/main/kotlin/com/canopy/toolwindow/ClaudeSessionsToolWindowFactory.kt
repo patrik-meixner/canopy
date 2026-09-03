@@ -76,6 +76,9 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         repoTreeContent.isCloseable = false
         toolWindow.contentManager.addContent(repoTreeContent)
 
+        // Built only when the window is actually opened, which is the one state change that cannot be missed.
+        com.canopy.services.OpenSessionsPersistence.getInstance(project).wasToolWindowVisible = true
+
         sessionService.startWatching()
 
         val editorListener = object : FileEditorManagerListener {
