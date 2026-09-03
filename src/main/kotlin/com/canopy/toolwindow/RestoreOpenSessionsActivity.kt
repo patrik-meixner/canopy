@@ -13,6 +13,8 @@ import com.intellij.openapi.startup.ProjectActivity
  * late or not at all. A startup activity also runs after the platform has restored its own editors:
  * opening one before that fails project loading on 2024.3+ with "Tab count expected to be zero".
  */
+private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(RestoreOpenSessionsActivity::class.java)
+
 class RestoreOpenSessionsActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
@@ -63,7 +65,12 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         manager.invokeLater {
             if (project.isDisposed) return@invokeLater
 
-            if (wasVisible) manager.getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)?.activate(null, false)
+            val canopy = manager.getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)
+            if (wasVisible) canopy?.activate(null, false)
+            LOG.info(
+                "Canopy: restoring sidebar in ${project.name} — remembered=$wasVisible, " +
+                    "toolWindow=${if (canopy == null) "not registered" else "visible=${canopy.isVisible}"}"
+            )
             OpenSessionsPersistence.getInstance(project).isTrackingToolWindow = true
         }
     }

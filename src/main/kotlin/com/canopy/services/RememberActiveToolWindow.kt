@@ -1,10 +1,13 @@
 package com.canopy.services
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 
 const val CANOPY_TOOL_WINDOW = "Canopy"
+
+private val LOG = Logger.getInstance(RememberActiveToolWindow::class.java)
 
 class RememberActiveToolWindow(private val project: Project) : ToolWindowManagerListener {
 
@@ -25,5 +28,6 @@ class RememberActiveToolWindow(private val project: Project) : ToolWindowManager
         val canopy = toolWindowManager.getToolWindow(CANOPY_TOOL_WINDOW) ?: return
 
         com.canopy.settings.CanopySettings.getInstance().state.sidebarWasOpen = canopy.isVisible
+        LOG.info("Canopy: sidebar ${if (canopy.isVisible) "open" else "closed"} — remembered for the next start")
     }
 }
