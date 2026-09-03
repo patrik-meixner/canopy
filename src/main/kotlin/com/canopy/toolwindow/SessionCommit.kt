@@ -5,12 +5,6 @@ import java.nio.file.Path
 
 data class CommitOutcome(val root: String, val ok: Boolean, val detail: String)
 
-/**
- * Commits a session's work across every repository it touched.
- *
- * A submodule commit alone leaves the superproject pointing at the old revision, so the pointer is
- * staged and committed in the parent too — otherwise the change is invisible to anyone who clones.
- */
 object SessionCommit {
 
     private const val GIT_TIMEOUT_MS = 60_000L
@@ -18,12 +12,6 @@ object SessionCommit {
     fun commit(roots: List<String>, message: String, superproject: String?): List<CommitOutcome> =
         finish(roots.mapNotNull { root -> commitOne(root, message)?.let { root to it } }, message, superproject)
 
-    /**
-     * Commits only the files that were picked, leaving the rest of the working tree where it is.
-     *
-     * The pathspec is repeated on the commit so anything already staged for other reasons does not
-     * ride along in a commit that claims to be about the selection.
-     */
     fun commitPaths(
         pathsByRoot: Map<String, List<String>>,
         message: String,

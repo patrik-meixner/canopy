@@ -8,9 +8,6 @@ import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import javax.swing.JPanel
 
-/**
- * Every task the session is working through, not the handful the CLI has room to print.
- */
 class PlanTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
     private val cards = CardListPanel(
@@ -41,7 +38,6 @@ class PlanTabPanel(project: Project, parent: Disposable) : InsightTabPanel(proje
     }
 }
 
-/** Reads like the CLI's own summary line, so the tab needs no explaining. */
 internal fun summaryOf(tasks: List<PlannedTask>): String {
     if (tasks.isEmpty()) return ""
     val done = tasks.count { it.status == TaskStatus.COMPLETED }

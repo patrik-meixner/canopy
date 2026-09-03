@@ -4,7 +4,6 @@ import java.awt.CardLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 
-/** Whichever of the two a tab has something to show in. */
 class ContentOrEmpty(content: JComponent, empty: EmptyState) : JPanel(CardLayout()) {
 
     init {

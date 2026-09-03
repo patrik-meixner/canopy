@@ -13,12 +13,6 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 
-/**
- * Tells you when an agent stops and waits, so the tool window does not have to be watched.
- *
- * Only a transition into a blocking state notifies, and never for the session already on screen —
- * being told about the tab you are reading is noise, and repeat balloons for one prompt worse.
- */
 object SessionAttentionNotifier {
 
     private const val GROUP = "Canopy Session Attention"
@@ -33,10 +27,6 @@ object SessionAttentionNotifier {
         }
     }
 
-    /**
-     * A permission prompt genuinely blocks the agent. Finishing a turn does not: it happens between
-     * every batch of tool calls, so notifying on it means a balloon every few seconds.
-     */
     private fun wanted(attention: SessionAttention): Boolean {
         val settings = CanopySettings.getInstance().state
 

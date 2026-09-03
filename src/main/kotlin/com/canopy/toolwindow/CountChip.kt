@@ -11,12 +11,6 @@ import java.awt.Graphics2D
 import java.awt.RenderingHints
 import javax.swing.JComponent
 
-/**
- * A number and what it counts, on a ground tinted by what it means.
- *
- * The number carries the weight and the label stays quiet, so a row of these reads as three
- * quantities rather than as a sentence to parse.
- */
 class CountChip(private val entry: OutstandingCount) : JComponent() {
 
     private val boldFont = UIUtil.getLabelFont().deriveFont(java.awt.Font.BOLD)
@@ -56,8 +50,6 @@ class CountChip(private val entry: OutstandingCount) : JComponent() {
             g.color = InsightUi.blendInto(InsightUi.raisedBackground(), ink, CHIP_TINT)
             g.fillRoundRect(0, 0, width, height, JBUI.scale(ARC), JBUI.scale(ARC))
 
-            // Both halves share one baseline, set from the padding rather than guessed from the
-            // middle: the number and the word are different fonts and must sit on the same line.
             val bold = getFontMetrics(boldFont)
             val baseline = JBUI.scale(PAD_Y) + bold.ascent
             val count = entry.count.toString()

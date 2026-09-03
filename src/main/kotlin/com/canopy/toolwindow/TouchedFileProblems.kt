@@ -14,12 +14,6 @@ data class FileProblem(
     val message: String
 )
 
-/**
- * Errors and warnings the IDE found in the files a session changed.
- *
- * The agent cannot see the IDE's analysis, so it ships code the editor is already underlining. The
- * highlights come from files whose documents are loaded, which is what the daemon has analysed.
- */
 object TouchedFileProblems {
 
     private const val PER_FILE_LIMIT = 10
@@ -57,7 +51,6 @@ object TouchedFileProblems {
 
 private const val MAX_LISTED = 25
 
-/** One prompt the agent can act on, rather than a dump it has to re-derive locations from. */
 fun problemPrompt(problems: List<FileProblem>, repositoryRoots: Set<String>): String? {
     if (problems.isEmpty()) return null
     val listed = problems.take(MAX_LISTED)

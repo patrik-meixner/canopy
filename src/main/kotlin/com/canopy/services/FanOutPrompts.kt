@@ -9,12 +9,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.Alarm
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Holds a fan-out prompt until the worktree session it belongs to is actually running.
- *
- * `claude --worktree` creates the directory and starts the CLI asynchronously, so typing the prompt
- * at the moment the tab opens types it into a terminal that is not ready to read it.
- */
 @Service(Service.Level.PROJECT)
 class FanOutPrompts(private val project: Project) {
 

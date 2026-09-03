@@ -7,25 +7,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 
-/**
- * Incremental line reader for Claude's append-only JSONL transcripts.
- *
- * Transcripts routinely reach tens of megabytes, and the plugin re-reads them on timers and
- * on every file-change event. Re-parsing the whole file each time costs time proportional to
- * the *history*, when the new information is proportional to the *append* — so a long-running
- * session gets progressively more expensive to watch. This reader keeps a byte offset and
- * hands back only the lines added since the last pass.
- *
- * Two details make that safe against a file being written concurrently:
- *
- *  - The offset only ever advances to the last newline seen, so a line the writer hasn't
- *    finished is left unconsumed and delivered whole on a later pass.
- *  - A file that shrank was rewritten rather than appended to (a transcript compaction, or a
- *    different session at the same path), so the offset resets and `onRestart` fires *before*
- *    any line is delivered, giving the caller a chance to discard accumulated state.
- *
- * Not thread-safe; callers hold their own lock.
- */
 class JsonlTailReader {
 
     var offset = 0L
@@ -35,10 +16,6 @@ class JsonlTailReader {
         offset = 0
     }
 
-    /**
-     * Deliver every complete, non-blank line appended since the last call, and return how
-     * many there were. [onRestart] fires first if the file was rewritten.
-     */
     fun consume(path: Path, onRestart: () -> Unit = {}, onLine: (String) -> Unit): Int {
         val size = Files.size(path)
         if (size == offset) return 0

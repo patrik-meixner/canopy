@@ -15,12 +15,6 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 
-/**
- * One keystroke to any session, ranked so the blocked ones come first.
- *
- * Discovery reads every transcript, so the popup opens only once the list is in hand rather
- * than freezing the UI while it is built.
- */
 class SessionPaletteAction : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {

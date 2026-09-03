@@ -10,9 +10,6 @@ import com.intellij.util.ui.JBUI
 import javax.swing.JComponent
 import javax.swing.JTextArea
 
-/**
- * One prompt, several worktrees, so three approaches to the same problem can run at once.
- */
 class FanOutDialog(
     project: Project,
     private val scope: RepoScope,

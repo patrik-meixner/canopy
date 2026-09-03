@@ -7,12 +7,6 @@ import com.intellij.openapi.vcs.history.VcsRevisionNumber
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * File content fetched when the diff is opened rather than when the tree is built.
- *
- * Reading every revision up front costs two git processes per changed file, which is what made a
- * few hundred changed files take seconds before anything appeared.
- */
 class GitContentRevision(
     private val root: String,
     private val relativePath: String,

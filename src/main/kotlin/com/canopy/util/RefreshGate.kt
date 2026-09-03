@@ -2,11 +2,6 @@ package com.canopy.util
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * One refresh at a time, and no sooner than [floorMillis] after the last unless someone asked for it.
- *
- * A caller that gets `true` from [tryStart] owes a [finish].
- */
 class RefreshGate(private val floorMillis: Long) {
 
     private val running = AtomicBoolean(false)

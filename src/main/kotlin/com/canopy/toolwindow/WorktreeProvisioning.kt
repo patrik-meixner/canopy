@@ -10,12 +10,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-/**
- * Carries the untracked files a fresh worktree needs into it, then runs the install command.
- *
- * A worktree starts from the index, so everything git deliberately ignores — credentials, local
- * overrides, installed dependencies — is missing, and the agent's first act is to fail on it.
- */
 object WorktreeProvisioning {
 
     private val log = Logger.getInstance(WorktreeProvisioning::class.java)
@@ -52,7 +46,6 @@ object WorktreeProvisioning {
             false
         }
 
-    /** The command runs in a terminal tab rather than headless: install output is what you read when it fails. */
     private fun runSetupCommand(project: Project, targetPath: String, command: String) {
         if (command.isEmpty()) return
 
@@ -76,7 +69,6 @@ internal fun setupFileNames(configured: String): List<String> =
         .filter { it.isNotEmpty() }
         .distinct()
 
-/** Never overwrites: a worktree that already carries its own .env is configured, not stale. */
 internal fun filesToProvision(
     names: List<String>,
     existsInSource: (String) -> Boolean,

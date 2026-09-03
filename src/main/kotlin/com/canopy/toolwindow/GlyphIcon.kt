@@ -10,16 +10,8 @@ import java.awt.RenderingHints
 import javax.swing.Icon
 
 /**
- * One glyph of the session vocabulary, centred in a fixed box.
- *
- * A fixed box is what keeps a tab and a row from resizing as the state under them changes, and it
- * is why this is an icon rather than a label's text. An empty glyph reserves the box and draws
- * nothing.
- *
- * The glyph is resolved at paint time rather than when the icon is built: the editor tab strip asks
- * for a file's icon constantly, but the main toolbar's file widget asks once and keeps what it got,
- * so an icon that carried a fixed glyph froze there on whichever state happened to be current when
- * the tab was selected.
+ * Resolved at paint time, not at construction: the main toolbar's file widget asks for an icon once
+ * and keeps it, so a glyph baked in there freezes on whatever the state was when the tab opened.
  */
 class GlyphIcon(
     private val glyphOf: () -> String,
@@ -37,9 +29,6 @@ class GlyphIcon(
 
     override fun paintIcon(component: Component?, graphics: Graphics, x: Int, y: Int) {
         val glyph = glyphOf()
-        // Asking for the next repaint from the paint itself keeps the cost to the glyphs actually
-        // on screen: a spinner at its own frame rate, anything else only often enough to notice a
-        // state it cannot be told about.
         component?.repaint(if (isSpinnerFrame(glyph)) SPINNER_FRAME_MS else IDLE_RECHECK_MS)
         if (glyph.isEmpty()) return
 
@@ -64,5 +53,4 @@ class GlyphIcon(
 private const val BOX = 16
 private const val IDLE_RECHECK_MS = 1_000L
 
-/** Matches the weight the same glyph has in the session list, so the two read as one thing. */
 private const val GLYPH_TO_BOX = 0.9f

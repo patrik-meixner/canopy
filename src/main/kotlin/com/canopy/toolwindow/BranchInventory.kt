@@ -2,12 +2,6 @@ package com.canopy.toolwindow
 
 import com.canopy.util.ProcessHelper
 
-/**
- * A local branch and what a person needs to decide what to do with it.
- *
- * [worktreePath] is the worktree that has it checked out: git refuses to check a branch out twice,
- * so a branch already held elsewhere cannot become a new worktree, and saying so beats an error.
- */
 data class BranchEntry(
     val name: String,
     val upstream: String?,
@@ -69,7 +63,6 @@ internal fun parseBranches(output: String): List<BranchEntry> =
         }
         .toList()
 
-/** What decides the next action: where it is checked out, how far it has drifted, whether it is dead. */
 internal fun branchNote(branch: BranchEntry): String {
     val parts = mutableListOf<String>()
     branch.worktreePath?.let { parts.add("in " + it.substringAfterLast('/')) }

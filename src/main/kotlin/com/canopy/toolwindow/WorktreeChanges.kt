@@ -26,23 +26,10 @@ import java.util.IdentityHashMap
 import javax.swing.Action
 import javax.swing.JComponent
 
-/**
- * Computes the diff of a worktree, split into two groups:
- *  - COMMITTED: what the worktree branch changed relative to the base branch (merge-base..HEAD)
- *  - LOCAL: uncommitted changes in the working tree (tracked diff vs HEAD + untracked files)
- *
- * Changes are shown in a [SimpleChangesBrowser] — the same directory-tree + double-click-to-diff
- * component the Commit tool window uses — inside a modeless dialog with one tab per group.
- */
 object WorktreeChanges {
 
     enum class Group(val label: String) { COMMITTED("Committed"), LOCAL("Uncommitted") }
 
-    /**
-     * A single changed file. A null side means that side is empty (added on the right, deleted on the left).
-     * [workingVf] is the live working-tree file for LOCAL changes — resolved off the EDT so the diff can
-     * be edited and saved back to disk. Null for committed/deleted sides (read-only).
-     */
     data class FileChange(
         val group: Group,
         val path: String,
@@ -62,7 +49,6 @@ object WorktreeChanges {
             extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
         )
 
-    /** Contents of [path] at [rev], or null if git can't produce it (missing/binary/error). */
     private fun blob(dir: String, rev: String, path: String): String? {
         val res = git(dir, "show", "$rev:$path")
         return if (res.exitCode == 0) res.output else null
@@ -75,7 +61,6 @@ object WorktreeChanges {
         null // binary or non-UTF8 working file
     }
 
-    /** Resolve the live VirtualFile for a working-tree file. Off-EDT only (does a synchronous VFS refresh). */
     private fun resolveVf(dir: String, rel: String): VirtualFile? = try {
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(dir).resolve(rel))
     } catch (_: Exception) {
@@ -157,7 +142,6 @@ object WorktreeChanges {
         WorktreeChangesDialog(project, title, committed, local, meta).show()
     }
 
-    /** Prefer a local main/master; fall back to the remote default branch. Null if none found. */
     private fun detectBase(dir: String): String? {
         for (b in listOf("main", "master")) {
             if (git(dir, "rev-parse", "--verify", "--quiet", "refs/heads/$b").exitCode == 0) return b
@@ -170,7 +154,6 @@ object WorktreeChanges {
         return null
     }
 
-    /** Parse `git diff --name-status -M` into (statusCode, oldPath, newPath). */
     private fun parseNameStatus(out: String): List<Triple<Char, String, String>> =
         out.lines().filter { it.isNotBlank() }.mapNotNull { line ->
             val parts = line.split('\t')
@@ -204,7 +187,6 @@ private class WorktreeChangesDialog(
         return tabs
     }
 
-    /** Tree of changed files on the left, a live diff preview on the right (updates on selection). */
     private fun buildTab(changes: List<Change>): JComponent {
         // Directory-only grouping: the default "module" policy calls ProjectFileIndex.getModuleForFile,
         // which forces a workspace-index refresh on the EDT (SlowOperations violation). Build empty,
@@ -237,14 +219,10 @@ private class WorktreeChangesDialog(
             ?: (change.afterRevision ?: change.beforeRevision)?.file?.name ?: "file"
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(name)
 
-        // Left/base is always a historical snapshot — read-only.
         val left: DiffContent = fc?.left?.let { text ->
             factory.create(project, text, fileType).also { (it as? DocumentContent)?.document?.setReadOnly(true) }
         } ?: factory.createEmpty()
 
-        // Right is the working file for the Uncommitted group: back it with the live VirtualFile
-        // (pre-resolved off the EDT) so edits in the diff save straight to disk. Committed/base
-        // sides stay read-only text.
         val right: DiffContent = when {
             fc == null -> factory.createEmpty()
             fc.group == WorktreeChanges.Group.LOCAL && fc.workingVf != null ->

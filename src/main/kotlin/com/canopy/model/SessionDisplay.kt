@@ -12,15 +12,11 @@ data class SessionDisplay(
     val projectPath: String,
     val worktreeName: String? = null,
     val touchedRoots: Map<String, Int> = emptyMap(),
-    /** Where the agent was run: what separates two sessions sharing one repository. */
     val workingDirectory: String? = null,
     val startedAt: Instant? = null,
     val tail: TranscriptTail? = null,
-    /** When you last said something here. The list orders on this so an agent writing cannot move it. */
     val lastPromptAt: Instant? = null,
-    /** A tab that is open but has not started: it has no transcript and nothing to act on yet. */
     val isDraft: Boolean = false,
-    /** The session this row's shell was opened from, when the row is a shell rather than a session. */
     val terminalOwner: String? = null
 ) {
     val isTerminal: Boolean

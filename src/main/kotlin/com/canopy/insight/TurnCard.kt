@@ -12,12 +12,6 @@ import javax.swing.JPanel
 import javax.swing.JTextArea
 import javax.swing.SwingConstants
 
-/**
- * One turn as an island: what you asked, what came of it, and what it wrote.
- *
- * The files are the part worth having on screen - they are what a review is about - so they are
- * named rather than counted, and clicking one opens it.
- */
 class TurnCard(private val turn: ActivityTurn, private val onOpenFile: (String) -> Unit) : JPanel(BorderLayout()) {
 
     private val island = IslandPanel(BorderLayout(JBUI.scale(10), 0))

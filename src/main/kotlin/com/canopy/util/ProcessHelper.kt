@@ -3,13 +3,6 @@ package com.canopy.util
 import com.intellij.openapi.diagnostic.Logger
 import java.io.File
 
-/**
- * Shared process creation helper that ensures common binary locations are in PATH.
- *
- * When the IDE is launched from the macOS dock (not a terminal), the inherited PATH
- * is minimal (/usr/bin:/bin). This helper prepends common locations so that `claude`,
- * `git`, and other tools are discoverable.
- */
 object ProcessHelper {
 
     private val log = Logger.getInstance(ProcessHelper::class.java)
@@ -30,16 +23,7 @@ object ProcessHelper {
 
     data class ExecResult(val exitCode: Int, val output: String, val timedOut: Boolean = false)
 
-    /**
-     * Run a child process with a hard timeout.
-     *
-     * Reads stdout (with stderr merged) on a daemon thread so we can enforce a real
-     * deadline via process.waitFor(timeout). On timeout, the child is destroyForcibly
-     * and we return timedOut=true with whatever output was captured.
-     *
-     * NEVER call proc.inputStream.bufferedReader().readText() followed by waitFor() —
-     * readText blocks until EOF, which can be never. Use this helper instead.
-     */
+    /** Never `readText()` then `waitFor()`: readText blocks until EOF, which can be never. */
     fun execWithTimeout(
         command: Array<String>,
         timeoutMs: Long,
@@ -65,7 +49,6 @@ object ProcessHelper {
                     }
                 }
             } catch (_: Exception) {
-                // Stream closed via destroyForcibly; ignore.
             }
         }, "Canopy-proc-reader").apply { isDaemon = true; start() }
 
@@ -73,7 +56,6 @@ object ProcessHelper {
         if (!finished) {
             log.warn("Canopy: command timed out after ${timeoutMs}ms: ${command.joinToString(" ")}")
             process.destroyForcibly()
-            // Give the reader a moment to drain; if not, abandon it (daemon).
             reader.join(1000)
             return ExecResult(-1, synchronized(output) { output.toString() }, timedOut = true)
         }
@@ -82,9 +64,7 @@ object ProcessHelper {
     }
 
     fun builder(vararg command: String): ProcessBuilder {
-        // Resolve the binary to an absolute path using our augmented PATH,
-        // because ProcessBuilder uses the parent JVM's PATH to find commands,
-        // not the child environment we set.
+        // ProcessBuilder finds the command on the parent JVM's PATH, not on the child environment's.
         val resolved = if (command.isNotEmpty() && !command[0].contains(File.separator)) {
             val abs = which(command[0])
             if (abs != null) arrayOf(abs, *command.drop(1).toTypedArray()) else command
@@ -96,10 +76,6 @@ object ProcessHelper {
         }
     }
 
-    /**
-     * Searches for a binary in the augmented PATH directories.
-     * Returns the resolved path if found, or null. Results are cached.
-     */
     fun which(binary: String): String? {
         resolvedPaths[binary]?.let { return it }
         val env = augmentedEnv()

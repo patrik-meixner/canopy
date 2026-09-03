@@ -12,10 +12,6 @@ import java.awt.BorderLayout
 import java.awt.event.HierarchyEvent
 import javax.swing.JPanel
 
-/**
- * Shared plumbing for the tabs that read one session: follow the selected session tab, subscribe
- * to the parsed view, and tick only while actually on screen.
- */
 abstract class InsightTabPanel(protected val project: Project, parent: Disposable) : JPanel(BorderLayout()), Disposable {
 
     private val service = SessionInsightService.getInstance(project)
@@ -65,10 +61,6 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
         bindToSelection()
     }
 
-    /**
-     * A tab built while its tool window is already open receives no SHOWING_CHANGED, so the
-     * hierarchy listener alone left the first-opened tab watching nothing and never refreshing.
-     */
     override fun addNotify() {
         super.addNotify()
         if (isShowing) startWatching()
@@ -81,7 +73,6 @@ abstract class InsightTabPanel(protected val project: Project, parent: Disposabl
 
     protected abstract fun render(insight: SessionInsight)
 
-    /** Redraw what is already parsed, for a filter the tab owns rather than the transcript. */
     protected fun refresh() {
         drawn?.let(::render)
     }

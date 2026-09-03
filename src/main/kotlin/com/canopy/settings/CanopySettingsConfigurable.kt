@@ -20,7 +20,6 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
     private val state get() = CanopySettings.getInstance().state
 
-    /** What the index was last built against, so a change to it can ask for the rescan it needs. */
     private var excludedWorktreesWhenOpened = true
 
     override fun createPanel(): DialogPanel = panel {
@@ -88,7 +87,6 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
             row {
                 checkBox("Keep worktrees out of the index").bindSelected(state::excludeWorktreesFromIndex)
             }.rowComment("A worktree is a second copy of code the IDE has already indexed, and nobody edits in one. Leaving them in costs a full repository each and puts every file in Find in Files twice. Submodules are untouched. Changing this rescans the project.")
-
 
             row("Sweep no more often than every") {
                 intTextField(1..600).bindIntText(state::worktreeRefreshSeconds).columns(4)
@@ -159,7 +157,6 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
         }
     }
 
-    /** The bound panel writes the values; open windows still have to be told to redraw. */
     override fun apply() {
         super.apply()
         refreshOpenSessionChrome()

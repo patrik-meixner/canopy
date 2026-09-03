@@ -15,14 +15,6 @@ object ClaudeProcessDetector {
     @Volatile private var excludedPidsAt = 0L
 
     private val gson = Gson()
-    /**
-     * Detects externally running claude sessions (not launched by Canopy).
-     *
-     * Reads ~/.claude/sessions/{PID}.json to get session IDs directly.
-     * If a session file has a "name" field, also resolves it against known sessions
-     * (since --resume {name} may create a new session ID for the same named session).
-     * Excludes Canopy processes (identified by "canopy-settings" in args).
-     */
     fun detectExternalSessions(projectPath: String?, sessions: List<com.canopy.model.SessionDisplay> = emptyList()): Set<String> {
         if (projectPath == null) return emptySet()
         return try {
@@ -49,9 +41,6 @@ object ClaudeProcessDetector {
 
                             result.add(sessionId)
 
-                            // If the session file has a name, also mark all matching
-                            // sessions from our list (--resume {name} gets a new ID,
-                            // and multiple sessions can share a name)
                             val name = obj.get("name")?.asString
                             if (name != null) {
                                 sessions.filter { it.name == name || it.tabTitle == name }
@@ -66,17 +55,6 @@ object ClaudeProcessDetector {
         }
     }
 
-    /**
-     * PIDs that must never be treated as an "external" claude session, gathered from a
-     * single `ps` pass:
-     *  - Canopy-owned processes, identified by our injected `--settings canopy-settings-*`.
-     *  - Claude Code's own daemon/background pool (`daemon`, `bg-pty-host`, `bg-spare`),
-     *    which shares the project cwd but isn't a user's external terminal.
-     */
-    /**
-     * The whole process table, so it is asked for at most once every [EXCLUDED_PIDS_TTL_MS]. The
-     * processes it looks for are daemons the CLI keeps around, which do not come and go per second.
-     */
     private fun getSelfExcludedPids(): Set<Int> {
         val now = System.currentTimeMillis()
         excludedPids?.takeIf { now - excludedPidsAt < EXCLUDED_PIDS_TTL_MS }?.let { return it }
@@ -95,7 +73,6 @@ object ClaudeProcessDetector {
             )
             res.output.lines()
                 .map { it.trim() }
-                // Compiled once: this ran against every line of the process table.
                 .filter { line -> line.contains("canopy-settings") || SPARE_PROCESS.containsMatchIn(line) }
                 .mapNotNull { it.split(WHITESPACE, limit = 2).firstOrNull()?.toIntOrNull() }
                 .toSet()
@@ -104,11 +81,6 @@ object ClaudeProcessDetector {
         }
     }
 
-    /**
-     * In-JVM liveness check. This used to spawn `kill -0` per candidate session file, i.e. a
-     * process per session on every detection sweep (and the sweep runs on a timer); ProcessHandle
-     * answers the same question from the JVM with no child process at all.
-     */
     private fun isProcessAlive(pid: Int): Boolean {
         return try {
             ProcessHandle.of(pid.toLong()).map { it.isAlive }.orElse(false)

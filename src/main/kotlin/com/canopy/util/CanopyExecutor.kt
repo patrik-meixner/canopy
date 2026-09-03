@@ -7,20 +7,6 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * Bounded executor owned by Canopy. All background work that could block on
- * external state (git invocations, file scans, status polls) MUST run here, not
- * on Application.executeOnPooledThread, so we cannot starve the IDE-shared pool.
- *
- * The cap (settings.backgroundPoolMaxThreads, default 16) is sized to cover peak
- * per-tab refresh work — each open session tab can have up to 2 in-flight refreshes
- * (git toolbar + worktree status), gated by single-flight. A typical user with ~8
- * session tabs across IDE windows will burst to ~16. If the pool runs hot, a warning
- * is logged at submit time so the cap can be tuned upward in settings.
- *
- * Threads are daemon and named "Canopy-N" so they show up clearly in thread dumps.
- * Idle threads expire after 60 s; at idle the pool holds zero threads.
- */
 object CanopyExecutor {
 
     private val log = Logger.getInstance(CanopyExecutor::class.java)
@@ -80,8 +66,6 @@ object CanopyExecutor {
 
         val active = executor.activeCount
         if (active >= target) {
-            // Throttle the warning to once every 60 s so a saturated burst doesn't
-            // spam the log with one line per submission.
             val now = System.nanoTime()
             if (now - lastSaturationWarnNanos > 60_000_000_000L) {
                 lastSaturationWarnNanos = now

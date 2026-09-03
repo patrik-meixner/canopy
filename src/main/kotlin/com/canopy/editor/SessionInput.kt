@@ -5,19 +5,12 @@ import com.canopy.services.SessionRuntimeService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 
-/**
- * Answers a session without putting it on screen.
- *
- * A permission prompt blocks the agent until someone presses a key, and walking to the tab to
- * press one is the whole cost. It writes into a live PTY, it does not resume anything.
- */
 object SessionInput {
 
     private const val ACCEPT_DEFAULT = "\r"
 
     fun canSend(project: Project, sessionId: String): Boolean = runtimeFor(project, sessionId) != null
 
-    /** Text composed elsewhere, typed into the session as if you had typed it. */
     fun send(project: Project, sessionId: String, text: String) {
         val runtime = runtimeFor(project, sessionId)
         if (runtime == null) {
@@ -47,7 +40,6 @@ object SessionInput {
         SessionRuntimeService.getInstance(project).existing(sessionId)
 }
 
-/** Blank stays unsent: an empty reply would submit the prompt's default answer by accident. */
 internal fun replyPayload(typed: String): String? {
     val trimmed = typed.trim()
 

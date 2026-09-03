@@ -6,10 +6,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Keeps every agent alive for as long as the project is, so closing a tab stops being the same
- * thing as killing what it was showing.
- */
 @Service(Service.Level.PROJECT)
 class SessionRuntimeService : Disposable {
 
@@ -17,13 +13,8 @@ class SessionRuntimeService : Disposable {
 
     fun existing(key: String): SessionRuntime? = runtimes[key]
 
-    /** Every agent the project is holding, whether or not a tab is showing it. */
     fun all(): List<SessionRuntime> = runtimes.values.toList()
 
-    /**
-     * The view is handed to the caller before the process exists, because output can arrive while
-     * the terminal is still being built.
-     */
     fun create(
         key: String,
         file: com.canopy.editor.ClaudeSessionVirtualFile,
@@ -37,11 +28,9 @@ class SessionRuntimeService : Disposable {
         return runtime
     }
 
-    /** Filed under its session id once Claude has given the session one, its tab key until then. */
     fun keyOf(file: com.canopy.editor.ClaudeSessionVirtualFile): String? =
         runtimes.entries.firstOrNull { it.value.file === file }?.key
 
-    /** A session started inside Canopy is keyed on its tab until Claude gives it a real id. */
     fun rekey(from: String, to: String) {
         if (from == to) return
 

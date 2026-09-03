@@ -19,12 +19,6 @@ import javax.swing.JTable
 import javax.swing.SwingConstants
 import javax.swing.table.TableCellRenderer
 
-/**
- * A session as an island: what it wants, what it is called, and where and when it ran.
- *
- * One line of text at row height 26 left the state, the repository, the spend and the age of a
- * session competing for the same strip of pixels.
- */
 class SessionCardRenderer(
     private val getStatus: (String) -> SessionStatus,
     private val getAttention: (SessionDisplay) -> SessionAttention,
@@ -84,8 +78,6 @@ class SessionCardRenderer(
         val isRunning = getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
         val isHovered = row == hoveredRow()
         island.islandColor = InsightUi.cardBackground(selected, hovered = isHovered, running = isRunning)
-        // Only a running session has anything to stop, and only the row under the pointer is being
-        // acted on, so the rest of the list stays free of buttons.
         stop.icon = if (isRunning && isHovered) {
             if (isCloseHovered()) AllIcons.Actions.CloseHovered else AllIcons.Actions.Close
         } else {
@@ -101,11 +93,6 @@ class SessionCardRenderer(
         return outer
     }
 
-    /**
-     * A row is redrawn on hover, on selection, and ten times a second while an agent is working.
-     * Sorting a session's repositories and formatting its age on every one of those was the whole
-     * cost of drawing the list.
-     */
     private fun cachedMeta(session: SessionDisplay): String {
         val detail = getDetail(session)
         val key = "${session.sessionId}|${session.modified.toEpochMilli()}|$detail|${System.currentTimeMillis() / META_BUCKET_MS}"
@@ -123,7 +110,6 @@ class SessionCardRenderer(
             SessionStatus.AVAILABLE -> com.canopy.model.SessionPresence.Available
         }
 
-        // A row always carries a mark, so the column never changes width as a session changes state.
         return com.canopy.model.sessionGlyph(attention, presence, System.currentTimeMillis()) ?: "●"
     }
 
@@ -136,11 +122,6 @@ class SessionCardRenderer(
     }
 }
 
-/**
- * A name too long for the card is cut, and this is where the whole of it lives.
- *
- * An empty tooltip still opens a window, which is what put a blank grey box over the editor.
- */
 internal fun tooltipFor(session: SessionDisplay): String {
     val place = session.worktreeName ?: session.projectPath
     val lines = listOfNotNull(session.displayName.takeIf { it.isNotBlank() }, place.takeIf { it.isNotBlank() })
@@ -151,9 +132,7 @@ internal fun tooltipFor(session: SessionDisplay): String {
 private fun escape(text: String): String =
     text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-/** Where it worked, how long ago, and what it is costing, in that order of use. */
 internal fun metaLine(session: SessionDisplay, detail: String, nowMillis: Long = System.currentTimeMillis()): String {
-    // Nothing has happened in it yet, so an age and a repository would both be inventions.
     if (session.isDraft) return "Not started yet"
     val age = relativeAge(session.modified.toEpochMilli(), nowMillis)
 
@@ -162,13 +141,6 @@ internal fun metaLine(session: SessionDisplay, detail: String, nowMillis: Long =
 
 private const val MAX_PLACES = 2
 
-/**
- * The repositories a session actually wrote to, not the project it was launched from.
- *
- * A session started in one project routinely works in another checkout entirely, and one working
- * in a superproject usually writes to its submodules rather than to it. The list is capped so a
- * session touching six repositories cannot widen the card.
- */
 internal fun placesFor(session: SessionDisplay): String? {
     val worked = session.touchedRoots.entries
         .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
@@ -189,7 +161,6 @@ private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
 private const val DAY = 24 * HOUR
 
-/** Its own arithmetic: the platform's formatter needs a running application, and this is testable. */
 internal fun relativeAge(atMillis: Long, nowMillis: Long): String {
     val elapsed = nowMillis - atMillis
 

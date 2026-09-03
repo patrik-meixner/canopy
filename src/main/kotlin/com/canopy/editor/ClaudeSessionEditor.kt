@@ -59,15 +59,7 @@ class ClaudeSessionEditor(
     private val loadingStopped = AtomicBoolean(false)
     private val isDisposed = AtomicBoolean(false)
 
-    /**
-     * Whether this tab is actually on screen. Toolbar polling is gated on it: the periodic
-     * refresh used to run for every *open* tab, so N background tabs each kept re-querying git
-     * and re-reading the transcript for a toolbar nobody was looking at.
-     *
-     * Maintained from the EDT by a HierarchyListener and read from the poll threads.
-     */
     @Volatile private var tabShowing = false
-    /** Child of rootDisposable; covers everything created per PTY session so refresh() can dispose it without tearing down the editor. */
     private var sessionDisposable: Disposable = Disposer.newDisposable(rootDisposable, "claude-session")
     private var currentContent: JComponent? = null
     private var focusComponent: JComponent? = null
@@ -157,20 +149,16 @@ class ClaudeSessionEditor(
             }
         }
 
-        // The stage is the set of open tabs, so taking a session off it must be remembered; the
-        // IDE closing every tab on its way out is not the user taking anything off anything.
         Disposer.register(rootDisposable, Disposable {
             if (com.canopy.services.CanopyShutdown.isClosing()) return@Disposable
             if (com.canopy.services.SessionStaging.isRearranging(project)) return@Disposable
 
-            // A shell has no transcript to come back to, so closing its tab is the end of it.
             val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
             if (file.isShellSession) return@Disposable runtimes.stop(file.sessionKey)
 
             file.sessionId?.let { persistence.remove(it) }
         })
 
-        // Sync tab title when session names change (e.g. after /rename)
         val nameListener: () -> Unit = {
             file.sessionId?.let { sid ->
                 sessionService.getSessions().find { it.sessionId == sid }?.tabTitle?.let {
@@ -182,10 +170,7 @@ class ClaudeSessionEditor(
         sessionService.addChangeListener(nameListener)
         Disposer.register(rootDisposable, Disposable { sessionService.removeChangeListener(nameListener) })
 
-        // Show loading, then async-detect external status before deciding what to display
         val isResume = file.sessionId != null && file.forkFrom == null
-        // An agent this project is already holding is ours, however much it looks like a stray
-        // claude process from outside, and its scrollback is on screen the moment it reattaches.
         val isReattaching = com.canopy.services.SessionRuntimeService.getInstance(project)
             .existing(file.sessionId ?: file.sessionKey) != null
 
@@ -198,8 +183,6 @@ class ClaudeSessionEditor(
                 val isExternal = file.sessionId in externalIds
                 ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
-                    // Taken off the stage while the check was still running: starting an agent into
-                    // a disposed editor leaves a terminal nothing will ever draw.
                     if (isDisposed.get()) return@invokeLater
 
                     if (isExternal) {
@@ -241,7 +224,6 @@ class ClaudeSessionEditor(
             alignmentX = java.awt.Component.CENTER_ALIGNMENT
             isEnabled = false
             addActionListener {
-                // Reopen the tab fresh — avoids loading panel state issues
                 restartSession()
             }
         }
@@ -257,7 +239,6 @@ class ClaudeSessionEditor(
         loadingPanel.add(panel, BorderLayout.CENTER)
         stopLoading()
 
-        // Poll until the external session closes, then enable resume
         val sessionService = ClaudeSessionService.getInstance(project)
         val pollAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.POOLED_THREAD, sessionDisposable)
         lateinit var poll: Runnable
@@ -293,8 +274,6 @@ class ClaudeSessionEditor(
         val statusFile = statusService.createStatusFilePath(monitoringId)
         val notifyFile = statusService.createNotifyFilePath(monitoringId)
 
-        // Deliberately not a tab badge: the terminal is "active" whenever anything reaches it,
-        // including the status line redrawing itself, which lit every tab at once for no reason.
         val view = object : com.canopy.services.SessionRuntimeView {
             override fun onActiveChanged(isActive: Boolean) {
                 if (isActive) {
@@ -333,7 +312,6 @@ class ClaudeSessionEditor(
         ptyProcess = session.process
         focusComponent = session.widget.preferredFocusableComponent
 
-        // Normal exit (0): close the tab. Abnormal exit: keep it open so the error is visible.
         if (running == null) session.process.onExit().thenAccept { process ->
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
@@ -353,7 +331,6 @@ class ClaudeSessionEditor(
         sessionToolbar = toolbar
 
         terminalWidget = session.widget
-        // JediTerm draws the first glyph flush against the edge; the gap has to come from a wrapper.
         val terminalArea = JPanel(BorderLayout()).apply {
             border = JBUI.Borders.emptyLeft(8)
             background = session.widget.terminalPanel.background
@@ -362,21 +339,13 @@ class ClaudeSessionEditor(
 
         this.terminalArea = terminalArea
 
-        // Layout: toolbar(s) on top, splitter in center, context bar at bottom
         val gitDir = file.workingDir ?: project.basePath
-        // A worktree session's parent project is a git repo by definition, and its own
-        // dir may not exist yet (the CLI creates it asynchronously) — so don't gate the
-        // git toolbar on the dir's existence, or a brand-new worktree tab would never get
-        // one. The toolbar's refresh handles the not-yet-created window itself.
         val isGitRepo = file.isWorktreeSession ||
             (gitDir != null && java.io.File(gitDir, ".git").let { it.isDirectory || it.isFile })
 
         val topPanel = JPanel().apply {
             layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
             add(toolbar)
-            // Resolve the git dir at use time: a new-worktree tab has no workingDir
-            // until session linking fills it in, at which point the toolbar should
-            // switch from the main repo to the worktree.
             if (isGitRepo) {
                 gitToolbar = createGitToolbar { file.workingDir ?: project.basePath }
                 add(gitToolbar)
@@ -394,18 +363,14 @@ class ClaudeSessionEditor(
         currentContent = contentPanel
         loadingPanel.add(contentPanel, BorderLayout.CENTER)
 
-        // Drag-and-drop: accept files dropped onto the terminal
         setupDropTarget(session.widget.component)
 
-        // A terminal that was already running has its scrollback on screen the moment it is
-        // reattached, and an idle agent sends nothing to end a spinner with.
         if (running == null) {
             loadingPanel.startLoading()
             AppExecutorUtil.getAppScheduledExecutorService()
                 .schedule(::stopLoading, 5L, TimeUnit.SECONDS)
         }
 
-        // A shell tab has no Claude process behind it, so nothing would ever write a status file.
         if (running == null && !file.isShellSession) {
             statusService.startMonitoring(monitoringId, statusFile, notifyFile)
             Disposer.register(runtime.disposable, Disposable { statusService.stopMonitoring(monitoringId) })
@@ -418,7 +383,6 @@ class ClaudeSessionEditor(
                 file.modelId = status?.modelId
                 file.modelName = status?.modelName
                 file.contextPercent = status?.contextRemainingPercent
-                // Waiting for you is not news on the tab you are already looking at.
                 val selectedFile = FileEditorManager.getInstance(project).selectedEditor?.file
                 if (statusService.getNotifyState(sid) == "idle_prompt" && selectedFile == file) {
                     statusService.clearNotifyState(file.sessionId ?: monitoringId)
@@ -426,17 +390,12 @@ class ClaudeSessionEditor(
                 refreshTabTitle()
                 updateContextBar(status)
 
-                // Notifications are SessionAttentionNotifier's job: it is the only place that knows
-                // which states are worth a balloon, and two producers cannot honour one setting.
             }
         }
         statusService.addStatusListener(statusListener)
         Disposer.register(sessionDisposable, Disposable { statusService.removeStatusListener(statusListener) })
-        // Deliver cached state immediately — otherwise a re-instantiated editor
-        // stays invisible until the next distinct status update arrives.
         statusService.getStatus(monitoringId)?.let { statusListener(monitoringId, it) }
 
-        // Clear idle indicator when user switches to this tab
         val selectionListener = object : FileEditorManagerListener {
             override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
                 val id = file.sessionId ?: monitoringId
@@ -458,7 +417,6 @@ class ClaudeSessionEditor(
             FileEditorManagerListener.FILE_EDITOR_MANAGER, selectionListener
         )
 
-        // Link new/forked session to real session ID when it appears
         if (running == null && needsLinking && !file.isShellSession) {
             setupNewSessionLinking(sessionService, statusService, persistence, monitoringId, statusFile, notifyFile)
         }
@@ -527,7 +485,6 @@ class ClaudeSessionEditor(
         return toolbar
     }
 
-    /** Path to this session's transcript JSONL — resolves the worktree project dir when applicable. */
     private fun transcriptPath(): Path? {
         val sessionId = file.sessionId ?: return null
         val basePath = project.basePath ?: return null
@@ -563,10 +520,6 @@ class ClaudeSessionEditor(
         val gate = com.canopy.util.RefreshGate(TOOLBAR_REFRESH_FLOOR_MS)
         fun refresh(isForced: Boolean = false) {
             val gitDir = resolveGitDir() ?: return
-            // A brand-new worktree dir may not exist yet (the CLI creates it async). Until
-            // its `.git` link is in place, `git -C <dir>` would walk up to the parent
-            // project repo and report the wrong branch ("main"), so skip — the new-worktree
-            // dir poll re-fires refresh() the moment the worktree appears.
             if (!java.io.File(gitDir, ".git").exists()) return
             if (!gate.tryStart(isForced)) return
             com.canopy.util.CanopyExecutor.submit {
@@ -581,8 +534,6 @@ class ClaudeSessionEditor(
                         }
                     val changed = changedFiles.size
 
-                    // One parse per tick, shared by both consumers — this used to walk the
-                    // whole transcript twice.
                     val writes = writesSoFar()
                     val sessionFiles = writes.mapTo(HashSet()) { it.path }
                     val bySession = if (sessionFiles.isNotEmpty()) {
@@ -615,7 +566,6 @@ class ClaudeSessionEditor(
 
         refresh(isForced = true)
 
-        // Refresh on status updates (proxy for session activity)
         val statusService = ClaudeStatusService.getInstance(project)
         val listener: (String, ClaudeStatus?) -> Unit = { sid, _ ->
             if (sid == file.sessionId) refresh()
@@ -633,13 +583,11 @@ class ClaudeSessionEditor(
                     val pureFiles = ownedChangedFiles(gitDir, writesSoFar())
                     if (pureFiles.isEmpty()) return@executeOnPooledThread
 
-                    // Stage only the session's pure files
                     for (f in pureFiles) {
                         val rel = java.nio.file.Path.of(gitDir).relativize(java.nio.file.Path.of(f)).toString()
                         execGitWithExitCode(gitDir, "add", rel)
                     }
 
-                    // Ask Claude to generate the commit message and commit
                     val fileList = pureFiles.joinToString(", ") {
                         java.nio.file.Path.of(gitDir).relativize(java.nio.file.Path.of(it)).toString()
                     }
@@ -675,8 +623,6 @@ class ClaudeSessionEditor(
     }
 
     private fun createWorktreeToolbar(): JComponent {
-        // file.workingDir is read at use time, not captured: a tab born from
-        // "New worktree session" has no workingDir until session linking fills it in.
         val projectPath = project.basePath
 
         val branchLabel = JBLabel(ClaudeSessionIconProvider.TREE_ICON).apply {
@@ -687,7 +633,6 @@ class ClaudeSessionEditor(
             foreground = UIManager.getColor("Label.disabledForeground")
         }
 
-        // Track current branch names and ahead/behind for button state
         var currentWtBranch = ""
         var currentMainBranch = ""
         var currentAhead = 0
@@ -766,8 +711,6 @@ class ClaudeSessionEditor(
             }
         }
 
-        // These actions need the worktree path, which a brand-new worktree session
-        // doesn't have until the first message links it. Disabled until then.
         fun updateOpenButtons() {
             val hasPath = file.workingDir != null
             val noPathTip = "Available after the first message — the worktree hasn't been created yet"
@@ -787,10 +730,6 @@ class ClaudeSessionEditor(
             ApplicationManager.getApplication().invokeLater { updateOpenButtons() }
             val worktreePath = file.workingDir
             if (worktreePath == null || projectPath == null) return
-            // Brand-new worktree the CLI hasn't created yet (dir absent, session not linked):
-            // show a neutral "creating…" pending state rather than a red "missing", and don't
-            // run git against a nonexistent dir. The new-worktree dir poll re-fires this until
-            // the worktree appears, at which point the normal path renders the real branch.
             if (file.sessionId == null && !java.nio.file.Files.isDirectory(java.nio.file.Path.of(worktreePath))) {
                 ApplicationManager.getApplication().invokeLater {
                     statusLabel.text = worktreePath.substringAfterLast('/') + "  — creating…"
@@ -901,8 +840,6 @@ class ClaudeSessionEditor(
                                 )
                                 com.intellij.openapi.vfs.VirtualFileManager.getInstance().asyncRefresh {}
                             }
-                            // Conflicts aren't a failed run \u2014 the rebase started and is now
-                            // waiting on the user, so it's a warning with the way out.
                             result.output.contains("CONFLICT") -> showNotification(
                                 "Resolve in the terminal with git rebase --continue or --abort.",
                                 NotificationType.WARNING,
@@ -925,9 +862,6 @@ class ClaudeSessionEditor(
                         )
                     }
                 } finally {
-                    // Every exit path restores the label and re-syncs button state. Without this
-                    // a failure leaves the button reading "Update\u2026" and disabled until the next
-                    // status tick.
                     ApplicationManager.getApplication().invokeLater { updateButton.text = UPDATE_LABEL }
                     refreshBranchStatus(isForced = true)
                 }
@@ -974,7 +908,6 @@ class ClaudeSessionEditor(
 
         refreshBranchStatus(isForced = true)
 
-        // Refresh when session status changes (proxy for activity)
         val statusService = ClaudeStatusService.getInstance(project)
         val listener: (String, com.canopy.model.ClaudeStatus?) -> Unit = { sid, _ ->
             if (sid == file.sessionId) refreshBranchStatus()
@@ -1027,19 +960,10 @@ class ClaudeSessionEditor(
         return bar
     }
 
-    /**
-     * Wire periodic + tab-focus refresh for a toolbar's status callback.
-     * The ClaudeStatusService listener already covers the active case (status changes
-     * while Claude is working); this fills the gap when Claude is idle but external
-     * state (commits in the terminal, remote pulls, finished rebases) can drift.
-     */
     private fun wireToolbarRefresh(refresh: (isForced: Boolean) -> Unit) {
         val refreshAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.POOLED_THREAD, sessionDisposable)
         lateinit var tick: Runnable
         tick = Runnable {
-            // Only the visible tab polls. A background tab's toolbar is repainted by the
-            // selection listener below the moment it comes to the front, so nothing is stale
-            // by the time anyone can see it.
             if (tabShowing) refresh(false)
             val sec = com.canopy.settings.CanopySettings.getInstance().state.branchStatusRefreshSeconds
             if (sec > 0 && !refreshAlarm.isDisposed) {
@@ -1061,17 +985,6 @@ class ClaudeSessionEditor(
         )
     }
 
-    /**
-     * A brand-new worktree tab knows its directory up front (set eagerly at creation), but
-     * the CLI creates that directory asynchronously a moment after spawn. During that window
-     * nothing else refreshes the toolbars: pre-link status events are dropped (they key on
-     * sessionId, still null), and the periodic branch-status poll may be disabled. This
-     * bridges the gap with a short bounded poll that re-runs [refresh] until the worktree
-     * dir exists or the session links — then the normal triggers take over.
-     *
-     * No-ops for anything that isn't a not-yet-created new worktree (no workingDir, dir
-     * already present, or already linked), so it's safe to wire from every toolbar.
-     */
     private fun wireNewWorktreeDirPoll(refresh: (isForced: Boolean) -> Unit) {
         val worktreeDir = file.workingDir ?: return
         if (file.sessionId != null) return
@@ -1082,9 +995,6 @@ class ClaudeSessionEditor(
         lateinit var tick: Runnable
         tick = Runnable {
             refresh(true)
-            // Stop once the worktree exists (refresh above just rendered it), once linking
-            // wired the normal triggers, or after a backstop cap (~30s) so an abandoned
-            // creation doesn't poll forever.
             val done = java.io.File(worktreeDir).isDirectory ||
                 file.sessionId != null ||
                 attempts.incrementAndGet() >= 40
@@ -1095,11 +1005,6 @@ class ClaudeSessionEditor(
         if (!alarm.isDisposed) alarm.addRequest(tick, 750)
     }
 
-    /**
-     * Failures route to the sticky group so they stay on screen until dismissed; successes use
-     * the auto-hiding one. A single group can't express that difference, and a failure the user
-     * has to act on must not disappear on a timer.
-     */
     private fun showNotification(message: String, type: NotificationType, title: String = "") {
         val group = if (type == NotificationType.ERROR || type == NotificationType.WARNING) {
             "Canopy Errors"
@@ -1124,23 +1029,9 @@ class ClaudeSessionEditor(
             timeoutMs = GIT_TIMEOUT_MS,
             extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
         )
-        // timedOut must survive the narrowing: a hung git exits -1 with partial output, which is
-        // otherwise indistinguishable from an ordinary failure and gets reported as one.
         return GitResult(res.exitCode, res.output, res.timedOut)
     }
 
-    /**
-     * Build the body of a git failure notification.
-     *
-     * The governing rule is **git's own words are the message**. We only *prepend* an
-     * interpretation when the output matches a pattern we are confident about; anything
-     * unrecognised falls through to git's text rather than to a guess.
-     *
-     * This inverts the previous behaviour, which asserted one specific cause
-     * ("Fast-forward not possible — update worktree first") for every non-zero exit and
-     * discarded the real output — so a dirty tree, a stale `index.lock`, a missing branch, or a
-     * timeout all told the user to go fix something unrelated.
-     */
     private fun gitFailureMessage(result: GitResult): String {
         if (result.timedOut) {
             return "Timed out after ${GIT_TIMEOUT_MS / 1000}s. The repository may be busy, " +
@@ -1158,15 +1049,11 @@ class ClaudeSessionEditor(
             output.take(GIT_OUTPUT_LIMIT) + if (output.length > GIT_OUTPUT_LIMIT) "…" else ""
         }
 
-        // Notification content is rendered as HTML, so git's output has to be escaped or angle
-        // brackets in a branch/path silently swallow the rest of the line.
         val escaped = com.intellij.openapi.util.text.StringUtil.escapeXmlEntities(detail)
             .replace("\n", "<br/>")
         return if (hint != null) "$hint<br/><br/>$escaped" else escaped
     }
 
-    // Only the writes are kept, which measured about two percent of transcript bytes — cheap to
-    // hold, and it saves re-reading the whole file on every toolbar tick.
     private val transcriptJson = com.google.gson.Gson()
     private val writesTail = com.canopy.util.JsonlTailReader()
     private val sessionWrites = mutableListOf<com.canopy.session.FileWrite>()
@@ -1176,7 +1063,6 @@ class ClaudeSessionEditor(
     private fun writesSoFar(): List<com.canopy.session.FileWrite> {
         val transcript = transcriptPath()?.takeIf { java.nio.file.Files.exists(it) } ?: return emptyList()
 
-        // Rebound to another transcript: nothing read from the old one still applies.
         if (transcript != writesFrom) {
             writesFrom = transcript
             writesTail.reset()
@@ -1194,10 +1080,6 @@ class ClaudeSessionEditor(
         return sessionWrites.toList()
     }
 
-    /**
-     * The changed files this session can be said to own, which is what may be committed on its
-     * behalf without asking. Git and the filesystem are read here; deciding is [ownedFiles].
-     */
     private fun ownedChangedFiles(gitDir: String, writes: List<com.canopy.session.FileWrite>): List<String> {
         if (writes.isEmpty()) return emptyList()
 
@@ -1223,7 +1105,6 @@ class ClaudeSessionEditor(
     private fun createModelDropdown(): JComponent {
         val aliases = arrayOf("sonnet", "opus", "haiku", "sonnet[1m]", "opus[1m]", "opusplan")
 
-        // Map model IDs from the status line to the alias used in /model
         fun idToAlias(modelId: String): String? {
             val id = modelId.lowercase()
             val has1m = id.contains("[1m]")
@@ -1239,7 +1120,6 @@ class ClaudeSessionEditor(
         combo.isFocusable = false
         var updating = false
 
-        // Set initial selection from current status
         file.modelId?.let { idToAlias(it) }?.let { combo.selectedItem = it }
 
         combo.addActionListener {
@@ -1248,7 +1128,6 @@ class ClaudeSessionEditor(
             sendToTerminal("/model $selected\r")
         }
 
-        // Sync selection when status updates report a different model
         val statusService = ClaudeStatusService.getInstance(project)
         val listener: (String, ClaudeStatus?) -> Unit = listener@{ sid, status ->
             val monitoringId = file.sessionId ?: return@listener
@@ -1314,10 +1193,6 @@ class ClaudeSessionEditor(
         })
     }
 
-    /**
-     * A terminal whose process is gone still accepts keystrokes and does nothing with them, which
-     * reads as the tab having frozen. Saying so, and offering the way back, is the difference.
-     */
     private fun showProcessEnded(code: Int) {
         if (endedBanner != null) return
         val reason = if (code == 143) "The agent was stopped." else "The agent exited with code $code."
@@ -1325,7 +1200,6 @@ class ClaudeSessionEditor(
         val restart = javax.swing.JButton("Restart Session").apply {
             addActionListener {
                 val manager = FileEditorManager.getInstance(project)
-                // A fresh file, because the old one is bound to a terminal that has already gone.
                 val reopened = ClaudeSessionVirtualFile(file.baseName, sessionId = file.sessionId).also {
                     it.workingDir = file.workingDir
                     it.isWorktreeSession = file.isWorktreeSession
@@ -1347,7 +1221,6 @@ class ClaudeSessionEditor(
         currentContent?.repaint()
     }
 
-    /** The Messages tab searches this buffer to jump back to a message. */
     fun terminal(): JBTerminalWidget? = terminalWidget
 
     fun sendToTerminal(text: String) {
@@ -1395,15 +1268,9 @@ class ClaudeSessionEditor(
                     .rekey(file.sessionKey, candidate.sessionId)
                 com.canopy.services.rememberOpenTerminals(project, "sessionLinked")
 
-                // Migrate status monitoring from temp to real session ID.
-                // Keep the original temp file paths — CANOPY_STATUS_FILE/NOTIFY_FILE
-                // were baked into the process env at spawn, so claude keeps writing to
-                // the temp paths for the life of the process.
                 statusService.stopMonitoring(tempMonitoringId)
                 statusService.startMonitoring(candidate.sessionId, tempStatusFile, notifyFile)
 
-                // Force: a worktree tab's title doesn't change on link (still the
-                // worktree name), but the tab tooltip now has a session ID to show.
                 refreshTabTitle(force = true)
                 sessionService.removeChangeListener(linkListener)
             }
@@ -1422,7 +1289,6 @@ class ClaudeSessionEditor(
         ApplicationManager.getApplication().invokeLater {
             val usedPercent = status?.contextUsedPercent
             if (usedPercent == null) {
-                // Don't hide the bar if it was previously shown — keep last known values
                 return@invokeLater
             }
             val pct = usedPercent.toInt().coerceIn(0, 100)
@@ -1483,12 +1349,6 @@ class ClaudeSessionEditor(
         }
     }
 
-    /**
-     * Tear down the PTY and all session-scoped state, then re-run startTerminalSession()
-     * inside the same FileEditor. Keeping the editor instance means the tab stays put —
-     * we don't have to close+reopen the file (which would append the tab to the end of
-     * the strip).
-     */
     private fun restartSession() {
         try {
             ptyProcess?.destroyForcibly()
@@ -1505,8 +1365,6 @@ class ClaudeSessionEditor(
         maxEffortButton = null
         lastTitle = null
 
-        // Reset class-level UI components so they don't show stale state until the new PTY reports back.
-        // (reconnectButton is rebuilt fresh inside createToolbar — nothing to reset on it here.)
         hasContextBarData = false
         contextBar.isVisible = false
         contextProgress.value = 0
@@ -1518,9 +1376,6 @@ class ClaudeSessionEditor(
         versionLabel.text = ""
         versionLinkTarget = null
 
-        // JBLoadingPanel delegates add() into its inner contentPanel but inherits
-        // Container.remove(), so removing via loadingPanel itself is a silent no-op —
-        // the dead session's UI would stay stacked above the new one, eating clicks.
         currentContent?.let { loadingPanel.contentPanel.remove(it) }
         currentContent = null
 
@@ -1533,11 +1388,8 @@ class ClaudeSessionEditor(
         loadingPanel.repaint()
 
         startTerminalSession()
-        // Cover the external→resume path: showExternalPanel skipped persistence.add, but now we have a live PTY.
         file.sessionId?.let { OpenSessionsPersistence.getInstance(project).add(it) }
 
-        // Nothing re-queries getPreferredFocusedComponent on an in-place swap, so
-        // without this the prompt isn't typeable until the user switches tabs.
         focusComponent?.let { fc ->
             ApplicationManager.getApplication().invokeLater {
                 com.intellij.openapi.wm.IdeFocusManager.getInstance(project).requestFocus(fc, true)
@@ -1559,9 +1411,6 @@ class ClaudeSessionEditor(
     }
 
     private fun refreshTabTitle(force: Boolean = false) {
-        // The status glyph now lives in the tab icon, not the title text, so the name alone
-        // no longer changes when Claude's state cycles. Key the dedup on glyph + name so a
-        // pure status change still triggers updateFilePresentation (which refreshes the icon).
         val signature = "${file.statusGlyph(project)} ${file.computeTabTitle()}"
         if (!force && signature == lastTitle) return
         lastTitle = signature
@@ -1575,13 +1424,6 @@ class ClaudeSessionEditor(
     override fun getPreferredFocusedComponent(): JComponent? = focusComponent
     override fun getName(): String = file.computeTabTitle()
     override fun isModified(): Boolean = false
-    /**
-     * The highlighting daemon puts every selected editor in its active set, then restarts itself
-     * immediately — hundreds of times a second — when it cannot build a highlighting session for
-     * one. A session tab has no document to highlight, and this is how the platform is told so:
-     * an editor that declares its embedded text editors contributes those instead of itself, and
-     * an empty list contributes nothing.
-     */
     override fun getEmbeddedEditors(): List<com.intellij.openapi.editor.Editor> = emptyList()
 
     override fun isValid(): Boolean = true
@@ -1602,20 +1444,12 @@ class ClaudeSessionEditor(
         private const val GIT_TIMEOUT_MS = 15_000L
         private const val GIT_OUTPUT_LIMIT = 400
 
-        /** Status lines change several times a turn; a toolbar that ran git on each one ran it constantly. */
         private const val TOOLBAR_REFRESH_FLOOR_MS = 5_000L
 
-        // Worktree toolbar button labels. A running operation appends [BUSY_SUFFIX]; the label is
-        // restored in a finally so it can't stick on a failure or an early return.
         private const val UPDATE_LABEL = "↓ Update"
         private const val MERGE_LABEL = "↑ Merge to project"
         private const val BUSY_SUFFIX = "…"
 
-        /**
-         * Substring → interpretation, checked in order, first match wins. Deliberately short:
-         * every entry is a failure mode we can name with confidence. Anything not listed shows
-         * git's raw output, which is a better answer than a confident wrong one.
-         */
         private val GIT_FAILURE_HINTS: List<Pair<String, String>> = listOf(
             "not possible to fast-forward" to
                 "The project branch has commits the worktree doesn't. Update the worktree first, then merge.",

@@ -4,9 +4,6 @@ import com.intellij.terminal.pty.PtyProcessTtyConnector
 import com.pty4j.PtyProcess
 import java.nio.charset.Charset
 
-/**
- * Strips the escape sequences JediTerm does not understand, which it otherwise logs as warnings.
- */
 open class FilteringPtyConnector(
     process: PtyProcess,
     charset: Charset
@@ -14,11 +11,9 @@ open class FilteringPtyConnector(
 
     private val trace = PtyTrace.of(process)
 
-    /** Read from and written to by the single reader thread JediTerm runs. */
     private var held = ""
     private val firstOutput = java.util.concurrent.atomic.AtomicBoolean(false)
 
-    /** Runs once the far end has said anything, which for a shell means its prompt is up. */
     var onFirstOutput: (() -> Unit)? = null
 
     companion object {

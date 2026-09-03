@@ -11,12 +11,6 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 
-/**
- * Jumps to the next session tab that stopped and is waiting, cycling from the current one.
- *
- * With several agents running, spotting which one went quiet is the expensive part; scanning
- * tabs by eye is what this replaces.
- */
 class FocusWaitingSessionAction : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {

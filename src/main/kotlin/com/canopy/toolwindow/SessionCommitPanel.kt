@@ -18,14 +18,6 @@ import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.KeyStroke
 
-/**
- * The Commit window's message box, where the review already is.
- *
- * A modal input dialog for a commit message hides the tree behind it, which is the one thing worth
- * looking at while writing one. This is the platform's own editor, so it brings the commit-message
- * highlighting, the history and the inspections with it - laid out the way the Commit window lays
- * it out, because that is where the habit was learned.
- */
 class SessionCommitPanel(
     private val project: Project,
     parent: Disposable,
@@ -46,16 +38,12 @@ class SessionCommitPanel(
     init {
         Disposer.register(parent, message)
         isVisible = false
-        // The same ground the tree above it stands on, and the same hairline the editor draws for
-        // itself, so the panel reads as the bottom of one surface rather than a strip stuck on.
         background = InsightUi.emptyBackground()
         border = JBUI.Borders.compound(
             JBUI.Borders.customLineTop(JBColor.border()),
             JBUI.Borders.empty(InsightUi.GAP)
         )
         message.preferredSize = Dimension(0, JBUI.scale(EDITOR_HEIGHT))
-        // The Commit window's editor sits in a rounded hairline with the text held off it. Left to
-        // itself out here the field draws a square line and puts the caret against the corner.
         message.border = JBUI.Borders.compound(
             RoundedLineBorder(JBColor.border(), JBUI.scale(EDITOR_ARC), 1),
             JBUI.Borders.empty(EDITOR_PADDING)
@@ -84,7 +72,6 @@ class SessionCommitPanel(
         BUTTON_GAP,
         listOf(
             flat("Commit") { accept(AfterCommit.Stay) },
-            // The one with a fill, as in the Commit window: the button that finishes the job.
             JButton("Commit and Push").apply { addActionListener { accept(AfterCommit.Push) } },
             flat("Cancel") { hidePanel() }
         )
@@ -96,10 +83,8 @@ class SessionCommitPanel(
         addActionListener { onClick() }
     }
 
-    /** The message survives being cancelled: a commit abandoned to look at a diff is not rewritten. */
     fun ask(text: String) {
         caption.text = text
-        // What the Commit window offers: the last message you wrote, ready to be edited or typed over.
         if (message.text.isEmpty()) message.setText(lastCommitMessage.orEmpty())
         isVisible = true
         revalidate()
@@ -114,7 +99,6 @@ class SessionCommitPanel(
         onCancel()
     }
 
-    /** An empty message is not a commit, and git would refuse it anyway. */
     private fun accept(after: AfterCommit) {
         val typed = message.text.trim()
         if (typed.isEmpty()) return message.requestFocusInMessage()

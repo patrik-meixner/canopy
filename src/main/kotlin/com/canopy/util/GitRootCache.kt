@@ -4,13 +4,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Which working tree a directory belongs to, remembered for the life of the IDE.
- *
- * Finding it means walking up to the nearest `.git`, one existence check per level. A session
- * touches thousands of files across a few hundred directories, and the answer for a directory
- * cannot change while the IDE is open, so it is worth asking the filesystem exactly once.
- */
 object GitRootCache {
 
     private val roots = ConcurrentHashMap<Path, String>()

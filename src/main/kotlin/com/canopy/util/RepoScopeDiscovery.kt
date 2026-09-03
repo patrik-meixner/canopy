@@ -9,7 +9,6 @@ object RepoScopeDiscovery {
     private const val SHA_LENGTH = 40
     private const val UNINITIALIZED_MARKER = '-'
 
-    /** The superproject plus every initialized submodule, superproject first. */
     fun discover(projectBasePath: String): List<RepoScope> {
         val superproject = scopeAt(projectBasePath, isSubmodule = false) ?: return emptyList()
 
@@ -45,7 +44,6 @@ object RepoScopeDiscovery {
             .map { Path.of(projectBasePath, it).toAbsolutePath().toString() }
     }
 
-    /** Submodule paths from `git submodule status`, minus the ones git reports as not checked out. */
     internal fun initializedSubmodulePaths(statusOutput: String): List<String> =
         statusOutput.lines()
             .filter { it.isNotBlank() }

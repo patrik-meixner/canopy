@@ -8,12 +8,6 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import java.nio.file.Path
 
-/**
- * One pass over a session's transcript feeding every tab.
- *
- * Four panels each tailing the same multi-megabyte file would read it four times a tick; the tabs
- * are views over this, not readers of their own.
- */
 class SessionInsightReader {
 
     private val gson = Gson()
@@ -49,7 +43,6 @@ class SessionInsightReader {
         return fresh
     }
 
-    /** The shared cache, so the walk up to a .git happens once per directory for the whole plugin. */
     private fun repositoryOf(path: String): String {
         val directory = Path.of(path).parent ?: return OUTSIDE_ANY_REPOSITORY
         val root = com.canopy.util.GitRootCache.rootOf(directory) ?: return OUTSIDE_ANY_REPOSITORY
@@ -106,7 +99,6 @@ class SessionInsightReader {
 
 private const val DETAIL_LENGTH = 120
 
-/** What the call was aimed at: the file for an edit, the command for a shell, the prompt for an agent. */
 internal fun activityDetail(tool: String, input: JsonObject?): String {
     if (input == null) return ""
     val keys = when (tool) {

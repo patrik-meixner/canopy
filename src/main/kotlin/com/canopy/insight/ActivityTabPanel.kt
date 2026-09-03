@@ -13,13 +13,6 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import java.awt.BorderLayout
 import java.nio.file.Path
 
-/**
- * What the session did, turn by turn.
- *
- * A flat log of tool calls answers "what calls were made", which nobody asks: it buries the one
- * edit under twelve greps and reads as the terminal again, only worse. A turn is the unit the work
- * was asked for in, so it is the unit it reads back in.
- */
 class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
     private val cards = CardListPanel(

@@ -10,11 +10,6 @@ import javax.swing.Icon
 
 class ClaudeSessionIconProvider : FileIconProvider {
 
-    /**
-     * State lives in a fixed-size badge beside the agent's mark rather than in the title text: a
-     * glyph has a variable advance width, so putting it in the text resized the tab and reflowed
-     * the whole strip every time the state changed. The badge is always there, idle or not.
-     */
     override fun getIcon(file: VirtualFile, flags: Int, project: Project?): Icon? {
         if (file !is ClaudeSessionVirtualFile) return null
 
@@ -25,7 +20,6 @@ class ClaudeSessionIconProvider : FileIconProvider {
     }
 
     companion object {
-        /** A session tab runs claude; a shell tab runs whatever the user typed, so it says terminal instead. */
         private val CLAUDE_ICON = IconLoader.getIcon("/icons/claude.svg", ClaudeSessionIconProvider::class.java)
         private val SHELL_ICON: Icon = com.intellij.icons.AllIcons.Debugger.Console
         val TREE_ICON: Icon = IconLoader.getIcon("/icons/worktree.svg", ClaudeSessionIconProvider::class.java)

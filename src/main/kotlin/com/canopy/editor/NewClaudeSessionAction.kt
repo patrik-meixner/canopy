@@ -7,7 +7,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.DumbAware
 
-/** The same thing the sidebar's + does, for when the sidebar is not open. */
 class NewClaudeSessionAction : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {
@@ -26,5 +25,4 @@ class NewClaudeSessionAction : AnAction(), DumbAware {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 }
 
-/** Claude names a session from what it is asked, and the tab takes that name the moment it links. */
 const val UNNAMED_SESSION_TITLE = "New session"

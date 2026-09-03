@@ -45,10 +45,6 @@ class SessionListPanel(
     private val worktreeMode: Boolean = false
 ) : Disposable {
 
-    // Worktree mode only: git status for the Git column, swept in the background under the
-    // polling gates in WorktreeStatusCache. Plain sessions all share the project dir, so the
-    // same badge on every row would be noise. Assigned in init (it needs `this` as its
-    // Disposable parent and the table model as its repaint target).
     private var worktreeStatus: WorktreeStatusCache? = null
 
     private val tableModel = SessionTableModel(
@@ -79,10 +75,7 @@ class SessionListPanel(
         override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): Component {
             val c = super.prepareRenderer(renderer, row, column)
             val session = tableModel.getItem(convertRowIndexToModel(row))
-            // The Git column colours itself by git state (amber = uncommitted); the
-            // session-status colouring below would flatten that back to the default.
             if (worktreeMode && convertColumnIndexToModel(column) == GIT_COLUMN_MODEL_INDEX) return c
-            // The card carries its own tooltip; a table-level one competes with it and goes stale.
             if (!worktreeMode) return c
             when (getStatus(session.sessionId)) {
                 SessionStatus.OPEN_EXTERNALLY -> {
@@ -119,7 +112,6 @@ class SessionListPanel(
 
     private var allSessions: List<SessionDisplay> = emptyList()
 
-    /** On-screen state and sweep floor for the orphaned-worktree scan (worktree mode only). */
     @Volatile private var panelVisible = false
     @Volatile private var lastOrphanSweep = 0L
     private val spinner = javax.swing.Timer(SPINNER_FRAME_MS.toInt()) { repaintWorkingRows() }
@@ -128,7 +120,6 @@ class SessionListPanel(
     private var spinningFoundAt = 0L
     private val changeListener: () -> Unit = { reloadData() }
 
-    // Orphaned-worktree section (worktree mode only): dirs under .claude/worktrees/ with no session.
     private val orphanListModel = javax.swing.DefaultListModel<OrphanWorktree>()
     private val orphanList = com.intellij.ui.components.JBList(orphanListModel)
     private val orphanPanel = JPanel(BorderLayout())
@@ -144,7 +135,6 @@ class SessionListPanel(
         setLoadingText("Reading transcripts")
         isOpaque = false
     }
-    // Table on top, orphan list on bottom; user-draggable so orphans never crowd out sessions.
     private val orphanSplitter = com.intellij.ui.OnePixelSplitter(true, 0.7f)
 
     init {
@@ -181,11 +171,9 @@ class SessionListPanel(
 
     fun getComponent(): JComponent = rootPanel
 
-    /** JTable has no hover state of its own, so the row under the cursor is tracked here. */
     private var hoveredRow: Int = -1
     private var closeHovered = false
 
-    /** The session the editor is showing, which survives the rows being replaced under it. */
     private var selectedSessionId: String? = null
 
     private fun trackHover() {
@@ -204,7 +192,6 @@ class SessionListPanel(
         table.addMouseListener(motion)
     }
 
-    /** A press on the stop button of a running row, which is the only row that draws one. */
     private fun isOverClose(event: MouseEvent): Boolean {
         if (worktreeMode) return false
 
@@ -241,11 +228,8 @@ class SessionListPanel(
         table.setShowGrid(false)
         table.intercellSpacing = java.awt.Dimension(0, 0)
         table.rowHeight = if (worktreeMode) JBUI.scale(26) else CARD_ROW_HEIGHT
-        // One column called "Name" is a header that says nothing; the worktree mode has real ones.
         if (!worktreeMode) table.tableHeader = null
 
-        // 3-state click cycle: asc → desc → unsorted (= model order, which the service already
-        // returns sortedByDescending { modified } so unsorted == MRU).
         val sorter = object : javax.swing.table.TableRowSorter<SessionTableModel>(tableModel) {
             override fun toggleSortOrder(column: Int) {
                 val keys = sortKeys
@@ -263,8 +247,6 @@ class SessionListPanel(
         }
         if (worktreeMode) {
             sorter.setComparator(2, String.CASE_INSENSITIVE_ORDER)  // Worktree
-            // Git (3) needs no comparator: its ColumnInfo declares Integer and ranks on
-            // uncommitted-then-unmerged, so one click sorts the neglected worktrees to the top.
         }
         // The Git column needs no comparator: its ColumnInfo declares Integer
         // via getColumnClass(), so TableRowSorter uses natural Comparable ordering. (Declaring the
@@ -293,8 +275,6 @@ class SessionListPanel(
         centerPanel.isOpaque = false
         table.isOpaque = false
 
-        // A worktree has to be named before it can exist; a session names itself from what it is
-        // asked, and can be renamed afterwards, so asking first only stands between + and a prompt.
         val newSessionAction = if (worktreeMode) {
             object : AnAction("New Worktree", "Start a new Claude session in a worktree", com.canopy.editor.ClaudeSessionIconProvider.TREE_ICON) {
                 override fun actionPerformed(e: AnActionEvent) {
@@ -312,7 +292,6 @@ class SessionListPanel(
         val refreshAction = object : AnAction("Refresh", "Refresh session list", AllIcons.Actions.Refresh) {
             override fun actionPerformed(e: AnActionEvent) {
                 sessionService.refresh()
-                // Explicit user action: skip the throttles so both update now.
                 worktreeStatus?.requestRefresh(force = true)
                 if (worktreeMode) refreshOrphans(force = true)
             }
@@ -343,7 +322,6 @@ class SessionListPanel(
             rootPanel.add(loadingPanel, BorderLayout.CENTER)
         }
         loadingPanel.add(tableScroll, BorderLayout.CENTER)
-        // The link belongs where the list runs out, not in a toolbar above rows it says nothing about.
         loadingPanel.add(moreRow, BorderLayout.SOUTH)
     }
 
@@ -412,7 +390,6 @@ class SessionListPanel(
         PopupHandler.installPopupMenu(orphanList, group, "ClaudeOrphanWorktreeMenu")
     }
 
-    /** A row is a session, and clicking one opens it: selecting without opening was never useful. */
     private fun setupClickToOpen() {
         table.addMouseListener(object : java.awt.event.MouseAdapter() {
             override fun mouseReleased(event: MouseEvent) {
@@ -428,7 +405,6 @@ class SessionListPanel(
                 if (getStatus(session.sessionId) == SessionStatus.OPEN_EXTERNALLY) return
 
                 activate(session, isAdditive = event.isMetaDown)
-                // A draft is keyed on its tab, and opening it by row id would start a second session.
                 if (session.isDraft) return
 
                 onSessionSelected(session)
@@ -436,10 +412,7 @@ class SessionListPanel(
         })
     }
 
-    /** The list is a map of what is open; the session on screen has to stay findable on it. */
     fun selectSession(sessionId: String?) {
-        // Every tab opened or closed to build the stage reports itself as the selection, so
-        // following them one by one walked the highlight across the terminals on the way past.
         if (sessionId == null || com.canopy.services.SessionStaging.isRearranging(project)) return
 
         selectedSessionId = sessionId
@@ -617,8 +590,6 @@ class SessionListPanel(
                         return
                     }
                     val wt = session.worktreeName
-                    // In worktree mode, if this is the only session referencing the worktree, remove
-                    // the worktree too rather than leaving it orphaned.
                     val lastForWorktree = worktreeMode && wt != null &&
                         allSessions.count { it.worktreeName == wt } <= 1
                     val message = if (lastForWorktree) {
@@ -645,10 +616,6 @@ class SessionListPanel(
         PopupHandler.installPopupMenu(table, group, "ClaudeSessionsContextMenu")
     }
 
-    /**
-     * The quiet half of a row: which repos the session wrote to, plus live context and spend for
-     * the ones still running. Everything here is already in memory, so it costs no extra work.
-     */
     private fun sessionDetail(session: SessionDisplay): String {
         val live = com.canopy.services.ClaudeStatusService.getInstance(project).getStatus(session.sessionId)
         val context = live?.contextUsedPercent?.let { "${it.toInt()}%" }
@@ -664,12 +631,6 @@ class SessionListPanel(
             getStatus(session.sessionId) == SessionStatus.OPEN_IN_PLUGIN
     )
 
-    /**
-     * The selected session, or null when the selected row is only an open tab.
-     *
-     * A draft has no transcript, no id and nothing on disk, so everything that acts on a session -
-     * fork, delete, resume, rename, reply - has nothing to act on and stays off.
-     */
     private fun selectedSession(): SessionDisplay? = selectedRow()?.takeUnless { it.isDraft || it.isTerminal }
 
     private fun selectedRow(): SessionDisplay? {
@@ -678,18 +639,6 @@ class SessionListPanel(
         return tableModel.getItem(table.convertRowIndexToModel(row))
     }
 
-    /**
-     * Discovery parses every transcript, so it must not run on the EDT. The spinner shows only
-     * while the list is still empty; afterwards refreshes swap the rows underneath silently,
-     * because a transcript write triggers this on every message.
-     */
-    /**
-     * The draft row is keyed on its tab; the real row is keyed on the session.
-     *
-     * The moment a session starts, the draft stops being one and its row is replaced by the real
-     * one - so a selection still pointing at the tab's key would find nothing and go blank. For a
-     * session opened from the list the two keys are the same and this changes nothing.
-     */
     private fun followLinkedDraft() {
         val key = selectedSessionId ?: return
         val linked = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
@@ -700,12 +649,6 @@ class SessionListPanel(
         selectedSessionId = linked
     }
 
-    /**
-     * A tab that is open and has not started yet, as a row.
-     *
-     * Worktree mode lists sessions belonging to a worktree, and a draft belongs to none until it
-     * has run, so it only ever appears in the plain list.
-     */
     private fun openDrafts(): List<SessionDisplay> {
         if (worktreeMode) return emptyList()
 
@@ -716,10 +659,6 @@ class SessionListPanel(
         return draftRows(open, project.basePath.orEmpty(), System.currentTimeMillis())
     }
 
-    /**
-     * A draft's row is keyed on its tab and a started session's on its id, so the key a shell
-     * stored is translated through whatever its session has become since.
-     */
     private fun openTerminals(): List<TerminalSource> {
         if (worktreeMode) return emptyList()
 
@@ -736,10 +675,6 @@ class SessionListPanel(
         }
     }
 
-    /**
-     * Everything the project is holding, not everything a tab is showing: a session taken off the
-     * stage keeps its terminals, and a list drawn from the tabs would drop the rows for both.
-     */
     private fun canopyFiles(): List<com.canopy.editor.ClaudeSessionVirtualFile> =
         com.canopy.services.SessionRuntimeService.getInstance(project).all().map { it.file }
 
@@ -752,8 +687,6 @@ class SessionListPanel(
         com.canopy.services.SessionRuntimeService.getInstance(project).existing(rowId) != null ||
             sessionFileFor(rowId) != null
 
-    /** The tab goes with it: a tab showing a stopped agent has nothing left to show. */
-    /** A shell has nothing to resume, so taking it away is the only thing closing it can mean. */
     private fun stopTerminal(key: String) {
         val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
         val shell = canopyFiles().firstOrNull { it.sessionKey == key } ?: return
@@ -763,7 +696,6 @@ class SessionListPanel(
         reloadData()
     }
 
-    /** Its terminals belong to it, so they end with it rather than outliving what they were for. */
     private fun stopSession(rowId: String) {
         val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
         val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
@@ -779,16 +711,11 @@ class SessionListPanel(
         reloadData()
     }
 
-    /**
-     * Puts a session on the stage, with its terminals, and takes the others off unless asked to
-     * keep them. Coming off the stage is not stopping: the agents behind those tabs go on running.
-     */
     private fun activate(session: SessionDisplay, isAdditive: Boolean) {
         val target = canopyFiles().firstOrNull {
             !it.isShellSession && (it.sessionId == session.sessionId || it.sessionKey == session.sessionId)
         }
 
-        // A session with no agent yet matches nothing, so the stage clears and the caller starts it.
         stageTo(target?.sessionKey ?: session.sessionId, isAdditive)
         if (target == null) return
 
@@ -811,7 +738,6 @@ class SessionListPanel(
         }
     }
 
-    /** A shell belongs to a session, so reaching for one brings that session along. */
     private fun focusTerminal(key: String, isAdditive: Boolean) {
         val manager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
         val shell = canopyFiles().firstOrNull { it.sessionKey == key } ?: return
@@ -820,7 +746,6 @@ class SessionListPanel(
         manager.openFile(shell, true)
     }
 
-    /** Tabs open and close in bursts and every agent's write announces itself: one rebuild per burst. */
     private fun reloadData() {
         if (reloadAlarm.isDisposed) return
 
@@ -842,21 +767,16 @@ class SessionListPanel(
     private fun applyDiscovered(discovered: List<SessionDisplay>) {
         com.canopy.services.RepoScopeService.getInstance(project).refreshIfStale { table.repaint() }
         loadingPanel.stopLoading()
-        // Most recent by default: a row that moves as its agent changes state means the list
-        // reorders itself under the pointer, and the glyph already says what is blocked.
         val sorted = if (com.canopy.settings.CanopySettings.getInstance().state.sortAttentionFirst) {
             discovered.sortedWith(compareBy<SessionDisplay> { sessionAttention(it).rank }.thenByDescending { it.modified })
         } else {
             discovered.sortedByDescending { it.lastPromptAt ?: it.modified }
         }
-        // Always first: a session you have just started is the one you are about to type into.
         allSessions = openDrafts() + sorted
         followLinkedDraft()
         applyFilter()
         if (worktreeMode) {
             refreshOrphans()
-            // Throttled + visibility-gated inside the cache: reloadData fires on every
-            // transcript write, which is continuous while a session is working.
             worktreeStatus?.apply {
                 setTargets(allSessions.mapNotNull { it.worktreeName })
                 requestRefresh()
@@ -864,16 +784,10 @@ class SessionListPanel(
         }
     }
 
-    /** Drives the search field from outside, so the Repos tree can narrow this list to one worktree. */
     fun filterByWorktree(worktreeName: String?) {
         searchField.text = worktreeName.orEmpty()
     }
 
-    /**
-     * A session is named after its first prompt, so a name match finds almost nothing of what a
-     * session actually contains. The transcripts are scanned off the thread and the rows they
-     * match are folded in when the scan lands, leaving the name match to render immediately.
-     */
     private fun searchTranscripts(query: String) {
         if (query.length < MIN_TRANSCRIPT_QUERY) {
             transcriptScan?.set(true)
@@ -884,8 +798,6 @@ class SessionListPanel(
             return
         }
 
-        // A reload repaints the list while a scan is still running, and restarting the scan there
-        // would mean it never finishes for as long as an agent keeps writing.
         if (query == transcriptQuery || query == transcriptScanning) return
 
         val basePath = project.basePath ?: return
@@ -910,10 +822,6 @@ class SessionListPanel(
         }
     }
 
-    /**
-     * Old sessions are kept out of the way rather than deleted: the list grows for months and a
-     * search across all of it still has to work, so a query lifts the cut-off on its own.
-     */
     private fun applyFilter() {
         val query = searchField.text.orEmpty().lowercase().trim()
         searchTranscripts(query)
@@ -931,13 +839,10 @@ class SessionListPanel(
         }
         val page = com.canopy.insight.pageful(filtered, limit)
         moreRow.show(page.remaining, SESSION_PAGE)
-        // Attached after paging, so a session's shells never take a slot from another session.
         tableModel.items = withTerminalRows(
             page.shown, openTerminals(), project.basePath.orEmpty(), System.currentTimeMillis()
         )
         applyRowHeights()
-        // Replacing the rows drops the selection, and the rows are replaced whenever an agent
-        // writes, so the session being reviewed has to be put back on every reload.
         restoreSelection()
     }
 
@@ -951,18 +856,6 @@ class SessionListPanel(
         }
     }
 
-    /**
-     * Only the rows that are spinning repaint, and only while the list is on screen, so an idle
-     * project pays nothing for the animation.
-     */
-    /**
-     * Repaints the glyph of whatever is spinning, and costs nothing while nothing is.
-     *
-     * This used to work out which rows were spinning on every frame: forty rows through the
-     * attention rules nine times a second, on the EDT, whether or not any agent was running. The
-     * answer only changes when the data does, so it is worked out a couple of times a second, and
-     * the timer drops to that rate whenever the answer is none.
-     */
     private fun repaintWorkingRows() {
         if (!table.isShowing) return
 
@@ -978,7 +871,6 @@ class SessionListPanel(
         }
         if (spinningRows.isEmpty()) return
 
-        // Only the strip the glyph occupies: the rest of the card has not changed.
         for (row in spinningRows) {
             if (row >= table.rowCount) continue
             val cell = table.getCellRect(row, 0, true)
@@ -986,20 +878,10 @@ class SessionListPanel(
         }
     }
 
-    /** Opening or closing a tab adds or removes a draft row, which is a different list, not a repaint. */
     fun refreshRows() = reloadData()
 
-    /** Redraws the rows from the tabs alone, without re-reading a single transcript. */
     fun refreshFromTabs() = applyFilter()
 
-    /**
-     * Recompute the orphaned-worktree list off the EDT (dir scan + `git worktree list`).
-     *
-     * Same gating as the Git column: reloadData() fires on every transcript write, so being
-     * single-flight isn't enough on its own — this also needs to stay off while the tab is
-     * hidden and to coalesce bursts. [force] is for explicit user actions and for the sweeps
-     * that must follow a delete.
-     */
     private fun refreshOrphans(force: Boolean = false) {
         val basePath = project.basePath ?: return
         if (!force) {
@@ -1007,8 +889,6 @@ class SessionListPanel(
             val now = System.currentTimeMillis()
             if (now - lastOrphanSweep < ORPHAN_SWEEP_MIN_MS) return
         }
-        // Stamp only once a sweep actually starts, so a call rejected by the single-flight
-        // guard doesn't push the floor out and delay the next real one.
         if (!orphanRefreshInFlight.compareAndSet(false, true)) return
         lastOrphanSweep = System.currentTimeMillis()
         com.canopy.util.CanopyExecutor.submit {
@@ -1047,8 +927,6 @@ class SessionListPanel(
     }
 
     private fun startSessionInOrphan(orphan: OrphanWorktree) {
-        // Optimistically drop it — creating a session makes it non-orphan; a later reload re-adds
-        // it if the session never materializes.
         orphanListModel.removeElement(orphan)
         updateOrphanVisibility()
         onNewSession(orphan.name)
@@ -1122,7 +1000,6 @@ class SessionListPanel(
         }
     }
 
-    /** Removes the worktree for [worktreeName] after its last session was deleted (no orphan left behind). */
     private fun deleteWorktreeAfterSession(worktreeName: String) {
         val basePath = project.basePath ?: return
         com.canopy.util.CanopyExecutor.submit {
@@ -1153,7 +1030,6 @@ class SessionListPanel(
         }
     }
 
-    /** Compute a worktree's diff off the EDT, then open IntelliJ's native diff viewer. */
     private fun showWorktreeChanges(worktreeDir: String, title: String) {
         com.canopy.util.CanopyExecutor.submit {
             val result = WorktreeChanges.compute(worktreeDir)
@@ -1167,7 +1043,6 @@ class SessionListPanel(
         }
     }
 
-    /** Tell the IDE's VFS that a directory changed on disk so the Project view / editors refresh. */
     private fun refreshVfs(path: String) {
         val parent = java.nio.file.Path.of(path).parent ?: return
         val vf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(parent) ?: return
@@ -1179,10 +1054,8 @@ class SessionListPanel(
     }
 
     private companion object {
-        /** Model index of the Git column in worktree mode: status, Name, Worktree, Git, … */
         const val GIT_COLUMN_MODEL_INDEX = 3
 
-        /** Floor between orphaned-worktree scans driven by session-list changes. */
         const val ORPHAN_SWEEP_MIN_MS = 15_000L
     }
 
@@ -1259,7 +1132,6 @@ private const val RELOAD_COALESCE_MS = 100
 
 private val CARD_ROW_HEIGHT = JBUI.scale(46)
 
-/** How often the spinning rows are worked out again, and the timer's rate while there are none. */
 private const val SPIN_RESCAN_MS = 500L
 
 private val GLYPH_STRIP_WIDTH = JBUI.scale(44)

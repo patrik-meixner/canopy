@@ -7,13 +7,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Caches the project's repo scopes, since discovery costs one git process per submodule plus
- * one for the superproject and the answer only changes when a submodule is added or checked out.
- *
- * Reads never block: callers get the last known list, and a stale one triggers a background
- * refresh that calls back when it lands.
- */
 @Service(Service.Level.PROJECT)
 class RepoScopeService(private val project: Project) {
 

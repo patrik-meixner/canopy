@@ -10,12 +10,6 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.util.Alarm
 import java.util.concurrent.CopyOnWriteArrayList
 
-/**
- * Tells the review panels that the working trees moved, so nothing has to be refreshed by hand.
- *
- * One subscription for the whole project rather than one per panel, and a debounce because a single
- * commit rewrites several files inside .git and an agent writes in bursts.
- */
 @Service(Service.Level.PROJECT)
 class WorkspaceChangeNotifier(private val project: Project) : Disposable {
 
@@ -43,7 +37,6 @@ class WorkspaceChangeNotifier(private val project: Project) : Disposable {
         if (wasEmpty) pollGitState()
     }
 
-    /** Three stat calls per repository, which is what it costs to see a commit nothing announced. */
     private fun pollGitState() {
         if (gitAlarm.isDisposed) return
 
@@ -70,7 +63,6 @@ class WorkspaceChangeNotifier(private val project: Project) : Disposable {
     companion object {
         private const val DEBOUNCE_MS = 700
 
-        /** Slow enough to cost nothing, quick enough that a commit is on screen before you look. */
         private const val GIT_POLL_MS = 2_000
 
         fun getInstance(project: Project): WorkspaceChangeNotifier =

@@ -13,7 +13,6 @@ private val CLI_OWN_RECORD = listOf("<command-name>", "<local-command-stdout>", 
 
 private const val INTERRUPT_MARKER = "[Request interrupted by user"
 
-/** Null for the record types that are neither side of the conversation, so the tail is unchanged. */
 fun transcriptTailOf(
     type: String?,
     isCompactSummary: Boolean,

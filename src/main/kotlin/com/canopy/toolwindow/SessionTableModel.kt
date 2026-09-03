@@ -16,8 +16,6 @@ class SessionTableModel(
     isCloseHovered: () -> Boolean = { false }
 ) : ListTableModel<SessionDisplay>() {
     init {
-        // The worktree mode keeps real columns because it sorts by them; the session list has no
-        // header at all, so a row there is free to be one card instead of two competing cells.
         val hasColumns = showWorktreeColumn || getWorktreeStatus != null
         columnInfos = if (hasColumns) {
             val cols = mutableListOf<ColumnInfo<SessionDisplay, *>>(
@@ -149,15 +147,6 @@ private class WorktreeColumnInfo : ColumnInfo<SessionDisplay, String>("Worktree"
     override fun valueOf(item: SessionDisplay): String = item.worktreeName ?: ""
 }
 
-/**
- * Uncommitted/unmerged state of the row's worktree: "✎3" for 3 uncommitted files, "↑2" for
- * 2 commits not in the base branch, blank when there's nothing outstanding — so a row that
- * needs attention is the only thing that draws the eye.
- *
- * Sorts on a numeric rank (uncommitted dominates) rather than the display string, so one
- * click puts the worktrees you forgot about on top. The renderer reads a cache that a
- * background sweep fills in; cells stay blank until the first sweep lands.
- */
 private class GitColumnInfo(
     private val getWorktreeStatus: (String) -> WorktreeStatus?
 ) : ColumnInfo<SessionDisplay, Int>("Git") {
@@ -166,8 +155,6 @@ private class GitColumnInfo(
 
     override fun valueOf(item: SessionDisplay): Int {
         val st = statusOf(item) ?: return -1
-        // Uncommitted work outranks unmerged commits; the cap keeps a pathological commit
-        // count from spilling into the next dirty-file bucket.
         return st.dirtyCount * 100_000 + st.ahead.coerceAtMost(99_999)
     }
 
@@ -186,12 +173,7 @@ private class GitColumnInfo(
                 foreground = when {
                     isSelected -> table.selectionForeground
                     st == null -> com.intellij.util.ui.UIUtil.getLabelDisabledForeground()
-                    // Red is reserved for a git operation frozen mid-flight. A missing or
-                    // unreadable worktree stays muted — a worktree the CLI is still creating
-                    // reads as MISSING for a moment and shouldn't flash an alarm.
                     st.state in INTERRUPTED_STATES -> com.intellij.ui.JBColor.RED
-                    // Uncommitted work is the thing worth noticing; unmerged commits alone
-                    // are a normal in-progress state, so they stay in the muted colour.
                     st.dirty -> DIRTY_COLOR
                     else -> com.intellij.util.ui.UIUtil.getLabelDisabledForeground()
                 }
@@ -255,5 +237,4 @@ private class GitColumnInfo(
         )
     }
 }
-
 

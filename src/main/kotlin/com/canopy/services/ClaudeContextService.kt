@@ -12,12 +12,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * The directories Claude Code reads context from, and what is in them.
- *
- * A worktree has its own encoded project directory, so memory differs per session rather than per
- * project: [scan] takes the working directory of the session being looked at.
- */
 @Service(Service.Level.PROJECT)
 class ClaudeContextService(private val project: Project) {
 
@@ -80,7 +74,6 @@ class ClaudeContextService(private val project: Project) {
         )
     }
 
-    /** Frontmatter only: a rules file runs to hundreds of lines and none of them reach the tree. */
     private fun parse(file: Path): Parsed {
         val size = runCatching { Files.size(file) }.getOrDefault(0L)
         val modifiedAt = runCatching { Files.getLastModifiedTime(file).toMillis() }.getOrDefault(0L)
@@ -114,7 +107,6 @@ private val ContextKind.directoryName: String
         ContextKind.MEMORY -> "memory"
     }
 
-/** Name and description from YAML frontmatter, or nulls when the file does not open with one. */
 internal fun frontmatterOf(lines: List<String>): Pair<String?, String?> {
     if (lines.firstOrNull()?.trim() != "---") return null to null
     var name: String? = null

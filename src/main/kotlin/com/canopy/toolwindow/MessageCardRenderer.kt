@@ -13,13 +13,6 @@ import javax.swing.JPanel
 import javax.swing.ListCellRenderer
 import javax.swing.SwingConstants
 
-/**
- * One message as an island: an ordinal chip, its text wrapped to whatever width the panel has, and
- * a strip of thumbnails for anything pasted into it.
- *
- * The text wraps through HTML sized to the list, because a fixed character cut left half the panel
- * empty when the splitter was dragged wide and still truncated when it was narrow.
- */
 class MessageCardRenderer : ListCellRenderer<SessionMessage> {
 
     private val outer = JPanel(BorderLayout())
@@ -59,9 +52,6 @@ class MessageCardRenderer : ListCellRenderer<SessionMessage> {
         text.text = wrappedHtml(value.text, textWidth(list))
 
         thumbnails.removeAll()
-        // A renderer runs on every paint, and ImageIO on a screenshot is not fast: decoding here
-        // held the UI thread for seconds at a time on a list full of them. Whatever is already
-        // decoded is drawn; the rest arrives and repaints the row.
         for (image in value.images.take(MAX_THUMBNAILS)) {
             val ready = MessageThumbnails.cached(image)
             if (ready != null) {
@@ -86,7 +76,6 @@ class MessageCardRenderer : ListCellRenderer<SessionMessage> {
 
 private const val PREVIEW_LINE_LIMIT = 3
 
-/** Only the opening lines: the card is a way back into the conversation, not a reader for it. */
 internal fun wrappedHtml(text: String, width: Int): String {
     val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.take(PREVIEW_LINE_LIMIT).toList()
     val body = lines.joinToString("<br>") { escapeForHtml(it) }

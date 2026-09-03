@@ -6,7 +6,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import javax.swing.JPanel
 
-/** Wide enough for the terminal to start at a sensible width; see ClaudeTerminalService. */
 private const val OFFSCREEN_WIDTH = 1200
 private const val OFFSCREEN_HEIGHT = 800
 

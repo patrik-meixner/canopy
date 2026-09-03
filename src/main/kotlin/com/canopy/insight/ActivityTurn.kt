@@ -1,18 +1,11 @@
 package com.canopy.insight
 
-/**
- * Everything the agent did between one of your prompts and the next.
- *
- * A flat call log answers "what calls were made", which nobody asks. The question a review starts
- * from is "what did it do when I asked for that", and a turn is that unit.
- */
 data class ActivityTurn(
     val ordinal: Int,
     val prompt: String,
     val atMillis: Long,
     val filesWritten: List<String>,
     val commandsRun: Int,
-    /** What it ran, by name: `gradlew`, `git`, `sed`. Four is enough to recognise the shape of a turn. */
     val commandVerbs: List<String>,
     val lookups: Int
 )
@@ -46,7 +39,6 @@ fun activityTurns(
     return turns.filter { it.filesWritten.isNotEmpty() }
 }
 
-/** What the turn amounts to, in the order it is worth knowing. */
 fun turnSummary(turn: ActivityTurn): String {
     val written = turn.filesWritten.size.takeIf { it > 0 }?.let { "$it file${plural(it)} written" }
     val named = turn.commandVerbs.joinToString(", ").takeIf { it.isNotEmpty() }?.let { " ($it)" }.orEmpty()

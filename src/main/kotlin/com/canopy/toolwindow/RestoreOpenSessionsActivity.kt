@@ -17,7 +17,6 @@ class RestoreOpenSessionsActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
         val persistence = OpenSessionsPersistence.getInstance(project)
-        // Before the early return below: the stripe is worth restoring even with no session to open.
         if (persistence.wasToolWindowVisible) {
             ApplicationManager.getApplication().invokeLater {
                 if (!project.isDisposed) showCanopy(project)
@@ -41,9 +40,6 @@ class RestoreOpenSessionsActivity : ProjectActivity {
             openClaudeSession(project, staged)
             terminals.forEach { reopenTerminal(project, it) }
             focusFirst(project, staged)
-            // The rest come back working rather than on screen: listed, answerable, and one click
-            // from a tab, without a stack of them opening over the project you just wanted to see.
-            // One a second, because each is a node process starting while the IDE is still indexing.
             plan.detached.forEachIndexed { index, session -> restoreDetachedLater(project, session, index + 1) }
         }
     }
@@ -65,14 +61,12 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         return com.canopy.util.ClaudePathEncoder.worktreeAbsolutePath(base, worktree)
     }
 
-    /** Shown, not activated: the stripe comes back as you left it without taking the caret. */
     private fun showCanopy(project: Project) {
         com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
             .getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)
             ?.show()
     }
 
-    /** Whatever is opened last wins the selection, and the last thing opened is a terminal. */
     private fun focusFirst(project: Project, session: com.canopy.model.SessionDisplay) {
         val file = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
             .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()
@@ -81,10 +75,6 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(file, true)
     }
 
-    /**
-     * A shell of its own, not the one that was there: the process it ran died with the IDE, so
-     * what comes back is an empty shell in the same place under the same name.
-     */
     private fun reopenTerminal(project: Project, terminal: com.canopy.services.RememberedTerminal) {
         val owner = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles
             .filterIsInstance<com.canopy.editor.ClaudeSessionVirtualFile>()

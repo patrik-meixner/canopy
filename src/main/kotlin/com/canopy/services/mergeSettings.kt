@@ -3,13 +3,6 @@ package com.canopy.services
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 
-/**
- * Canopy's own settings laid over the user's, rather than in place of them.
- *
- * `--settings` replaces a settings file rather than adding to one, so handing Claude Code a file
- * holding only a status line and some hooks silently dropped everything else the user had
- * configured. Hook arrays are appended to so the user's own hooks still run alongside ours.
- */
 fun mergeSettings(base: JsonObject, ours: JsonObject): JsonObject {
     val merged = base.deepCopy()
 

@@ -15,12 +15,6 @@ import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
 
-/**
- * A worktree with no session, as an island: what it is called and why it is still here.
- *
- * The reason is a sentence, not a word, and on one line it pushed the name and its repository out
- * of view exactly when they were needed to decide whether to delete it.
- */
 class OrphanCardRenderer : ListCellRenderer<OrphanWorktree> {
 
     private val outer = object : JPanel(BorderLayout()) {

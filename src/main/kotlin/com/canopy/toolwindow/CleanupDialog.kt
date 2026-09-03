@@ -12,12 +12,6 @@ import java.awt.Dimension
 import javax.swing.JComponent
 import javax.swing.JPanel
 
-/**
- * Names every worktree that would go, and why, before any of them does.
- *
- * Removing a worktree removes its directory; a list of names with a count would not be enough to
- * decide from.
- */
 class CleanupDialog(project: Project, private val candidates: List<CleanupCandidate>) : DialogWrapper(project) {
 
     private val list = CheckBoxList<CleanupCandidate>()

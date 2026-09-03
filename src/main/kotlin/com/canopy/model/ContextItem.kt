@@ -9,10 +9,6 @@ enum class ContextKind(val label: String) {
     MEMORY("Memory")
 }
 
-/**
- * Where context comes from. Claude Code merges three of these, and which one a file sits in decides
- * whether it applies to everything you do, to this repository, or only to this session's checkout.
- */
 enum class ContextLevel(val label: String) {
     PERSONAL("Personal"),
     PROJECT("Project"),
@@ -31,7 +27,6 @@ data class ContextItem(
     val source: ContextSource,
     val path: Path
 ) {
-    /** Text that invokes this item from a prompt; rules and memory are loaded, never called. */
     val insertText: String
         get() = when (source.kind) {
             ContextKind.SKILL -> "/$name "

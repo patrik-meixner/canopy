@@ -4,11 +4,6 @@ import com.intellij.openapi.vcs.changes.ui.ChangesBrowserNode
 import com.intellij.openapi.vcs.changes.ui.ChangesBrowserNodeRenderer
 import com.intellij.ui.SimpleTextAttributes
 
-/**
- * A commit as a folder of the files it changed.
- *
- * Grouping pushed work by directory says where it landed; grouping it by commit says what it was.
- */
 class CommitBrowserNode(private val entry: CommitWithChanges) : ChangesBrowserNode<CommitWithChanges>(entry) {
 
     override fun render(renderer: ChangesBrowserNodeRenderer, selected: Boolean, expanded: Boolean, hasFocus: Boolean) {

@@ -6,13 +6,6 @@ import java.awt.datatransfer.DataFlavor
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 
-/**
- * Routes Cmd+V to the CLI when the clipboard holds an image rather than text.
- *
- * The terminal's own paste only knows how to send text, so an image silently does nothing.
- * Claude Code reads the clipboard itself when it sees Ctrl+V, so forwarding that byte hands
- * the image over instead of dropping it.
- */
 object ClipboardImagePaste {
 
     private const val CTRL_V = "\u0016"

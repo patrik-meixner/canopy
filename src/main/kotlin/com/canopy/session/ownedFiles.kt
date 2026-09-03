@@ -1,14 +1,5 @@
 package com.canopy.session
 
-/**
- * Which of the changed files a session can be said to own.
- *
- * Owning one means every difference between HEAD and what is on disk is accounted for by the
- * session's own writes. A file anything else has touched makes the whole set unsafe to commit
- * unattended, so the answer is all or nothing rather than a best guess per file.
- *
- * Git and the filesystem are passed in, which is what makes this answerable without either.
- */
 fun ownedFiles(
     changed: Set<String>,
     writes: List<FileWrite>,

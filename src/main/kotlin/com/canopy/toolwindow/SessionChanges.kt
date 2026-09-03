@@ -8,10 +8,6 @@ import com.intellij.openapi.vcs.changes.CurrentContentRevision
 import com.intellij.openapi.vcs.changes.Change
 import java.nio.file.Path
 
-/**
- * [isYours] separates what is still the reviewer's to act on from what has already left the machine.
- * A pushed file is history: it reads as work in progress otherwise, and there is a lot more of it.
- */
 enum class SessionChangeSection(val title: String, val isYours: Boolean) {
     Uncommitted("Changes", true),
     Elsewhere("Elsewhere in this repository", false),
@@ -20,25 +16,14 @@ enum class SessionChangeSection(val title: String, val isYours: Boolean) {
     Unversioned("Unversioned Files", true)
 }
 
-/**
- * A working tree split the way review actually proceeds: what is still yours to commit, what you
- * committed but have not shared, what is already on the remote, and what git is not tracking.
- */
 data class SessionChangeSet(
     val changes: Map<SessionChangeSection, List<Change>>,
     val unversioned: List<FilePath>,
-    /** Pushed work grouped the way it was made: a hundred files are a handful of commits. */
     val pushedCommits: List<CommitWithChanges> = emptyList(),
-    /** Read from the transcript rather than the hooks' ledger, so a file's owner is a judgement, not a record. */
     val isEstimated: Boolean = false
 ) {
     val isEmpty: Boolean get() = changes.isEmpty() && unversioned.isEmpty()
 
-    /**
-     * Content revisions compare by identity, so a recomputed set never equals the old one. Naming
-     * what is on screen instead lets an unchanged result leave the tree, its scroll and its
-     * selection alone.
-     */
     fun signature(): Long = pathSignature(
         sequence {
             for (section in SessionChangeSection.entries) {
@@ -60,17 +45,8 @@ object SessionChanges {
 
     private const val GIT_TIMEOUT_MS = 20_000L
 
-    /** Far more commits than a session makes, and short enough that a long branch costs nothing. */
     private const val SESSION_COMMIT_LIMIT = 200
 
-    /**
-     * [since] bounds the commit sections to the session's own window. Without it a long-lived team
-     * branch reports its entire divergence from the base: thousands of files nobody wrote today.
-     *
-     * Elsewhere is shown for the repository the session was run from; one it only reached into is
-     * reviewed for its own work alone. With [ownCommits] known, the commit sections hold the files
-     * those commits touched and no other; without, every file committed in the window.
-     */
     fun collect(
         root: String,
         since: java.time.Instant?,
@@ -114,14 +90,12 @@ object SessionChanges {
         return changes.filter { pathOfChange(it) in touched }
     }
 
-    /** Newest commit that is both on HEAD and on the remote; everything after it is unpushed. */
     private fun sharedWithRemote(root: String): String? {
         val upstream = upstreamOf(root) ?: return null
 
         return git(root, "merge-base", "HEAD", upstream)?.trim()?.ifEmpty { null }
     }
 
-    /** Bounded to the session like the pushed range: unbounded, a rebased branch is its whole history. */
     private fun unpushedStart(root: String, sharedTip: String?, sessionStart: String?): String? {
         if (sessionStart == null) return null
         val from = commitRangeStart(sharedTip, detectBase(root)) ?: return null
@@ -132,13 +106,8 @@ object SessionChanges {
     private fun isAncestor(root: String, ancestor: String, descendant: String): Boolean =
         git(root, "merge-base", "--is-ancestor", ancestor, descendant) != null
 
-    /**
-     * Where "committed but not shared" starts: the remote's tip when there is one, otherwise the
-     * base branch - a branch that was never pushed has all of its commits unshared.
-     */
     internal fun commitRangeStart(sharedTip: String?, base: String?): String? = sharedTip ?: base
 
-    /** The commit the session started from: the parent of its oldest commit inside the window. */
     private fun sessionStartPoint(root: String, since: java.time.Instant?): String? {
         if (since == null) return null
         val log = git(root, "log", "--format=%H %at", "-n", "$SESSION_COMMIT_LIMIT", "HEAD") ?: return null
@@ -161,11 +130,6 @@ object SessionChanges {
         }
     }
 
-    /**
-     * The working tree is backed by a real file, so the diff's right-hand side is editable: a typo
-     * spotted while reviewing gets fixed in place. A committed revision has no file to write to and
-     * stays read-only.
-     */
     private fun afterRevision(root: String, relativePath: String, to: String?, filePath: FilePath): ContentRevision =
         if (to == null) CurrentContentRevision(filePath) else GitContentRevision(root, relativePath, to, filePath)
 

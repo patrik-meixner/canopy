@@ -3,14 +3,6 @@ package com.canopy.services
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 
-/**
- * Which files each session wrote, for the sessions parsed most recently.
- *
- * Two agents editing the same file is the failure mode that costs an afternoon, and nothing else
- * can see it coming. Deliberately in memory and bounded: a running session's transcript grows, so
- * it is re-parsed on every sweep and its entry stays current, while history would cost a persisted
- * path list per session for a question nobody asks about last month's work.
- */
 @Service(Service.Level.PROJECT)
 class SessionFileIndex {
 
@@ -38,7 +30,6 @@ class SessionFileIndex {
     }
 }
 
-/** Only files this session wrote can overlap, so the walk is over its own paths, not the whole index. */
 internal fun overlaps(sessionId: String, index: Map<String, Set<String>>): Map<String, List<String>> {
     val own = index[sessionId] ?: return emptyMap()
     val others = index.filterKeys { it != sessionId }

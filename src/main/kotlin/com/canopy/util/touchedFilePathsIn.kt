@@ -8,14 +8,6 @@ private val PATH_KEYS = listOf("file_path", "notebook_path", "path")
 
 private val ABSOLUTE_PATH = Regex("""(/(?:Users|home|opt|srv|var|tmp|private)/[A-Za-z0-9._@%+-]+(?:/[A-Za-z0-9._@%+-]+)+)""")
 
-/**
- * Absolute paths an assistant message worked on.
- *
- * Reads are excluded: an agent opens hundreds of files to change three. Shell commands are not,
- * because an agent edits through the shell far more often than through the edit tools — a session
- * that ran nothing but heredocs and sed would otherwise look like it touched nothing at all, and
- * the repository it actually worked in would never be attributed to it.
- */
 fun touchedFilePathsIn(message: JsonObject): List<String> {
     val content = message.getAsJsonObject("message")?.get("content") ?: return emptyList()
     if (!content.isJsonArray) return emptyList()
@@ -53,25 +45,12 @@ private val WRITING_VERB = Regex(
         """stash(?!\s+(list|show))|worktree\s+(add|remove|move|prune|repair|lock|unlock)))\b"""
 )
 
-/** A redirection, but not `2>&1`, `1>&2` or a `->` inside a string. */
 private val REDIRECTION = Regex("""(?<![0-9&\-])>""")
 
 private val CLAUSE_BREAK = Regex("""\r?\n|;|&&|\|\||\|""")
 
 private val CHANGE_DIRECTORY = Regex("""(^|[;&|(`]\s*|\s)cd\s+["']?(/(?:Users|home|opt|srv|var|tmp|private)/[A-Za-z0-9._@%+-]+(?:/[A-Za-z0-9._@%+-]+)*)""")
 
-/**
- * Absolute paths a shell command wrote to, and nothing it merely looked at.
- *
- * An agent edits through the shell far more often than through the edit tools, so these paths are
- * what attributes a repository to a session at all. Taking every path a command names attributed
- * whatever the agent grepped, found or listed - a session that ran one `find` across the disk then
- * claimed every repository it walked past.
- *
- * A `cd` stands for the relative writes that follow it, which is every heredoc and `sed -i file` an
- * agent runs after changing directory. Only for those: a `cd` into a repository to read it, in a
- * command that happened to write somewhere else by full path, claimed that repository too.
- */
 internal fun pathsInCommand(command: String?): List<String> {
     if (command.isNullOrBlank()) return emptyList()
 

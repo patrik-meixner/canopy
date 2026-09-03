@@ -16,10 +16,6 @@ import javax.swing.SwingConstants
 
 private const val PREVIEW_LINES = 4
 
-/**
- * One message as an island. The text wraps to the card, and a message longer than a few lines is
- * cut here and read in the overlay rather than turning the list into the transcript.
- */
 class MessageCard(
     private val message: SessionMessage,
     private val onOpen: (MessageCard, MouseEvent) -> Unit,
@@ -69,7 +65,6 @@ class MessageCard(
         })
     }
 
-    /** Only the tone changes on hover: touching size or insets is what made rows jump. */
     private fun highlight(hovered: Boolean) {
         island.islandColor = if (hovered) InsightUi.hoverBackground() else InsightUi.islandBackground()
         island.repaint()
@@ -121,7 +116,6 @@ class MessageCard(
     }
 }
 
-/** A card is a way back into the conversation, not a reader for it. */
 internal fun previewOf(text: String): String {
     val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
     val head = lines.take(PREVIEW_LINES).joinToString("\n")

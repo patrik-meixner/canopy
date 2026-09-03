@@ -8,10 +8,6 @@ import com.intellij.openapi.vcs.changes.ui.ChangesBrowserNode
 import com.intellij.openapi.vcs.changes.ui.TreeModelBuilder
 import javax.swing.tree.DefaultTreeModel
 
-/**
- * The Commit window's tree, sectioned by how far a change has travelled rather than by which
- * changelist it belongs to.
- */
 class SectionedChangesBrowser(
     project: Project,
     parent: com.intellij.openapi.Disposable,
@@ -113,7 +109,6 @@ class SectionedChangesBrowser(
         return listOf(refresh, commit, push, note, problems, overlaps) + super.createToolbarActions()
     }
 
-    /** What a note is about: the selected rows, and their untracked files as well as their changes. */
     fun selectedPaths(): List<String> {
         val data = com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.selected(viewer)
         val changed = data.iterateUserObjects(Change::class.java)
@@ -123,7 +118,6 @@ class SectionedChangesBrowser(
         return (changed.toList() + untracked.toList()).distinct()
     }
 
-    /** Every file in the tree, for the checks that are about the change as a whole. */
     fun allPaths(): List<String> {
         val data = com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.all(viewer)
         val changed = data.iterateUserObjects(Change::class.java)
@@ -133,12 +127,6 @@ class SectionedChangesBrowser(
         return (changed.toList() + untracked.toList()).distinct()
     }
 
-    /**
-     * The same menu the Commit and Log windows have: a row here is a file, and a file opens.
-     *
-     * Show Diff stays first because reviewing is why the tree exists, but reading a change usually
-     * ends in wanting the file itself.
-     */
     override fun createPopupMenuActions(): List<com.intellij.openapi.actionSystem.AnAction> {
         val ours = listOfNotNull(
             diffAction,
@@ -159,13 +147,6 @@ class SectionedChangesBrowser(
         return ours + super.createPopupMenuActions().filterNot { it in ours }
     }
 
-    /**
-     * Everything under one row, rather than everything.
-     *
-     * Expand All opens four hundred pushed files to find one directory, and the alternative was
-     * clicking down a level at a time. A section header is a row like any other, so this opens a
-     * whole state as readily as a single module.
-     */
     private fun expandSubtreeAction() = subtreeAction("Expand Subtree", com.intellij.icons.AllIcons.Actions.Expandall) {
         expandSubtree(viewer, it)
     }
@@ -191,15 +172,9 @@ class SectionedChangesBrowser(
         override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
     }
 
-    /** A leaf has no subtree, so the actions stay off rather than doing nothing. */
     private fun selectedBranch(): javax.swing.tree.TreePath? = viewer.selectionPath
         ?.takeIf { (it.lastPathComponent as? javax.swing.tree.TreeNode)?.isLeaf == false }
 
-    /**
-     * A directory row stands for the files under it, so committing one commits those and nothing
-     * else. Pushing has no directory-sized form: a push moves a repository, so the selection only
-     * says which repositories are meant.
-     */
     private fun commitSelectionAction() = object : com.intellij.openapi.actionSystem.AnAction(
         "Commit Selected Files\u2026",
         "Commit only the files under the selection",
@@ -215,13 +190,6 @@ class SectionedChangesBrowser(
         override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
     }
 
-    /**
-     * The IDE's own Rollback, not one of ours.
-     *
-     * It knows the same shortcut people already use, shows the diff of what it is about to undo,
-     * and can shelve it first - none of which a reimplementation would inherit. The browser
-     * publishes the selected changes, so the action finds them the way it finds them anywhere else.
-     */
     private fun rollbackAction(): com.intellij.openapi.actionSystem.AnAction? =
         com.intellij.openapi.actionSystem.ActionManager.getInstance().getAction("ChangesView.Revert")
 
@@ -298,11 +266,9 @@ class SectionedChangesBrowser(
         override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
     }
 
-    /** A deleted file has a path in the tree and nothing on disk, so Edit Source has to stay off. */
     private fun virtualFileAt(path: String): com.intellij.openapi.vfs.VirtualFile? =
         com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(java.nio.file.Path.of(path))
 
-    /** Narrows the tree to the files whose path carries [query]; blank shows everything again. */
     fun setFileQuery(query: String) {
         if (query == fileQuery) return
 
@@ -318,14 +284,12 @@ class SectionedChangesBrowser(
         sections = changeSet.changes
         unversioned = changeSet.unversioned
         pushedCommits = changeSet.pushedCommits
-        // Keeping the state stops a tab switch from throwing away what was expanded and collapsed.
         viewer.rebuildTree(com.intellij.openapi.vcs.changes.ui.ChangesTree.ALWAYS_KEEP)
         collapsePushedOnce()
     }
 
     private var pushedCollapsed = false
 
-    /** Pushed work is history and outnumbers the rest; it opens closed, and stays how you leave it. */
     private fun collapsePushedOnce() {
         if (pushedCollapsed || sections[SessionChangeSection.Pushed].isNullOrEmpty()) return
         pushedCollapsed = true
@@ -347,7 +311,6 @@ class SectionedChangesBrowser(
             if (changes.isEmpty()) continue
 
             val tag = tagNode(builder, section)
-            // A hundred pushed files are a handful of commits, and the commit is what they mean.
             if (section == SessionChangeSection.Pushed && pushedCommits.isNotEmpty()) {
                 insertByCommit(builder, tag)
                 continue
@@ -356,8 +319,6 @@ class SectionedChangesBrowser(
             builder.insertChanges(changes, tag)
         }
 
-        // Its own tag rather than setUnversioned, which the platform always places first: what the
-        // session actually changed reads before a heap of untracked output it never wrote.
         val shownUnversioned = unversioned.filter { matchesFileQuery(it.path, fileQuery) }
         if (shownUnversioned.isNotEmpty()) {
             val tag = tagNode(builder, SessionChangeSection.Unversioned)
@@ -385,12 +346,6 @@ class SectionedChangesBrowser(
         )
     }
 
-    /**
-     * A header is one word and a count, the way the Commit window writes one.
-     *
-     * It used to spell out what each state meant beside its name, which is four explanations of
-     * git on screen at all times; the card above the tree already says what is outstanding.
-     */
     private fun tagNode(builder: TreeModelBuilder, section: SessionChangeSection): ChangesBrowserNode<*> {
         val node = com.intellij.openapi.vcs.changes.ui.TagChangesBrowserNode(
             object : ChangesBrowserNode.Tag {

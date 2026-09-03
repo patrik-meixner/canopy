@@ -6,10 +6,6 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 
-/**
- * A close is followed only while the IDE is staying up. Shutdown closes every tab before anything
- * gets to save, so following those would write an empty list over the one worth keeping.
- */
 class RememberTerminalsOnTabChange(private val project: Project) : FileEditorManagerListener, CanopyTabsListener {
 
     override fun fileOpened(source: FileEditorManager, file: VirtualFile) {

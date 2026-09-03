@@ -3,7 +3,6 @@ package com.canopy.toolwindow
 import com.canopy.model.SessionDisplay
 import com.canopy.settings.SessionRestore
 
-/** [staged] gets a tab; [detached] come back running, listed and answerable, with no tab of their own. */
 data class RestorePlan(val staged: SessionDisplay?, val detached: List<SessionDisplay>)
 
 fun restorePlan(saved: List<SessionDisplay>, mode: SessionRestore): RestorePlan {

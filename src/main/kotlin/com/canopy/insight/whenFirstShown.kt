@@ -3,13 +3,6 @@ package com.canopy.insight
 import java.awt.event.HierarchyEvent
 import javax.swing.JComponent
 
-/**
- * Work that waits until there is a reason to do it.
- *
- * A list of forty messages builds forty cards whether or not you scroll to the fifth, and a card
- * holding a screenshot costs a decode. Hanging that on the component becoming visible means the
- * ones nobody looks at cost nothing at all.
- */
 fun whenFirstShown(component: JComponent, work: () -> Unit) {
     if (component.isShowing) return work()
 

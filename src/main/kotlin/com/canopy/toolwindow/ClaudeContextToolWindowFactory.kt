@@ -12,10 +12,6 @@ import com.intellij.openapi.wm.impl.content.ToolWindowContentUi
 import com.intellij.ui.content.ContentFactory
 import javax.swing.JComponent
 
-/**
- * Everything about the session on screen that is not its terminal: what it was asked, what it is
- * doing, what it plans to do, where it wrote, and what it reads as context.
- */
 class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -32,7 +28,6 @@ class ClaudeContextToolWindowFactory : ToolWindowFactory, DumbAware {
         toolWindow.setTitleActions(listOf(SelectTabAction(toolWindow)))
     }
 
-    /** The review follows the selected session, the same way every other tab here does. */
     private fun detailPanel(project: Project, parent: com.intellij.openapi.Disposable): SessionDetailPanel {
         val sessions = com.canopy.services.ClaudeSessionService.getInstance(project)
         val panel = SessionDetailPanel(project, parent) { id -> sessions.getSessions().firstOrNull { it.sessionId == id } }

@@ -12,18 +12,6 @@ private const val SEARCH_DEPTH = 4
 
 private val NEVER_DESCENDED = setOf("node_modules", "vendor", ".git", "build", "dist", "target", ".gradle", ".idea")
 
-/**
- * Every git worktree under [root], as VFS urls, found by what a worktree is rather than by where
- * anyone happened to put it.
- *
- * A worktree's `.git` is a file naming a directory with a `worktrees` segment in it: `.git/
- * worktrees/x` for the top-level repository, `.git/modules/<submodule>/worktrees/x` for a
- * worktree of a submodule. A submodule's own checkout is a file too, but it names `.git/modules/
- * <submodule>` with no such segment - and a submodule is real code somebody edits.
- *
- * A visitor rather than `Files.walk`, because only a visitor can skip a subtree or shrug off a broken
- * symlink without a stack trace.
- */
 fun worktreeExcludeUrls(root: String): List<String> {
     val base = Path.of(root)
     if (!Files.isDirectory(base)) return emptyList()

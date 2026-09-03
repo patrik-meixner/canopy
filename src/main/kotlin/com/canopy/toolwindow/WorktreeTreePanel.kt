@@ -34,12 +34,6 @@ import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreePath
 import javax.swing.tree.TreeSelectionModel
 
-/**
- * Worktrees grouped by the repo that owns them: the superproject and each initialized submodule.
- *
- * Refreshes cost one `git worktree list` per repo, so they run off the EDT and only while the
- * panel is on screen, under the same floor the session sweep uses.
- */
 class WorktreeTreePanel(
     private val project: Project,
     parent: Disposable,
@@ -56,10 +50,8 @@ class WorktreeTreePanel(
     private val tree = Tree(treeModel)
     private val refreshInFlight = AtomicBoolean(false)
 
-    /** Its own cache: the tree is now the only place worktree git state is shown. */
     private val worktreeStatus = WorktreeStatusCache(project, this) { tree.repaint() }
 
-    /** Branches come from the same sweep: one pass over the repositories answers both sections. */
     private var branches: Map<String, List<BranchEntry>> = emptyMap()
 
     @Volatile private var onScreen = false
@@ -105,7 +97,6 @@ class WorktreeTreePanel(
 
     private fun selectedRepo(): WorktreeTreeNode.Repo? = selectedNode() as? WorktreeTreeNode.Repo
 
-    /** Every row belongs to a repository, so a repository action never needs the repository row. */
     private fun scopeOfSelection(): com.canopy.model.RepoScope? =
         selectedRepo()?.scope ?: selectedWorktree()?.scope ?: selectedBranch()?.scope
 
@@ -279,7 +270,6 @@ class WorktreeTreePanel(
 
                 override fun update(e: AnActionEvent) {
                     val branch = selectedBranch()
-                    // git refuses to delete the branch a worktree has checked out, and so does this.
                     e.presentation.isEnabled = branch != null &&
                         branch.entry.worktreePath == null &&
                         !branch.entry.isCurrent
@@ -305,11 +295,9 @@ class WorktreeTreePanel(
         PopupHandler.installPopupMenu(tree, group, "CanopyWorktreeTree")
     }
 
-    /** Asked of the repository, not of the selected row, so it answers the same from any of them. */
     private fun worktreesOf(scope: com.canopy.model.RepoScope): List<Pair<String, String>> =
         WorktreeInspector.list(scope.root).map { (Path.of(it.path).fileName?.toString() ?: it.path) to it.path }
 
-    /** Each worktree gets its own session, and each session gets the same prompt once it is up. */
     private fun fanOut(scope: com.canopy.model.RepoScope) {
         val existing = WorktreeInspector.list(scope.root)
             .mapNotNull { Path.of(it.path).fileName?.toString() }
@@ -322,7 +310,6 @@ class WorktreeTreePanel(
         com.canopy.services.FanOutPrompts.getInstance(project).expect(plan.names, plan.prompt)
     }
 
-    /** The sweep is conservative on purpose: it proposes, and every removal is still confirmed. */
     private fun cleanUp(scope: com.canopy.model.RepoScope) {
         val inUse = loadSessions().mapNotNull { it.worktreeName }.toSet()
 
@@ -365,7 +352,6 @@ class WorktreeTreePanel(
         }
     }
 
-    /** Removal is not undoable, so it names what will go and what would be lost with it. */
     private fun deleteWorktree(worktree: WorktreeTreeNode.Worktree) {
         val name = Path.of(worktree.entry.path).fileName?.toString() ?: worktree.entry.path
         val ahead = worktree.status?.ahead ?: 0
@@ -411,7 +397,6 @@ class WorktreeTreePanel(
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
 
-                // git -d refuses an unmerged branch; saying so beats a silent failure.
                 notify(if (deleted) "Deleted ${branch.entry.name}" else "Not deleted: ${output.take(200)}")
                 refresh(force = true)
             }
@@ -424,7 +409,6 @@ class WorktreeTreePanel(
         notify(if (copied.isEmpty()) "Nothing to copy" else "Copied ${copied.joinToString(", ")}")
     }
 
-    /** Walking a worktree with installed dependencies takes seconds, so it never runs on the EDT. */
     private fun reportDiskUsage(scope: com.canopy.model.RepoScope, worktrees: List<Pair<String, String>>) {
         if (worktrees.isEmpty()) {
             return notify("${scope.label} has no worktrees")
@@ -465,7 +449,6 @@ class WorktreeTreePanel(
             .notify(project)
     }
 
-    /** Runs against the worktree directory, so a submodule's worktree diffs against its own repo. */
     private fun showChanges(worktree: WorktreeTreeNode.Worktree) {
         val directory = worktree.entry.path
         val title = "${worktree.scope.label}: ${Path.of(directory).fileName}"
@@ -563,7 +546,6 @@ class WorktreeTreePanel(
 
     private fun worktreeNameOf(path: String): String = Path.of(path).fileName?.toString() ?: path
 
-    /** A session with no worktree belongs to the repo it wrote to most. */
     private fun sessionsInCheckout(sessions: List<com.canopy.model.SessionDisplay>, root: String) =
         sessions.filter { session ->
             val primary = session.touchedRoots.maxByOrNull { it.value }?.key
@@ -573,7 +555,6 @@ class WorktreeTreePanel(
     private fun sessionNode(session: com.canopy.model.SessionDisplay) =
         DefaultMutableTreeNode(WorktreeTreeNode.Session(session, attentionOf(session)))
 
-    /** Rebuilding replaces every node, so the user's expanded repos have to be restored by label. */
     private fun expandedRepoLabels(): Set<String> {
         if (root.childCount == 0) return emptySet()
 

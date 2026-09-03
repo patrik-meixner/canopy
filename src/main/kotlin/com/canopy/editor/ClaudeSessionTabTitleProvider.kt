@@ -11,9 +11,6 @@ class ClaudeSessionTabTitleProvider : EditorTabTitleProvider {
         return if (session.isShellSession) terminalLabel(project, session) else session.computeTabTitle()
     }
 
-    // Without this the platform falls back to the file's path, which is the
-    // immutable sessionKey — the worktree name for tabs born from "New worktree
-    // session", a temp key for new sessions — and never reflects later linking.
     override fun getEditorTabTooltipText(project: Project, virtualFile: VirtualFile): String? {
         val file = virtualFile as? ClaudeSessionVirtualFile ?: return null
         val parts = mutableListOf<String>()

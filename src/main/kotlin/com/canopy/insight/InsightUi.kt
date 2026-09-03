@@ -9,7 +9,6 @@ import java.awt.Graphics2D
 import java.awt.RenderingHints
 import javax.swing.JPanel
 
-/** One arc radius, one inset, one hairline: the tabs read as one surface rather than five widgets. */
 object InsightUi {
 
     val ARC: Int get() = JBUI.scale(10)
@@ -30,25 +29,16 @@ object InsightUi {
         com.intellij.openapi.editor.colors.EditorColorsManager.getInstance().globalScheme.defaultBackground
     }
 
-    /** The card carries the accent; the strip behind it stays the list, so nothing frames the card. */
     fun cardBackground(selected: Boolean, hovered: Boolean = false, running: Boolean = false): Color = when {
         selected && hovered -> accentTint(SELECTED_HOVER_TINT)
         selected -> accentTint(SELECTED_TINT)
         hovered -> accentTint(HOVER_TINT)
-        // Alive but not on screen looks identical to stopped otherwise, and the two are the most
-        // consequential states to confuse.
         running -> accentTint(RUNNING_TINT)
         else -> islandBackground()
     }
 
     fun hoverBackground(): Color = accentTint(HOVER_TINT)
 
-    /**
-     * The IDE's own accent, mixed into the list background rather than replacing it.
-     *
-     * One [JBColor] per strength, held: a lazy colour already re-reads the theme whenever it is
-     * painted, so building a new one per row per repaint allocated for nothing.
-     */
     fun accentTint(strength: Double): Color =
         tints.getOrPut(strength) { JBColor.lazy { blend(islandBackground(), accent(), strength) } }
 
@@ -58,7 +48,6 @@ object InsightUi {
     fun mutedForeground(selected: Boolean): Color =
         if (selected) UIUtil.getLabelForeground() else JBColor.GRAY
 
-    /** The same mix the cards use, for anything that has to sit on one of them. */
     fun blendInto(base: Color, ink: Color, strength: Double): Color = blend(base, ink, strength)
 
     private fun blend(base: Color, accent: Color, strength: Double): Color = Color(
@@ -67,38 +56,24 @@ object InsightUi {
         (base.blue + (accent.blue - base.blue) * strength).toInt().coerceIn(0, 255)
     )
 
-    /** The accent the IDE is themed with; there is no reason for the plugin to invent one. */
     fun accent(): Color = JBUI.CurrentTheme.Focus.focusColor()
 
     fun needsAttention(): Color = JBUI.CurrentTheme.Focus.errorColor(true)
 
     fun waiting(): Color = JBUI.CurrentTheme.Focus.warningColor(true)
 
-    /** The tone the tool window's own toolbar has, so a card belongs to the panel it sits in. */
     fun islandBackground(): Color = ISLAND
 
-    /** The strip behind the cards is the editor's ground, which is what the panel opens onto. */
     fun panelBackground(): Color = PANEL
 
-    /**
-     * A tab with nothing in it has no strip and no cards, so it sits on the ground the review tree
-     * sits on rather than on the colour that exists to separate cards from each other.
-     */
     fun emptyBackground(): Color = ISLAND
 
-    /**
-     * A card has to be told apart from what it sits on.
-     *
-     * The list gets that for free: cards are the tool window's tone against the editor's. A card
-     * alone on a panel of its own colour is invisible, so it is lifted a step and given an edge.
-     */
     fun raisedBackground(): Color = accentTint(RAISED_TINT)
 
     fun cardBorder(): Color = accentTint(BORDER_TINT)
 
 }
 
-/** A panel that paints itself as a rounded island instead of a square block. */
 open class IslandPanel(layout: java.awt.LayoutManager) : JPanel(layout) {
 
     var islandColor: Color = InsightUi.islandBackground()
@@ -107,7 +82,6 @@ open class IslandPanel(layout: java.awt.LayoutManager) : JPanel(layout) {
         isOpaque = false
     }
 
-    /** An outline only when one is asked for: a card in a list is told apart by its neighbours. */
     var outlineColor: Color? = null
 
     override fun paintComponent(graphics: Graphics) {

@@ -4,12 +4,6 @@ import com.canopy.util.ProcessHelper
 
 data class PushOutcome(val root: String, val ok: Boolean, val detail: String, val reviewUrl: String?)
 
-/**
- * Pushes every repository a session committed to, and hands back the review link the remote offers.
- *
- * Both GitLab and GitHub print the URL for opening a merge or pull request in the push output, so
- * the link needs no API token and no guess at which host is in play.
- */
 object SessionPush {
 
     private const val GIT_TIMEOUT_MS = 120_000L
@@ -32,10 +26,6 @@ object SessionPush {
     }
 }
 
-/**
- * A superproject's pointer commit references revisions that must already be on the remote, so the
- * submodules go first. Pushing the parent first publishes a pointer nobody else can resolve.
- */
 internal fun pushOrder(roots: List<String>, superproject: String?): List<String> =
     roots.filter { SessionCommit.isInside(it, superproject) } +
         roots.filterNot { SessionCommit.isInside(it, superproject) }

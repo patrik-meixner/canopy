@@ -4,19 +4,8 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 
 /**
- * The hooks Canopy needs to know what a session is doing, scoped to a turn.
- *
- * The unit is the turn, not the tool call. Keying on tools meant a turn that ran six of them
- * reported working, idle, working, idle, working, idle: `PostToolUse` fired between each, and a
- * tool finishing says nothing about whether the agent is done. A turn opens at
- * [UserPromptSubmit] and closes at [Stop], and nothing in between reopens or closes it.
- *
- * `PreToolUse` stays because it re-asserts the turn: a session resumed from outside Canopy, or one
- * that has just had a permission prompt answered, is working again without a prompt being
- * submitted here.
- *
- * The ledger is the other listener: it stamps when a writing tool begins and asks git what it
- * changed when it ends, which is the only exact account of a session's work there is.
+ * A turn opens at UserPromptSubmit and closes at Stop; nothing between them reopens it, so a tool
+ * finishing is not the agent finishing. PreToolUse re-asserts it for a session resumed elsewhere.
  */
 fun canopyHooks(notifyCommand: String, ledgerCommand: String): JsonObject {
     val entry = commands(notifyCommand)
@@ -62,5 +51,4 @@ private fun rule(matcher: String, hooks: JsonArray): JsonObject = JsonObject().a
     add("hooks", hooks.deepCopy())
 }
 
-/** The tools that can change a file. A read costs the ledger nothing because it never hears of it. */
 private const val WRITING_TOOLS = "^(Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__.*)$"

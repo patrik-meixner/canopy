@@ -17,7 +17,6 @@ data class ActivityEntry(
     val tool: String,
     val detail: String,
     val atMillis: Long,
-    /** Which of your prompts the agent was answering; 0 for anything before the first one. */
     val turn: Int
 )
 
@@ -27,12 +26,7 @@ data class TouchedFile(
     val repository: String
 )
 
-/**
- * [revision] changes only when something a tab draws changed, so a tick that appended nothing but
- * tool results does not rebuild five list models and repaint them.
- */
 data class SessionInsight(
-    /** Which session this is about: a revision counts per session and says nothing on its own. */
     val sessionId: String? = null,
     val revision: Long = 0,
     val messages: List<SessionMessage> = emptyList(),

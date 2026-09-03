@@ -4,12 +4,6 @@ import javax.swing.JTree
 import javax.swing.tree.TreeNode
 import javax.swing.tree.TreePath
 
-/**
- * Everything under one row, rather than everything.
- *
- * The platform expands a whole tree or one level of it, and neither answers "show me this module":
- * Expand All opens four hundred pushed files to reach one directory.
- */
 fun expandSubtree(tree: JTree, path: TreePath) {
     val node = path.lastPathComponent as? TreeNode ?: return
 
@@ -19,7 +13,6 @@ fun expandSubtree(tree: JTree, path: TreePath) {
     }
 }
 
-/** Children first: collapsing the parent alone leaves its descendants open underneath it. */
 fun collapseSubtree(tree: JTree, path: TreePath) {
     val node = path.lastPathComponent as? TreeNode ?: return
 

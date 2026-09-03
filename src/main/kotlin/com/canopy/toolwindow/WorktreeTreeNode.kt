@@ -4,7 +4,6 @@ import com.canopy.model.RepoScope
 
 sealed interface WorktreeTreeNode {
 
-    /** Worktrees and branches are different questions, so they are different roots. */
     data class Section(val title: String, val count: Int) : WorktreeTreeNode {
         override fun toString(): String = title
     }

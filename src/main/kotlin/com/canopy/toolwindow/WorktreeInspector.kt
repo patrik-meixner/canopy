@@ -16,13 +16,6 @@ data class WorktreeEntry(
     val prunableReason: String?
 )
 
-/**
- * A worktree with no Claude session attached. [registered] is true when git tracks it (the
- * normal case); false for a leftover directory git no longer knows about.
- *
- * [repoRoot] is the repository that owns it, which is not the project root once submodules
- * are in play: `git worktree remove` has to run against the owning repo.
- */
 data class OrphanWorktree(
     val name: String,
     val path: String,
@@ -36,14 +29,7 @@ data class OrphanWorktree(
 
 enum class WorktreeState { OK, REBASING, MERGING, CHERRY_PICKING, DETACHED, MISSING, UNKNOWN }
 
-/**
- * Working-tree and branch state of one worktree, as reported by [WorktreeInspector.status].
- *
- * [ahead] is the number of commits on the worktree branch that are not reachable from
- * [mainBranch] — i.e. work that would be lost if the worktree were deleted. Note that a
- * branch merged by *squashing* still reads as ahead, because the squashed commit is a
- * different object; reachability can't see through it.
- */
+/** [ahead] is reachability, so a branch merged by squashing still reads as ahead of [mainBranch]. */
 data class WorktreeStatus(
     val state: WorktreeState,
     val name: String,
@@ -90,10 +76,6 @@ object WorktreeInspector {
         }
     }
 
-    /**
-     * One `worktree list` answers both questions about a scope, so the branch its checkout sits
-     * on costs no extra git process.
-     */
     fun collect(scope: RepoScope): RepoWorktrees {
         val entries = list(scope.root)
 
@@ -126,7 +108,6 @@ object WorktreeInspector {
         }
     }
 
-    /** Worktrees across every repo scope that no session in [sessionWorktreeNames] is using. */
     fun findOrphans(scopes: List<RepoScope>, sessionWorktreeNames: Set<String>): List<OrphanWorktree> =
         scopes.flatMap { orphansIn(it, sessionWorktreeNames) }
             .sortedWith(compareBy({ it.repoLabel.lowercase() }, { it.name.lowercase() }))
@@ -163,7 +144,6 @@ object WorktreeInspector {
         return (tracked + leftovers).filter { it.name !in sessionWorktreeNames }
     }
 
-    /** Directories left behind under either worktree convention after git stopped tracking them. */
     private fun leftoverDirectories(scope: RepoScope, registeredPaths: Set<String>): List<String> =
         WORKTREE_DIRECTORY_NAMES
             .map { Path.of(scope.root, *it) }
@@ -175,10 +155,6 @@ object WorktreeInspector {
             }
             .filterNot { candidate -> registeredPaths.any { isSamePath(it, candidate) } }
 
-    /**
-     * Reads the directory rather than guessing: a `.git` file names the git dir a worktree belongs
-     * to, and its absence means nothing but files were left behind.
-     */
     private fun diagnose(path: String, scope: RepoScope): OrphanReason {
         val directory = Path.of(path)
         val gitLink = directory.resolve(".git")
@@ -202,7 +178,6 @@ object WorktreeInspector {
     private fun worktreeNameOf(path: String): String =
         Path.of(path).fileName?.toString() ?: path
 
-    /** Removes a registered worktree (directory + git registration). `--force` discards uncommitted changes. */
     fun remove(projectDir: String, worktreePath: String, force: Boolean): Pair<Boolean, String> {
         return try {
             val cmd = if (force) {
@@ -221,10 +196,6 @@ object WorktreeInspector {
         }
     }
 
-    /**
-     * Deletes [branch] only if it is fully merged — `git branch -d` refuses otherwise, so
-     * unmerged commits are never silently dropped. Returns (deleted, git output).
-     */
     fun deleteBranchIfMerged(projectDir: String, branch: String): Pair<Boolean, String> {
         return try {
             val res = ProcessHelper.execWithTimeout(
@@ -238,7 +209,6 @@ object WorktreeInspector {
         }
     }
 
-    /** Recursively deletes a leftover directory that git no longer tracks as a worktree. */
     fun deleteDirectory(path: String): Pair<Boolean, String> {
         return try {
             val dir = Path.of(path)
@@ -312,13 +282,6 @@ object WorktreeInspector {
         }
     }
 
-    /**
-     * Branch/dirty state of a single worktree, relative to the branch currently checked out
-     * in [projectPath] (the same comparison the worktree toolbar makes).
-     *
-     * Costs two to four short git invocations (~30-50 ms total). Call off the EDT.
-     */
-    /** The branch a repository is on, for callers that would otherwise ask once per worktree. */
     fun currentBranch(repositoryPath: String): String? = runGit(repositoryPath, "branch", "--show-current")
         .takeIf { it.first == 0 }
         ?.second
@@ -334,8 +297,6 @@ object WorktreeInspector {
         }
 
         try {
-            // One rev-parse for the git directory, then plain existence checks inside it. Asking
-            // git for each path meant four processes per worktree to learn that nothing is going on.
             val gitDir = runGit(worktreePath, "rev-parse", "--git-dir")
                 .takeIf { it.first == 0 }
                 ?.second
@@ -362,7 +323,6 @@ object WorktreeInspector {
             }
             val wtBranch = wtOut.trim()
 
-            // The same answer for every worktree of a repository, so a sweep asks once.
             val mainBranch = knownMainBranch ?: runGit(projectPath, "branch", "--show-current")
                 .takeIf { it.first == 0 }
                 ?.second

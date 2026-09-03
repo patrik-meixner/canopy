@@ -58,11 +58,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         notifyFiles[sessionId]?.let { try { Files.deleteIfExists(it) } catch (_: Exception) {} }
     }
 
-    /**
-     * Returns the path to the wrapper script, creating it on first call.
-     * The wrapper reads JSON from stdin, writes it to $CANOPY_STATUS_FILE,
-     * then chains to $CANOPY_ORIGINAL_STATUSLINE (the user's real command).
-     */
     @Synchronized
     fun getWrapperScriptPath(): Path {
         wrapperScript?.let { if (Files.exists(it)) return it }
@@ -87,11 +82,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return script
     }
 
-    /**
-     * Returns the path to the notify wrapper script, creating it on first call.
-     * Hook commands call this script, which reads the event JSON from stdin,
-     * extracts the notification_type, and writes it to $CANOPY_NOTIFY_FILE.
-     */
     @Synchronized
     fun getNotifyScriptPath(): Path {
         notifyScript?.let { if (Files.exists(it)) return it }
@@ -134,10 +124,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return script
     }
 
-    /**
-     * The ledger hook as a shell command: the bundled script, run by whatever python3 is on the
-     * path, and nothing at all where there is none, so a machine without it still runs the agent.
-     */
     @Synchronized
     fun getLedgerCommand(): String {
         val script = ledgerScript?.takeIf { Files.exists(it) } ?: installLedgerScript().also { ledgerScript = it }
@@ -154,10 +140,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return script
     }
 
-    /**
-     * Creates a temporary settings file that overrides statusLine.command
-     * and adds Notification hooks for idle/permission detection.
-     */
     fun createOverrideSettingsFile(wrapperPath: Path, notifyPath: Path, ledgerCommand: String): Path {
         val file = Files.createTempFile("canopy-settings-", ".json")
         val root = JsonObject()
@@ -178,10 +160,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return file
     }
 
-    /**
-     * The user's own settings, lowest priority first, so the file handed to `--settings` still
-     * carries everything they configured rather than only what Canopy adds.
-     */
     private fun userSettings(): JsonObject {
         val home = System.getProperty("user.home") ?: return JsonObject()
 
@@ -203,15 +181,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return Path.of(System.getProperty("java.io.tmpdir"), "canopy-notify-$sessionId")
     }
 
-    /**
-     * Discovers the user's configured statusLine command by reading the settings
-     * cascade in Claude Code's own precedence order (highest priority first):
-     *   1. Enterprise-managed policy settings (managed-settings.json)
-     *   2. <project>/.claude/settings.local.json
-     *   3. <project>/.claude/settings.json
-     *   4. ~/.claude/settings.local.json
-     *   5. ~/.claude/settings.json
-     */
     fun discoverOriginalStatusLineCommand(): String? {
         for (path in settingsCascadePaths()) {
             val cmd = readStatusLineCommand(path)
@@ -220,7 +189,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return null
     }
 
-    /** Ordered settings files Canopy consults to find the real statusLine command, highest priority first. */
     private fun settingsCascadePaths(): List<Path> {
         val home = System.getProperty("user.home")
         val paths = mutableListOf<Path>()
@@ -234,10 +202,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         return paths
     }
 
-    /**
-     * Path to the OS-level enterprise-managed Claude settings, which take precedence
-     * over all user/project settings. Returns null on unrecognized platforms.
-     */
     private fun managedSettingsPath(): Path? {
         val os = System.getProperty("os.name").lowercase()
         return when {
@@ -270,12 +234,8 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     fun stopMonitoring(sessionId: String) {
         monitoredSessions.remove(sessionId)
         notifyFiles.remove(sessionId)
-        // Keep currentStatus, notifyState, and /tmp files around so a re-instantiated
-        // editor can show the last known state immediately. Use clearSession() for
-        // explicit tab-close cleanup, and service dispose() handles project close.
     }
 
-    /** Fully clear all state for a session — call when the user explicitly closes the tab. */
     fun clearSession(sessionId: String) {
         stopMonitoring(sessionId)
         notifyState.remove(sessionId)
@@ -289,10 +249,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
         pollAlarm.addRequest(::poll, 500)
     }
 
-    /**
-     * Twice a second across every open session: reading and parsing files that have not changed is
-     * the bulk of it, and a modification time answers that for the price of one stat.
-     */
     private fun changedSince(file: Path): Boolean {
         // Size as well as time: a millisecond is coarse enough that two writes can share one, and a
         // missed notification is a session that looks like it is still working.

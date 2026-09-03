@@ -14,20 +14,11 @@ import javax.swing.SwingConstants
 import javax.swing.text.SimpleAttributeSet
 import javax.swing.text.StyleConstants
 
-/**
- * What a tab says when it has nothing to show.
- *
- * A tab with no content used to be an unbroken slab of colour, which reads as a tab that failed to
- * load rather than one with nothing in it yet. Every tab says the same three things in the same
- * place: what is missing, and what would put something there.
- */
 class EmptyState(icon: Icon, title: String, hint: String) : JPanel(GridBagLayout()) {
 
     init {
         background = InsightUi.emptyBackground()
 
-        // The column spans the panel rather than sizing to its text, which is what keeps the hint
-        // wrapping instead of clipping and keeps it centred once the panel is narrower than it.
         val column = JPanel(BorderLayout(0, JBUI.scale(6))).apply {
             isOpaque = false
             add(JLabel(illustrationOf(icon), SwingConstants.CENTER), BorderLayout.NORTH)

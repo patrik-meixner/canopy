@@ -6,12 +6,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.wm.ToolWindowManager
 
-/**
- * Opens one of the plugin's tool windows.
- *
- * The platform's own `Activate…ToolWindow` action only exists once the window has been registered,
- * which is later than the menu is built, so referencing it there fails on every start.
- */
 abstract class ActivateToolWindowAction(private val id: String) : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {

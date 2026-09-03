@@ -1,14 +1,7 @@
 package com.canopy.model
 
-/**
- * How much a session wants you, derived from the notify state the CLI writes.
- *
- * [rank] orders the list: with several agents running, the one blocked on a permission prompt
- * has to surface above one that is merely thinking, or you find it by clicking through tabs.
- */
 enum class SessionAttention(val rank: Int, val glyph: String) {
     NeedsPermission(0, "!"),
-    /** A finished turn is your turn, not an alarm: it reads as a prompt, not a question. */
     WaitingForInput(1, "›"),
     Working(2, "*"),
     Compacting(2, "~"),
@@ -17,14 +10,6 @@ enum class SessionAttention(val rank: Int, val glyph: String) {
     val isBlocking: Boolean get() = this == NeedsPermission || this == WaitingForInput
 }
 
-/**
- * What a session wants from you.
- *
- * The CLI's notify state is exact but only exists for sessions this plugin launched. For one
- * running in an outside terminal the transcript is the only evidence, and it is read solely when
- * the session is actually running — otherwise every finished session from months ago would look
- * like it were waiting.
- */
 fun sessionAttentionFor(
     notifyState: String?,
     isRunning: Boolean,
@@ -49,14 +34,7 @@ private fun SessionAttention.isOutlivedBy(tail: TranscriptTail?, idleForMillis: 
     return this == SessionAttention.Working && idleForMillis > WORKING_GOES_STALE_MS
 }
 
-/**
- * Long enough that a genuinely long turn is never mistaken for an abandoned one.
- *
- * Working now lasts a whole turn rather than a single tool call, and it is only ever cleared by the
- * hook that fires when the turn ends. A turn killed before that - the process gone, the keystroke
- * interrupted - would otherwise report working for as long as the session existed. Measured against
- * the transcript, which a working agent writes to on every tool result.
- */
+/** A turn killed before its Stop hook would report working forever; long enough that a real one never trips it. */
 const val WORKING_GOES_STALE_MS = 600_000L
 
 fun sessionAttentionOf(notifyState: String?): SessionAttention = when {

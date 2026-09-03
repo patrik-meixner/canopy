@@ -18,12 +18,6 @@ import javax.swing.DefaultListModel
 import javax.swing.JList
 import javax.swing.ListSelectionModel
 
-/**
- * The commits a session made, and the files behind whichever one is selected.
- *
- * The Log window answers this per repository and per branch. A session's commits span whatever it
- * worked in, so they are collected per repository it wrote to and bounded by when it started.
- */
 class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
     private val model = DefaultListModel<CommitEntry>()
@@ -41,13 +35,6 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             override fun textChanged(event: javax.swing.event.DocumentEvent) = applyFileQuery()
         })
     }
-    /**
-     * What was last read for each session, shown the moment you come back to it.
-     *
-     * Every open and every switch used to leave the list empty until git had finished walking the
-     * log of each repository. The answer rarely changes between two looks; when it has, the list
-     * is replaced behind you.
-     */
     private val known = LinkedHashMap<String, List<CommitEntry>>()
     private var limit = COMMIT_PAGE
     private val split = JBSplitter(true, "canopy.commits.split", 0.45f)
@@ -73,8 +60,6 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         commits.addListSelectionListener { if (!it.valueIsAdjusting) showFilesOf(commits.selectedValuesList) }
 
         files.hideViewerBorder()
-        // The same one-tab diff the Commit window opens, so walking a commit's files never
-        // accumulates a tab per file.
         val preview = com.canopy.toolwindow.ReviewDiffPreview(files.viewer, files)
         com.intellij.openapi.util.Disposer.register(parent, preview)
         files.setShowDiffActionPreview(preview)
@@ -94,7 +79,6 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         add(body, BorderLayout.CENTER)
     }
 
-    /** The tab follows the working trees on its own; this is for a commit made outside them. */
     private fun toolbar(): com.intellij.openapi.actionSystem.ActionToolbar {
         val refresh = object : com.intellij.openapi.actionSystem.AnAction(
             "Refresh",
@@ -130,7 +114,6 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         loadedFor = signature
         loadedRoots = roots
 
-        // Cache first, git behind it.
         known[session]?.let { show(it) }
         reload(roots)
     }
@@ -148,17 +131,14 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         body.showEmpty(collected.isEmpty())
         model.clear()
         page.shown.forEach { model.addElement(it) }
-        // Every commit that was selected and is still listed, so a reload keeps a whole range.
         val rows = (0 until model.size()).filter { model[it].sha in kept }
         if (rows.isNotEmpty()) commits.selectedIndices = rows.toIntArray()
     }
 
-    /** One git log per repository the session wrote to, off the EDT, newest commit first. */
     private fun reload(roots: List<Pair<String, String>>) {
         val since = insightStart()
 
         CanopyExecutor.submit {
-            // One git log per repository, and they wait on the disk rather than on each other.
             val logs = roots
                 .mapNotNull { (repository, path) -> repositoryRootOf(path)?.let { repository to it } }
                 .distinctBy { it.second }
@@ -191,8 +171,6 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
     private fun repositoryRootOf(path: String): String? =
         com.canopy.util.GitRootCache.rootOf(com.canopy.util.directoryOf(java.nio.file.Path.of(path)))
 
-    /** Several commits answer as one set of files, which is what a range of them means. */
-    /** The filter survives a change of selection, so walking commits keeps hunting the same file. */
     private fun applyFileQuery() {
         val query = fileSearch.text.orEmpty()
 

@@ -15,14 +15,6 @@ import javax.swing.BoxLayout
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-/**
- * Which session is being reviewed, and whether anything it left behind needs doing.
- *
- * The same card the sidebar draws, given the room the review tab has: the state it is in, what it
- * is called, where and when it ran, and its outstanding work as counts rather than a sentence. It
- * carries its own surface and edge, because unlike a row in a list it has no neighbours to be told
- * apart from.
- */
 class SessionHeaderCard : JPanel(BorderLayout()) {
 
     private val island = IslandPanel(BorderLayout(JBUI.scale(12), 0))
@@ -67,13 +59,6 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         add(island, BorderLayout.CENTER)
     }
 
-    /**
-     * [stateOf] is read at paint time, not here.
-     *
-     * The card is redrawn when the change set changes, which is nothing to do with what the agent
-     * is doing: a state captured here froze on whatever was true at the last scan, and the header
-     * spun on while the row, the tab and the toolbar had all gone quiet.
-     */
     fun show(session: SessionDisplay?, counts: List<OutstandingCount>, isEstimated: Boolean, stateOf: () -> SessionState) {
         glyph.icon = GlyphIcon(
             { stateOf().let { sessionGlyph(it.attention, it.presence, System.currentTimeMillis()) } ?: "●" },
@@ -88,9 +73,6 @@ class SessionHeaderCard : JPanel(BorderLayout()) {
         chips.removeAll()
         chips.add(com.canopy.insight.rowOf(CHIP_GAP, counts.map(::CountChip)), BorderLayout.CENTER)
         chips.isVisible = counts.isNotEmpty()
-        // The card is what grew, so the card is what has to be measured again. Revalidating the
-        // chip row alone left the row at its new height inside a card still sized without it, and
-        // the pills were cut off by the edge.
         revalidate()
         repaint()
     }
@@ -111,7 +93,6 @@ private const val TITLE_SCALE = 1.15f
 private const val GLYPH_BOX = 20
 private const val CHIP_GAP = 6
 
-/** Where it worked, how long ago, and how much was said, in that order of use. */
 internal fun placeLine(session: SessionDisplay?, nowMillis: Long = System.currentTimeMillis()): String {
     if (session == null) return "Open a session to review what it changed"
 

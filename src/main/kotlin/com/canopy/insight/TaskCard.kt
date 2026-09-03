@@ -15,9 +15,6 @@ import javax.swing.SwingConstants
 
 private const val DESCRIPTION_LINES = 2
 
-/**
- * One task as an island: its state, what it is, and the first of why.
- */
 class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
 
     private val island = IslandPanel(BorderLayout(JBUI.scale(10), 0))
@@ -44,7 +41,6 @@ class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
         island.repaint()
     }
 
-    /** The same mark and the same spin the session itself is drawn with, so a state means one thing. */
     private fun statusChip() = JLabel(
         com.canopy.toolwindow.GlyphIcon(
             com.canopy.model.taskGlyph(

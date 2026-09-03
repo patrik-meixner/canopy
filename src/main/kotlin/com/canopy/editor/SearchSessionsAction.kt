@@ -34,11 +34,6 @@ import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.event.DocumentEvent
 
-/**
- * Finds the session where something was said, by what was said in it.
- *
- * Sessions are named after their first prompt, which is a poor index of what they became.
- */
 class SearchSessionsAction : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {
@@ -95,7 +90,6 @@ private class SearchSessionsDialog(private val project: Project) : DialogWrapper
         add(ScrollPaneFactory.createScrollPane(results, true), BorderLayout.CENTER)
     }
 
-    /** Each keystroke cancels the scan the last one started, so typing never queues up work. */
     private fun schedule() {
         running?.set(true)
         val cancelled = AtomicBoolean(false)

@@ -23,8 +23,6 @@ internal fun readFiltered(
 
         val raw = String(buf, offset, count)
         onRaw(raw)
-        // Joined before filtering, not after: the whole point is that the filter sees the sequence
-        // whole rather than two halves, neither of which it matches.
         val split = splitTrailingEscape(filter(carried() + raw))
         if (split.emit.length > length) return tooLongForBuffer(buf, offset, length, split, carry)
 
@@ -36,11 +34,6 @@ internal fun readFiltered(
     }
 }
 
-/**
- * A held-back tail plus a full read can exceed the buffer the caller offered, and writing past it
- * would corrupt whatever sits after. The overflow was read before the held escape sequence, so it
- * goes back in front of it.
- */
 private fun tooLongForBuffer(
     buf: CharArray,
     offset: Int,

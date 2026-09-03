@@ -2,12 +2,6 @@ package com.canopy.toolwindow
 
 import com.canopy.util.ProcessHelper
 
-/**
- * What each worktree costs on disk, measured only when asked.
- *
- * A worktree with installed dependencies runs to gigabytes, and a handful of stale ones is the
- * usual reason a disk fills. Measuring walks the whole tree, so this never runs on a sweep.
- */
 object WorktreeDiskUsage {
 
     private const val TIMEOUT_MS = 20_000L
@@ -20,7 +14,6 @@ object WorktreeDiskUsage {
     }
 }
 
-/** `du` reports a leading block count and keeps going after a permission error, so read the first field. */
 internal fun parseDuKilobytes(output: String): Long? =
     output.lineSequence()
         .mapNotNull { it.trim().substringBefore('\t').substringBefore(' ').toLongOrNull() }

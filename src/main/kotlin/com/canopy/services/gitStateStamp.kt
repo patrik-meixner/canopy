@@ -20,7 +20,6 @@ fun gitStateStamp(root: String): Long {
     return GIT_STATE_FILES.maxOf { name -> lastModified(directory.resolve(name)) }
 }
 
-/** A worktree's .git is a file naming the real directory, which is where its refs actually move. */
 private fun worktreeGitDirectory(git: Path): Path? {
     if (!Files.isRegularFile(git)) return null
 

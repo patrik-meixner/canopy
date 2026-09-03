@@ -5,13 +5,6 @@ import com.google.gson.JsonObject
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * The session's task list, read from where Claude Code keeps it: one JSON file per task under
- * `~/.claude/tasks/<session id>/`.
- *
- * Folding TaskCreate and TaskUpdate calls out of the transcript would rebuild the same list from
- * its edit history, and get it wrong the moment a task is changed by anything but a tool call.
- */
 object TaskStore {
 
     private val gson = Gson()
@@ -35,7 +28,6 @@ object TaskStore {
         }
     }
 
-    /** Cheap enough to run on a tick: one stat per task file, no parsing. */
     fun signature(sessionId: String): String {
         val directory = directoryFor(sessionId)
         if (!Files.isDirectory(directory)) return ""

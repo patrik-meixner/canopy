@@ -20,7 +20,6 @@ class WorktreeExclusions(private val project: Project) : Disposable {
     private val started = AtomicBoolean(false)
     private val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
 
-    /** Instant, and empty until the first walk has landed: nothing is excluded that was not found. */
     fun current(): Array<String> {
         if (!CanopySettings.getInstance().state.excludeWorktreesFromIndex) return emptyArray()
         if (started.compareAndSet(false, true)) alarm.addRequest(::recompute, 0)
@@ -42,7 +41,6 @@ class WorktreeExclusions(private val project: Project) : Disposable {
     override fun dispose() = Unit
 
     companion object {
-        /** Worktrees appear when an agent starts one; a minute late is invisible, a walk a second is not. */
         private const val REVISIT_MS = 60_000
 
         fun getInstance(project: Project): WorktreeExclusions = project.getService(WorktreeExclusions::class.java)

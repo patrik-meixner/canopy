@@ -92,10 +92,6 @@ class ClaudeTerminalService(private val project: Project) {
             onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
     }
 
-    /**
-     * A plain login shell rather than a Claude session, so the agent and account can be chosen
-     * by hand. Login shells pick up the user's own PATH, which is where wrappers like `claude-p` live.
-     */
     fun createShellWidget(parent: Disposable, workingDir: String? = null): TerminalSession {
         val shell = com.canopy.util.ProcessHelper.augmentedEnv()["SHELL"] ?: "/bin/zsh"
 
@@ -117,7 +113,6 @@ class ClaudeTerminalService(private val project: Project) {
     ): TerminalSession {
         val env = com.canopy.util.ProcessHelper.augmentedEnv()
         env["TERM"] = "xterm-256color"
-        // Claude Code gates OSC 8 hyperlinks on this exact value, as does IntelliJ's own terminal runner.
         env["TERMINAL_EMULATOR"] = "JetBrains-JediTerm"
         val settings = com.canopy.settings.CanopySettings.getInstance()
         val envOverrides = settings.environmentOverrides()
@@ -136,7 +131,6 @@ class ClaudeTerminalService(private val project: Project) {
             arrayOf(claudePath) + command.drop(1).toTypedArray() + settings.extraSessionArgs().toTypedArray()
         }
 
-        // Build the full command, adding --settings override for status interception
         val fullCommand = if (statusFile != null) {
             val statusService = ClaudeStatusService.getInstance(project)
             val wrapperPath = statusService.getWrapperScriptPath()
@@ -152,7 +146,6 @@ class ClaudeTerminalService(private val project: Project) {
                 try { Files.deleteIfExists(overridePath) } catch (_: Exception) {}
             })
 
-            // Insert --settings right after the binary
             arrayOf(resolvedCommand[0], "--settings", overridePath.toAbsolutePath().toString()) +
                 resolvedCommand.drop(1).toTypedArray()
         } else {
@@ -183,7 +176,6 @@ class ClaudeTerminalService(private val project: Project) {
             throw e
         }
 
-        // Wrap onActiveChanged to fire onReady on the first idle transition
         val wrappedOnActiveChanged: ((Boolean) -> Unit)? = if (onActiveChanged != null || onReady != null) {
             var readyFired = false
             { active: Boolean ->
@@ -205,11 +197,7 @@ class ClaudeTerminalService(private val project: Project) {
 
         val settingsProvider = JBTerminalSystemSettingsProvider()
         val widget = JBTerminalWidget(project, settingsProvider, parent)
-        // The tool window's terminal installs these; a widget built directly gets none, which is
-        // why a URL printed by a status line was plain text rather than something to click.
         widget.addMessageFilter(com.intellij.execution.filters.UrlFilter(project))
-        // Written only once the shell has shown its prompt: a line sent before it is reading is a
-        // line the shell never runs.
         typed?.let { line -> connector.onFirstOutput = { sendInput(ptyProcess, line) } }
         startOnceWide(widget) { widget.start(connector) }
         ClipboardImagePaste.install(widget.terminalPanel) { sendInput(ptyProcess, it) }
@@ -229,11 +217,6 @@ class ClaudeTerminalService(private val project: Project) {
         return TerminalSession(widget, ptyProcess)
     }
 
-    /**
-     * A terminal started before its panel has been laid out reports a handful of columns, and the
-     * agent wraps its whole transcript to that width. The wrapping is baked into the scrollback, so
-     * the later resize widens new output and leaves everything above it in a narrow ribbon.
-     */
     private fun startOnceWide(widget: JBTerminalWidget, start: () -> Unit) {
         val panel = widget.terminalPanel
         if (panel.width >= MIN_START_WIDTH) return start()
@@ -247,7 +230,6 @@ class ClaudeTerminalService(private val project: Project) {
             }
         })
 
-        // Waiting forever on a width that never arrives would be a tab that does nothing at all.
         javax.swing.Timer(START_FALLBACK_MS) { begin() }.apply { isRepeats = false }.start()
     }
 

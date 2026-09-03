@@ -13,9 +13,6 @@ import java.awt.BorderLayout
 import javax.swing.JPanel
 import javax.swing.event.DocumentEvent
 
-/**
- * What you asked this session, as cards you can filter, read in full and click back to.
- */
 class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(project, parent) {
 
     private val cards = CardListPanel(
@@ -55,14 +52,12 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
 
         messages = com.canopy.toolwindow.withoutRepeats(insight.messages)
         rebuild()
-        // A different session is a different conversation, and you read a conversation from its end.
         if (changedSession) cards.followNewest()
     }
 
     private fun rebuild() {
         val query = search.text.trim()
         val matching = messages.filter { it.text.contains(query, ignoreCase = true) }
-        // The newest are the ones being read, so a page is taken from the end.
         val page = pageful(matching.asReversed(), limit)
         val shown = page.shown.asReversed()
 
@@ -87,8 +82,6 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
         MessagePreview.show(card, event.point, message) { jumpTo(message) }
     }
 
-    /** A message older than the scrollback is genuinely gone, which is worth saying rather than
-     *  looking like the click did nothing. */
     private fun jumpTo(message: SessionMessage) {
         val terminal = selectedSession()
             ?.let { session -> FileEditorManager.getInstance(project).getEditors(session) }

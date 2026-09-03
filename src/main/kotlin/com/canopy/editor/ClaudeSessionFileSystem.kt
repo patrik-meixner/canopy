@@ -6,16 +6,6 @@ import com.intellij.openapi.vfs.VirtualFileSystem
 import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * In-memory VFS that gives ClaudeSessionVirtualFile instances stable, resolvable URLs.
- *
- * Without this, tab drag-and-drop loses the file because LightVirtualFile URLs
- * (mock:///name) can't be resolved back by the VFS after serialization.
- *
- * Files are registered here on creation and looked up by path (session key).
- * Values are weak references — entries are GC'd once no editor or IDE component
- * holds the file (e.g. after all tabs for that session are closed).
- */
 class ClaudeSessionFileSystem : VirtualFileSystem() {
 
     private val files = ConcurrentHashMap<String, WeakReference<ClaudeSessionVirtualFile>>()

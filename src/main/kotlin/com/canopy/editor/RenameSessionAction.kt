@@ -8,12 +8,6 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.vfs.VirtualFile
 
-/**
- * Renames the session behind a tab, through the CLI rather than behind its back.
- *
- * `/rename` is what writes the title Claude itself reads back, so a name set here is the same name
- * the session has anywhere else. A shell tab has no session, so only its tab is renamed.
- */
 class RenameSessionAction : AnAction(), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {

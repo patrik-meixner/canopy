@@ -5,9 +5,6 @@ import com.intellij.terminal.JBTerminalWidget
 import java.awt.Container
 import javax.swing.JScrollBar
 
-/**
- * Finds a line in a terminal's scrollback and scrolls to it.
- */
 object TerminalScroll {
 
     private const val KEY_LENGTH = 24

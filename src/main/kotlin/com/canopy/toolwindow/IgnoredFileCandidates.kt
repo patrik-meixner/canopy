@@ -2,9 +2,6 @@ package com.canopy.toolwindow
 
 import com.canopy.util.ProcessHelper
 
-/**
- * The gitignored files near a repository root: local configuration a worktree starts without.
- */
 object IgnoredFileCandidates {
 
     private const val TIMEOUT_MS = 15_000L
@@ -25,10 +22,6 @@ private const val MAX_CANDIDATES = 30
 
 private val NOISE = Regex("""(^|/)(\.DS_Store|.*\.log|\.eslintcache|.*\.tsbuildinfo|.*\.pid)$""")
 
-/**
- * Directory entries end in `/` and are dropped: `--directory` collapses node_modules into one of
- * those, and copying an installed dependency tree is what the setup command is for.
- */
 internal fun configCandidates(lines: List<String>): List<String> =
     lines.asSequence()
         .map { it.trim() }

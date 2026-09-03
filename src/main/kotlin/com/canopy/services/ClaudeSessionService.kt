@@ -32,19 +32,9 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     private val pendingTranscripts = java.util.concurrent.ConcurrentHashMap.newKeySet<Path>()
     private val incrementalInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
-
     @Volatile
     private var cachedSessions: List<SessionDisplay>? = null
 
-    /**
-     * Per-transcript incremental parse state, keyed by file.
-     *
-     * The session list is rebuilt on every transcript write, and transcripts reach tens of
-     * megabytes — re-parsing every file from the top each time made the cost of watching a
-     * session grow with its own history. Every field the list needs accumulates cleanly over
-     * appended lines (counts add, the first prompt sticks, the newest title and timestamp
-     * win), so each pass only parses the bytes that are new.
-     */
     private val accumulators = java.util.concurrent.ConcurrentHashMap<Path, SessionAccumulator>()
 
     private val MAX_TOUCHED_PATHS = 2_000
@@ -61,10 +51,8 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         var turnTail: com.canopy.model.TranscriptTail? = null
         var lastPromptLine = 0
         var lastPromptAt: Instant? = null
-        /** Capped: a long session can touch thousands of files and this list only feeds a summary. */
         val touchedPaths = LinkedHashSet<String>()
 
-        /** Derived from [touchedPaths], recomputed only when that set has actually grown. */
         var roots: Map<String, Int> = emptyMap()
         var rootsFor = -1
 
@@ -77,7 +65,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             return roots
         }
 
-        /** Drop everything: the file was rewritten, so accumulated totals no longer apply. */
         fun reset() {
             firstPrompt = null
             customTitle = null
@@ -98,14 +85,12 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     @Volatile
     private var lastKnownMtime: Long = 0
 
-    /** Session IDs running in external terminals (not Canopy). */
     @Volatile
     private var externalSessionIds: Set<String> = emptySet()
 
     private val refreshInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private val refreshQueued = java.util.concurrent.atomic.AtomicBoolean(false)
 
-    /** Last external-session sweep; that sweep shells out to `ps`, so it gets a floor. */
     @Volatile
     private var lastExternalSweep = 0L
 
@@ -130,27 +115,16 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         listeners.remove(listener)
     }
 
-    /** Name from the cache only: a notification must never trigger a full transcript sweep. */
     fun cachedDisplayName(sessionId: String): String? =
         cachedSessions?.firstOrNull { it.sessionId == sessionId }?.displayName
 
-    /** From the cache only: a checkpoint must not trigger a transcript sweep. */
     fun cachedWorkingDir(sessionId: String): String? =
         cachedSessions?.firstOrNull { it.sessionId == sessionId }
             ?.let { session -> session.worktreeName?.let { com.canopy.util.ClaudePathEncoder.worktreeAbsolutePath(project.basePath ?: return null, it) } ?: session.projectPath }
 
-    /** From the cache only, so a tab render cannot trigger a transcript sweep. */
     fun cachedStartedAt(sessionId: String): java.time.Instant? =
         cachedSessions?.firstOrNull { it.sessionId == sessionId }?.startedAt
 
-    /**
-     * The cached list, and never a parse on the EDT.
-     *
-     * A tab icon, a row and the review header all ask for this while painting. Loading here meant
-     * the first of those paints parsed every transcript in the project - well over a gigabyte on a
-     * working machine - with the UI thread held for the duration. Painting gets whatever is known
-     * now and a refresh behind it; anything that truly needs the list is off the EDT already.
-     */
     fun getSessions(): List<SessionDisplay> {
         cachedSessions?.let { return it }
         if (ApplicationManager.getApplication().isDispatchThread) {
@@ -162,14 +136,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         return loadSessions().also { cachedSessions = it }
     }
 
-    /**
-     * Everything the session left on disk, wherever the encoder actually put it.
-     *
-     * This used to delete one guessed path. Claude Code encodes a project directory by replacing
-     * both `/` and `.`, and [ClaudePathEncoder.projectDir] replaces only `/`, so for any project
-     * with a dot in its path the delete removed nothing at all - and the next refresh, which reads
-     * every candidate directory, put the session straight back.
-     */
     fun deleteSession(sessionId: String): Boolean {
         val basePath = project.basePath ?: return false
         val directories = ClaudePathEncoder.projectDirCandidates(basePath) +
@@ -190,8 +156,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             }
         }
 
-        // Directly, rather than by asking for a refresh: a background scan already in flight would
-        // otherwise overwrite the corrected cache before the listeners see it.
         cachedSessions = cachedSessions?.filter { it.sessionId != sessionId }
         SessionDigestCache.getInstance(project).retainOnly(
             cachedSessions.orEmpty().mapNotNull { transcriptPathOf(it, basePath)?.toString() }.toSet()
@@ -211,21 +175,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         return directories.map { it.resolve("${session.sessionId}.jsonl") }.firstOrNull { Files.exists(it) }
     }
 
-    /**
-     * Rebuild the session list and notify listeners.
-     *
-     * Always runs on a background thread: the VFS listener that drives most refreshes fires
-     * in a write action on the EDT, so doing the file scan (and the external-session process
-     * sweep) inline blocked the UI thread on every transcript write.
-     *
-     * Overlapping requests coalesce — a call arriving mid-pass sets a flag that schedules
-     * exactly one more pass afterwards, rather than queueing a pass per event.
-     *
-     * Coalescing alone is not a limit: the next pass started the instant the last one ended, so a
-     * transcript being appended to kept the parse and the table rebuild that follows it running
-     * back to back for as long as an agent was talking. A floor between passes is what makes the
-     * cost proportional to time rather than to how fast the machine can go round.
-     */
     fun refresh() {
         if (!refreshInFlight.compareAndSet(false, true)) {
             refreshQueued.set(true)
@@ -241,19 +190,11 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             } finally {
                 lastRefreshAt = System.currentTimeMillis()
                 refreshInFlight.set(false)
-                // State changed while we were working: run once more, not once per event.
                 if (refreshQueued.compareAndSet(true, false)) refreshAfterFloor()
             }
         }
     }
 
-    /**
-     * Re-reads the transcripts that actually changed, rather than every transcript in the project.
-     *
-     * An agent writing touches one file; rebuilding the whole list meant stat-ing sixty of them for
-     * each write. Bursts coalesce without waiting: a path arriving mid-pass joins the next round of
-     * the same task, so nothing is delayed and nothing is done twice.
-     */
     fun refreshTranscripts(paths: Set<Path>) {
         pendingTranscripts.addAll(paths)
         if (!incrementalInFlight.compareAndSet(false, true)) return
@@ -278,8 +219,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         val current = cachedSessions ?: loadSessions().also { cachedSessions = it }
         val (present, gone) = paths.partition { Files.exists(it) }
 
-        // A deleted transcript still has an accumulator holding everything it ever said, so
-        // reparsing it would put the session straight back into the list.
         gone.forEach { accumulators.remove(it) }
         val removedIds = gone.mapTo(HashSet()) { it.fileName.toString().removeSuffix(".jsonl") }
 
@@ -297,20 +236,12 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         notifyListeners()
     }
 
-    /** Every listener rebuilds something on screen, so nothing is said until something has changed. */
     private fun notifyListeners() {
         ApplicationManager.getApplication().invokeLater {
             listeners.forEach { it() }
         }
     }
 
-    /**
-     * A transcript's directory says which worktree it belongs to; nothing else has to be read.
-     *
-     * Asked once per transcript, and a sweep covers every transcript in the project - which meant
-     * listing the worktree directory sixty times to answer the same question sixty ways. The map is
-     * built once and held briefly: worktrees appear on human timescales, sweeps in bursts.
-     */
     private fun worktreeNameOf(path: Path, basePath: String): String? =
         worktreesByProjectDir(basePath)[path.parent]
 
@@ -336,8 +267,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
 
         project.messageBus.connect(this)
             .subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
-                // Every VFS batch in the IDE arrives here, and a build produces thousands: what
-                // does not change between them is worked out once, above.
                 private val projectDirStrs = projectDirs.map { it.toString() }
                 private val sessionsDirStr = ClaudePathEncoder.sessionsDir().toString()
 
@@ -368,14 +297,12 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     }
 
     private fun startPolling() {
-        // First check runs quickly so external session status is known before the first render
         pollAlarm.addRequest(::checkForChanges, 200)
     }
 
     private fun checkForChanges() {
         val basePath = project.basePath ?: return
 
-        // Check main project dir(s) and all worktree project dirs
         val dirsToCheck = ClaudePathEncoder.projectDirCandidates(basePath).toMutableList()
         try {
             for (name in ClaudePathEncoder.worktreeNames(basePath)) {
@@ -410,13 +337,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         }
     }
 
-    /**
-     * Returns true if external session state changed.
-     *
-     * Rate-limited: the detector scans the whole process table, and both the 5 s poll and
-     * every list refresh want an answer. External terminals appear and disappear on human
-     * timescales, so a floor of [EXTERNAL_SWEEP_MIN_MS] loses nothing.
-     */
     private fun refreshExternalSessions(): Boolean {
         val now = System.currentTimeMillis()
         if (now - lastExternalSweep < EXTERNAL_SWEEP_MIN_MS) return false
@@ -441,8 +361,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 loadSessionsFromDir(wtProjectDir, name, seen)
             }
         } catch (_: Exception) { emptyList() }
-        // Drop parse state for transcripts that are gone (deleted sessions, removed worktrees)
-        // so their accumulators don't outlive them.
         accumulators.keys.retainAll(seen)
         SessionDigestCache.getInstance(project).retainOnly(seen.map { it.toString() }.toSet())
         return (mainSessions + wtSessions).sortedByDescending { it.modified }
@@ -475,10 +393,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         return sessions.sortedByDescending { it.modified }
     }
 
-    /**
-     * A transcript that has not changed since it was last parsed is never opened again: these files
-     * only grow, and a project directory here reaches gigabytes.
-     */
     private fun parseJsonlSession(path: Path, worktreeName: String?): SessionDisplay? {
         val sessionId = path.fileName.toString().removeSuffix(".jsonl")
         val digests = SessionDigestCache.getInstance(project)
@@ -500,7 +414,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
 
             val firstPrompt = acc.firstPrompt ?: return null
 
-            // Use file modification time if no timestamp found in content
             val modified = if (acc.lastTimestamp == Instant.EPOCH) {
                 Instant.ofEpochMilli(Files.getLastModifiedTime(path).toMillis())
             } else {
@@ -529,7 +442,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         }
     }
 
-    /** Fold one transcript line into [acc]. Every update is order-independent or last-wins. */
     private fun applyLine(acc: SessionAccumulator, line: String) {
         try {
             val obj = gson.fromJson(line, JsonObject::class.java)
@@ -554,7 +466,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 acc.touchedPaths.addAll(com.canopy.util.touchedFilePathsIn(obj))
             }
 
-            // /rename writes a custom-title entry; keep the last one
             if (type == "custom-title") {
                 acc.customTitle = obj.get("customTitle")?.asString
             }
@@ -565,7 +476,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
             obj.get("cwd")?.asString?.let { acc.workingDirectory = it }
             }
 
-            // Track latest timestamp
             val ts = obj.get("timestamp")
             if (ts != null) {
                 val instant = when {
@@ -586,7 +496,6 @@ class ClaudeSessionService(private val project: Project) : Disposable {
                 }
             }
         } catch (_: Exception) {
-            // Skip malformed lines
         }
     }
 
@@ -598,16 +507,13 @@ class ClaudeSessionService(private val project: Project) : Disposable {
         }
     }
 
-
     override fun dispose() {
         listeners.clear()
     }
 
     companion object {
 
-        /** The shortest gap between two full session sweeps, however fast transcripts arrive. */
         private const val REFRESH_FLOOR_MS = 750L
-        /** Floor between `ps`-based external-session sweeps. */
         private const val EXTERNAL_SWEEP_MIN_MS = 4_000L
 
         fun getInstance(project: Project): ClaudeSessionService =

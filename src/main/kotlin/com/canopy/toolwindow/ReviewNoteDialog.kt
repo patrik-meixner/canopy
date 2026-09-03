@@ -10,9 +10,6 @@ import com.intellij.util.ui.UIUtil
 import javax.swing.JComponent
 import javax.swing.JTextArea
 
-/**
- * The note is typed where the diff is, so it can be written while still looking at the code.
- */
 class ReviewNoteDialog(
     project: Project,
     private val files: List<String>,

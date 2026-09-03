@@ -21,14 +21,6 @@ data class TranscriptHit(
     val speaker: TranscriptSpeaker
 )
 
-/**
- * Full-text search over everything said in every session, by you and by the agent.
- *
- * There is no index, and deliberately so: a raw substring test on the undecoded line rejects
- * upwards of ninety-nine percent of a transcript, and JSON is parsed only for the lines that
- * survive it. Building and invalidating an index over a gigabyte of history would cost more than
- * the scan it replaces.
- */
 object TranscriptSearch {
 
     private const val PER_SESSION_LIMIT = 20
@@ -94,7 +86,6 @@ object TranscriptSearch {
         return agentTextIn(record)?.let { TranscriptSpeaker.Agent to it }
     }
 
-    /** Session ids alone, for the sidebar filter, which needs membership and not the snippets. */
     fun sessionsContaining(
         projectBasePath: String,
         query: String,
@@ -109,7 +100,6 @@ object TranscriptSearch {
 private const val SNIPPET_RADIUS = 60
 private val WHITESPACE_RUN = Regex("\\s+")
 
-/** The match in the middle of its own sentence, which is what makes a result list scannable. */
 fun snippetAround(text: String, query: String): String {
     val single = text.replace(WHITESPACE_RUN, " ").trim()
     val at = single.indexOf(query, ignoreCase = true)

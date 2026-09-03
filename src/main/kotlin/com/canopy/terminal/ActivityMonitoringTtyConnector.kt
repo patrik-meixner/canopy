@@ -7,13 +7,6 @@ import java.nio.charset.Charset
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-/**
- * Fires [onActiveChanged] as the far end starts and stops writing, and [onUnresponsive] when a
- * keystroke has gone [echoTimeoutMs] without anything coming back.
- *
- * Output within [echoWindowMs] of a write is the PTY echoing the keystroke, not the agent thinking,
- * so it does not count as activity. Callbacks are always invoked on the EDT.
- */
 class ActivityMonitoringTtyConnector(
     process: PtyProcess,
     charset: Charset,

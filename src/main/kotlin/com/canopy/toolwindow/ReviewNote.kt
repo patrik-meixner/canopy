@@ -2,12 +2,6 @@ package com.canopy.toolwindow
 
 import java.nio.file.Path
 
-/**
- * A review note aimed at a session: the files it is about, and what to do with them.
- *
- * The agent has no eyes on the diff viewer, so the note has to carry enough location for it to find
- * what you were looking at without asking.
- */
 data class ReviewNote(
     val paths: List<String>,
     val lines: IntRange?,
@@ -32,7 +26,6 @@ fun promptFor(note: ReviewNote, repositoryRoots: Set<String>): String? {
     return "In $where: $text\r"
 }
 
-/** A path relative to its repository is what the agent can act on; an absolute one is noise. */
 internal fun relativize(path: String, repositoryRoots: Set<String>): String {
     val normalized = Path.of(path).normalize()
     val root = repositoryRoots

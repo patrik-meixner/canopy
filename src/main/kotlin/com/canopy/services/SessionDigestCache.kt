@@ -8,12 +8,6 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.project.Project
 import java.time.Instant
 
-/**
- * Remembers what each transcript parsed to, keyed on its size and modification time.
- *
- * Transcripts only ever grow, and they grow large: a single project directory here holds well over
- * a gigabyte. Without this every IDE start re-folds all of it to rebuild a list of names and dates.
- */
 @State(name = "CanopySessionDigests", storages = [Storage("canopy-sessions.xml")])
 @Service(Service.Level.PROJECT)
 class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
@@ -22,7 +16,6 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         @JvmField var path: String = ""
         @JvmField var size: Long = 0
         @JvmField var modifiedAtMillis: Long = 0
-        /** The transcript's own last timestamp, which is what the list sorts on — not the file's. */
         @JvmField var sessionModifiedMillis: Long = 0
 
         @JvmField var sessionId: String = ""
@@ -43,20 +36,8 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
 
     private var state = State()
     private val byPath = HashMap<String, Entry>()
-    /** Entries are written by the parse thread and read by the save thread. */
     private val lock = Any()
 
-    /**
-     * The digests worth keeping, which is not the ones being rewritten.
-     *
-     * An entry is only used again if the transcript's size and timestamp still match, so an entry
-     * for a session an agent is working in is guaranteed stale by the next start. Returning it
-     * anyway changed this state on every transcript write, and the platform saved the whole file
-     * each time: an IDE that never stopped saying it was saving settings.
-     *
-     * A copy, too: entries are added from the thread that parses transcripts, and handing over the
-     * live list let a save walk it while it was being written to.
-     */
     override fun getState(): State = synchronized(lock) {
         State().apply { entries = ArrayList(settledEntries(state.entries, System.currentTimeMillis())) }
     }
@@ -65,7 +46,6 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         state = loaded
         byPath.clear()
         loaded.entries.forEach {
-            // Written before prompts were capped: cut on the way in so the next save is small.
             it.firstPrompt = openingWords(it.firstPrompt)
             byPath[it.path] = it
         }
@@ -110,7 +90,6 @@ class SessionDigestCache : PersistentStateComponent<SessionDigestCache.State> {
         entry.lastPromptAtMillis = session.lastPromptAt?.toEpochMilli() ?: 0
     }
 
-    /** Drops entries for transcripts that no longer exist, so the file cannot grow without bound. */
     fun retainOnly(paths: Set<String>) = synchronized(lock) {
         state.entries.removeIf { it.path !in paths }
         byPath.keys.retainAll(paths)

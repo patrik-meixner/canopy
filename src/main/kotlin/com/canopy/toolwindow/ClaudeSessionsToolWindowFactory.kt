@@ -25,8 +25,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
 
         val getStatus = { sessionId: String ->
             when {
-                // Plugin ownership wins: a session open in a Canopy tab is never
-                // "external", even if a stray/background claude process references it.
                 isOpenInPlugin(project, sessionId) -> SessionStatus.OPEN_IN_PLUGIN
                 sessionService.isExternallyOpen(sessionId) -> SessionStatus.OPEN_EXTERNALLY
                 else -> SessionStatus.AVAILABLE
@@ -39,11 +37,8 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
             onForkSession = { session -> forkSession(project, session) }
         )
 
-        // Blanking the title would still reserve its slot; this drops the label itself, and the
-        // name survives for the stripe tooltip and the View menu.
         toolWindow.component.putClientProperty(ToolWindowContentUi.HIDE_ID_LABEL, "true")
 
-        /** Reviewing a session happens in its own window, so opening one brings that window up. */
         val openForReview: (SessionDisplay) -> Unit = { session ->
             callbacks.onSessionSelected(session)
             SessionWindow.activateDetail(project)
@@ -81,12 +76,10 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         repoTreeContent.isCloseable = false
         toolWindow.contentManager.addContent(repoTreeContent)
 
-
         sessionService.startWatching()
 
         val editorListener = object : FileEditorManagerListener {
             override fun selectionChanged(event: FileEditorManagerEvent) {
-                // A tab that has not started has no session id, and its row is keyed on the tab.
                 val file = event.newFile as? ClaudeSessionVirtualFile ?: return
                 sessionsPanel.selectSession(file.sessionId ?: file.sessionKey)
             }
@@ -120,16 +113,11 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         val onForkSession: (SessionDisplay) -> Unit
     )
 
-    /**
-     * A session runs for as long as the project holds it, whether or not a tab is showing it, so
-     * asking the open tabs would report a live agent as available the moment you closed its tab.
-     */
     private fun isOpenInPlugin(project: Project, sessionId: String): Boolean =
         com.canopy.services.SessionRuntimeService.getInstance(project).existing(sessionId) != null ||
             FileEditorManager.getInstance(project).openFiles
                 .filterIsInstance<ClaudeSessionVirtualFile>()
                 .any { it.sessionId == sessionId }
-
 
     private fun openNewSession(project: Project, name: String) {
         val file = ClaudeSessionVirtualFile(name.ifBlank { com.canopy.editor.UNNAMED_SESSION_TITLE }).apply {
@@ -138,10 +126,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
         FileEditorManager.getInstance(project).openFile(file, true)
     }
 
-    /**
-     * A worktree usually already has sessions behind it, so activating one offers those first and
-     * only falls through to a fresh session when there are none.
-     */
     private fun offerSessionsForWorktree(
         project: Project,
         sessionService: ClaudeSessionService,
@@ -171,7 +155,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
     private fun directoryName(path: String): String =
         java.nio.file.Path.of(path).fileName?.toString() ?: path
 
-    /** Opens a session rooted in an existing worktree directory, rather than creating a new worktree. */
     private fun openSessionInDirectory(project: Project, name: String, directory: String) {
         val file = ClaudeSessionVirtualFile(name).apply { workingDir = directory }
         FileEditorManager.getInstance(project).openFile(file, true)
@@ -179,11 +162,6 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
 
     private fun openNewWorktreeSession(project: Project, worktreeName: String, repoRoot: String? = null) {
         val file = ClaudeSessionVirtualFile(worktreeName, newWorktreeName = worktreeName).apply {
-            // The worktree directory is deterministic from the name (the CLI normalizes
-            // '/'→'+', mirrored by WorktreeInspector.normalize), so resolve it up front —
-            // the git/worktree toolbars can show the real branch before the first message
-            // instead of falling back to the main repo and showing "main". The CLI creates
-            // the dir asynchronously after spawn; the toolbars tolerate it not existing yet.
             val owner = repoRoot ?: project.basePath
             if (owner != null) {
                 workingDir = ClaudePathEncoder.worktreeAbsolutePath(owner, WorktreeInspector.normalize(worktreeName))

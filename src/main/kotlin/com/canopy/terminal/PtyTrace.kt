@@ -5,12 +5,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 
-/**
- * Writes everything a session's terminal sends and receives to a file, for when a terminal behaves
- * differently here than it does anywhere else and reasoning about it has run out.
- *
- * Off unless `-Dcanopy.pty.trace=true` is set, because it records everything typed.
- */
 class PtyTrace private constructor(private val file: Path) {
 
     fun output(text: String) = append("< ", text)

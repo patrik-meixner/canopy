@@ -47,13 +47,6 @@ import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreePath
 import javax.swing.tree.TreeSelectionModel
 
-/**
- * Every directory Claude Code takes context from, and what it finds there.
- *
- * Grouped by level rather than by kind, because the question this answers is where a rule came
- * from: personal, this repository, or this session's own checkout. A worktree session has its own
- * encoded project directory, so its memory is not the memory of the parent checkout.
- */
 class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPanel(BorderLayout()), Disposable {
 
     private val rootNode = DefaultMutableTreeNode()
@@ -85,7 +78,6 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
         tree.cellRenderer = ContextTreeRenderer()
 
-
         object : DoubleClickListener() {
             override fun onDoubleClick(event: MouseEvent): Boolean = openSelected()
         }.installOn(tree)
@@ -111,7 +103,6 @@ class ClaudeContextPanel(private val project: Project, parent: Disposable) : JPa
         bindTo(selectedSessionWorkingDir())
     }
 
-    /** Rebinding is what makes the panel per session: a worktree tab reads a different memory directory. */
     private fun bindTo(directory: String?) {
         val effective = directory ?: project.basePath
         if (effective == workingDir && groups.isNotEmpty()) return
@@ -334,7 +325,6 @@ private val KIND_ICONS = ContextKind.entries.associateWith {
 
 internal fun kindIcon(kind: ContextKind): Icon = KIND_ICONS.getValue(kind)
 
-/** Home-relative paths keep the row readable; the full path is one Reveal away. */
 internal fun shorten(directory: Path): String {
     val home = System.getProperty("user.home")
     val text = directory.toString()

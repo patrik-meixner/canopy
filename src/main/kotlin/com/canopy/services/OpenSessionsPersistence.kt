@@ -52,7 +52,6 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
         get() = myState.toolWindowVisible
         set(value) { myState.toolWindowVisible = value }
 
-
     fun rememberTerminals(terminals: List<RememberedTerminal>) {
         myState.terminals = terminals.toMutableList()
     }

@@ -10,10 +10,6 @@ import com.intellij.ui.dsl.builder.RowLayout
 import com.intellij.ui.dsl.builder.panel
 import javax.swing.JComponent
 
-/**
- * Per-repository worktree setup, because what a fresh worktree is missing differs by repository:
- * a `.env` in one, a `devConfig-local.ts` in a submodule, a different install command in each.
- */
 class WorktreeSetupDialog(
     private val project: Project,
     private val repoKey: String,
@@ -60,7 +56,6 @@ class WorktreeSetupDialog(
     }
 }
 
-/** An empty entry is a deliberate "nothing here", so only an absent one falls back to the default. */
 internal fun setupFilesFor(overrides: Map<String, String>, repoKey: String, fallback: String): String =
     (overrides[repoKey] ?: fallback).replace(',', '\n')
 

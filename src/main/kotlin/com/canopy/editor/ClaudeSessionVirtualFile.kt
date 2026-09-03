@@ -23,11 +23,9 @@ class ClaudeSessionVirtualFile(
     val forkFrom: String? = null,
     val newWorktreeName: String? = null,
     val isShellSession: Boolean = false,
-    /** For a shell, the immutable key of the session tab it was opened from. */
     val ownerSessionKey: String? = null
 ) : LightVirtualFile(name, ClaudeSessionFileType, "") {
 
-    /** Stable key used for VFS URL resolution so tabs survive drag-and-drop. */
     val sessionKey: String = sessionId
         ?: if (forkFrom != null) "fork-$forkFrom-${System.nanoTime()}" else null
         ?: newWorktreeName
@@ -36,7 +34,6 @@ class ClaudeSessionVirtualFile(
 
     var baseName: String = name
 
-    /** What the user called the session, when they called it anything: Claude names it otherwise. */
     var requestedName: String? = null
     var workingDir: String? = null
     var isWorktreeSession: Boolean = newWorktreeName != null
@@ -64,17 +61,7 @@ class ClaudeSessionVirtualFile(
 
     override fun hashCode(): Int = sessionKey.hashCode()
 
-    // Status is rendered as a fixed-size icon badge (see ClaudeSessionIconProvider), NOT
-    // baked into the title text — a text glyph has a variable advance width, so toggling
-    // it resized the tab and reflowed the whole strip. Returning null means "idle": the
-    // badge slot is reserved but drawn empty, so the tab width is identical in every state.
-    /** The same vocabulary the session list uses, so a tab and its row never disagree. */
-    /**
-     * The same state the session list shows, read from the same services.
-     *
-     * This used to read fields on the file that nothing ever wrote, so the tab silently showed
-     * no state at all while the row beside it showed the truth.
-     */
+    /** Drawn as a fixed-size badge, never in the title: a glyph's advance width would resize the tab. */
     fun statusGlyph(project: com.intellij.openapi.project.Project): String? {
         val id = sessionId ?: return null
         val sessions = com.canopy.services.ClaudeSessionService.getInstance(project)

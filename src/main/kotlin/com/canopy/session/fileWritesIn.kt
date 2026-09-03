@@ -5,12 +5,6 @@ import com.google.gson.JsonObject
 private const val WHOLE_FILE_TOOL = "Write"
 private const val REPLACEMENT_TOOL = "Edit"
 
-/**
- * The writes one transcript record made, in the order it made them.
- *
- * A tool call missing the field its shape needs is dropped rather than guessed at: half a write
- * cannot be replayed, and pretending otherwise would make a file look untouched.
- */
 fun fileWritesIn(record: JsonObject): List<FileWrite> {
     if (record.get("type")?.asString != "assistant") return emptyList()
     val content = record.getAsJsonObject("message")?.getAsJsonArray("content") ?: return emptyList()

@@ -41,18 +41,15 @@ class RoundedProgressBarUI : BasicProgressBarUI() {
             ?: bar.background.darker()
         val fillColor = bar.foreground
 
-        // Track
         g2.color = trackColor
         g2.fill(RoundRectangle2D.Double(x, y, w, h, arc, arc))
 
-        // Fill
         val fillWidth = w * bar.percentComplete
         if (fillWidth > 0) {
             g2.color = fillColor
             g2.fill(RoundRectangle2D.Double(x, y, fillWidth, h, arc, arc))
         }
 
-        // Text — draw twice with clipping for contrast over fill vs track
         if (bar.isStringPainted && bar.string != null) {
             val fm = g2.getFontMetrics(bar.font)
             val text = bar.string
@@ -63,12 +60,10 @@ class RoundedProgressBarUI : BasicProgressBarUI() {
             val fillEdge = x + fillWidth
             val oldClip = g2.clip
 
-            // Text over filled area
             g2.clipRect(i.left, i.top, fillWidth.toInt(), h.toInt())
             g2.color = contrastColor(fillColor)
             g2.drawString(text, textX, textY)
 
-            // Text over track area
             g2.clip = oldClip
             g2.clipRect(fillEdge.toInt(), i.top, (w - fillWidth).toInt() + 1, h.toInt())
             g2.color = contrastColor(trackColor)
@@ -81,7 +76,6 @@ class RoundedProgressBarUI : BasicProgressBarUI() {
     }
 
     private fun contrastColor(bg: Color): Color {
-        // Relative luminance (ITU-R BT.709)
         val lum = (0.299 * bg.red + 0.587 * bg.green + 0.114 * bg.blue) / 255.0
         return if (lum > 0.5) Color.BLACK else Color.WHITE
     }

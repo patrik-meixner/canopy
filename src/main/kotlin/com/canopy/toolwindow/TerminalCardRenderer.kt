@@ -13,7 +13,6 @@ import javax.swing.JPanel
 import javax.swing.JTable
 import javax.swing.table.TableCellRenderer
 
-/** A shell belonging to the session above it: the indent is what says which session that is. */
 class TerminalCardRenderer(
     private val hoveredRow: () -> Int,
     private val isCloseHovered: () -> Boolean = { false }

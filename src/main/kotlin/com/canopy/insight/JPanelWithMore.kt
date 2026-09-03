@@ -4,7 +4,6 @@ import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 
-/** A scrolling list with the row that reveals the rest of it pinned below. */
 class JPanelWithMore(list: JComponent, more: MoreRow) : JPanel(BorderLayout()) {
 
     init {

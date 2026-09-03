@@ -1,11 +1,5 @@
 package com.canopy.toolwindow
 
-/**
- * A worktree that has nothing left to lose, and why.
- *
- * Deleting a worktree deletes its directory, so the rule is deliberately conservative: it has to be
- * clean, fully merged, and not in use. Anything else is left for a person to look at.
- */
 data class CleanupCandidate(
     val path: String,
     val name: String,

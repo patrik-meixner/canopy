@@ -17,12 +17,6 @@ import javax.swing.BoxLayout
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
-/**
- * The whole message, on demand.
- *
- * A row that grows to fit its longest message makes the list unreadable, and one that clips loses
- * exactly the part worth reading. The row stays a fixed preview and the full text opens beside it.
- */
 object MessagePreview {
 
     private var open: JBPopup? = null
@@ -74,7 +68,6 @@ object MessagePreview {
         if (message.images.isEmpty()) return null
 
         val strip = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply { isOpaque = false }
-        // Full size is a whole screenshot through ImageIO. The popup opens now and fills in.
         message.images.forEach { image ->
             val slot = JBLabel()
             strip.add(slot)
@@ -90,7 +83,6 @@ object MessagePreview {
     }
 }
 
-/** A single image, as large as a popup can sensibly hold. */
 object ImagePreview {
 
     private var open: JBPopup? = null

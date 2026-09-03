@@ -12,13 +12,6 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.ui.content.Content
 
-/**
- * Every tab of this tool window, including the ones the header had no room for.
- *
- * A narrow sidebar simply drops the tabs that do not fit, and a tab nobody can reach is a tab that
- * does not exist. This lists all of them, so how wide the window happens to be stops deciding what
- * the plugin can do.
- */
 class SelectTabAction(private val toolWindow: ToolWindow) : AnAction(
     "Show All Tabs",
     "Pick a tab, including any the header has no room for",
