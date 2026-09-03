@@ -879,7 +879,11 @@ class SessionListPanel(
 
     fun refreshRows() = reloadData()
 
-    fun refreshFromTabs() = applyFilter()
+    /** A draft that has just become a session is a tab change, not a list change: the row is keyed on the tab. */
+    fun refreshFromTabs() {
+        followLinkedDraft()
+        applyFilter()
+    }
 
     private fun refreshOrphans(force: Boolean = false) {
         val basePath = project.basePath ?: return

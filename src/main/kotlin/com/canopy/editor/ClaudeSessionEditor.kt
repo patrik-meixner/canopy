@@ -1292,6 +1292,9 @@ class ClaudeSessionEditor(
         statusService.startMonitoring(sessionId, tempStatusFile, notifyFile)
 
         refreshTabTitle(force = true)
+        // The row for this tab is keyed on the tab, and the session list itself may not have changed
+        // at all, so the list has to hear about the link from here rather than from a sweep.
+        project.messageBus.syncPublisher(com.canopy.services.CanopyTabsListener.TOPIC).tabsChanged()
         sessionService.refresh()
     }
 
