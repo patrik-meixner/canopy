@@ -48,6 +48,13 @@ class OpenSessionsPersistence : PersistentStateComponent<OpenSessionsPersistence
 
     fun getTerminals(): List<RememberedTerminal> = myState.terminals.toList()
 
+    /**
+     * The IDE has no layout of its own for a fresh project, so it opens one at startup and only
+     * then is the sidebar the user's again. Recording before that overwrote the answer with it.
+     */
+    @Volatile
+    var isTrackingToolWindow = false
+
     var wasToolWindowVisible: Boolean
         get() = myState.toolWindowVisible
         set(value) { myState.toolWindowVisible = value }

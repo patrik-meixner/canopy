@@ -17,7 +17,7 @@ class RestoreOpenSessionsActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
         val persistence = OpenSessionsPersistence.getInstance(project)
-        if (persistence.wasToolWindowVisible) showCanopy(project)
+        showCanopy(project, persistence.wasToolWindowVisible)
 
         val savedIds = persistence.getAll()
         if (savedIds.isEmpty()) return
@@ -58,10 +58,13 @@ class RestoreOpenSessionsActivity : ProjectActivity {
     }
 
     /** A startup activity runs before the tool windows are registered, so asking for one now finds nothing. */
-    private fun showCanopy(project: Project) {
+    private fun showCanopy(project: Project, wasVisible: Boolean) {
         val manager = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
         manager.invokeLater {
-            if (!project.isDisposed) manager.getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)?.activate(null, false)
+            if (project.isDisposed) return@invokeLater
+
+            if (wasVisible) manager.getToolWindow(com.canopy.services.CANOPY_TOOL_WINDOW)?.activate(null, false)
+            OpenSessionsPersistence.getInstance(project).isTrackingToolWindow = true
         }
     }
 

@@ -16,13 +16,14 @@ class RememberActiveToolWindow(private val project: Project) : ToolWindowManager
     ) = remember(toolWindowManager)
 
     /**
-     * The IDE hides every tool window on its way out, so a state change during shutdown is not the
-     * user putting the sidebar away.
+     * The IDE lays the sidebar out itself at both ends of a session, and neither is the user: it
+     * opens its own default before the restore runs, and hides everything on the way out.
      */
     private fun remember(toolWindowManager: ToolWindowManager) {
-        if (CanopyShutdown.isClosing()) return
+        val persistence = OpenSessionsPersistence.getInstance(project)
+        if (!persistence.isTrackingToolWindow || CanopyShutdown.isClosing()) return
         val canopy = toolWindowManager.getToolWindow(CANOPY_TOOL_WINDOW) ?: return
 
-        OpenSessionsPersistence.getInstance(project).wasToolWindowVisible = canopy.isVisible
+        persistence.wasToolWindowVisible = canopy.isVisible
     }
 }
