@@ -266,10 +266,7 @@ class ClaudeSessionEditor(
 
         val isFork = file.forkFrom != null
         val isNewWorktree = file.newWorktreeName != null
-        val isNewSession = file.sessionId == null && !isFork && !isNewWorktree
-        val needsLinking = isNewSession || isFork || isNewWorktree
-        val tempId = if (needsLinking) "new-${System.nanoTime()}" else null
-        val monitoringId = file.sessionId ?: tempId!!
+        val monitoringId = file.sessionId ?: "new-${System.nanoTime()}"
         val runtimeKey = file.sessionId ?: file.sessionKey
         val statusFile = statusService.createStatusFilePath(monitoringId)
         val notifyFile = statusService.createNotifyFilePath(monitoringId)
@@ -417,8 +414,8 @@ class ClaudeSessionEditor(
             FileEditorManagerListener.FILE_EDITOR_MANAGER, selectionListener
         )
 
-        if (running == null && needsLinking && !file.isShellSession) {
-            setupNewSessionLinking(sessionService, statusService, persistence, monitoringId, statusFile, notifyFile)
+        if (running == null && !file.isShellSession) {
+            followReportedSession(sessionService, statusService, persistence, monitoringId, statusFile, notifyFile)
         }
     }
 
@@ -1234,7 +1231,12 @@ class ClaudeSessionEditor(
         }
     }
 
-    private fun setupNewSessionLinking(
+    /**
+     * The terminal says which session it is showing, so nothing has to be worked out from the
+     * transcripts: guessing there could not see a session that already existed when the tab opened,
+     * which is every conversation the CLI resumes rather than starts.
+     */
+    private fun followReportedSession(
         sessionService: ClaudeSessionService,
         statusService: ClaudeStatusService,
         persistence: OpenSessionsPersistence,
@@ -1242,41 +1244,55 @@ class ClaudeSessionEditor(
         tempStatusFile: Path,
         notifyFile: Path
     ) {
-        val existingIds = sessionService.getSessions().map { it.sessionId }.toSet()
-        val startedAt = System.currentTimeMillis()
-
-        lateinit var linkListener: () -> Unit
-        linkListener = {
-            val openIds = FileEditorManager.getInstance(project).openFiles
-                .filterIsInstance<ClaudeSessionVirtualFile>()
-                .mapNotNull { it.sessionId }
-                .toSet()
-
-            val candidate = sessionService.getSessions()
-                .filter { it.sessionId !in existingIds && it.sessionId !in openIds }
-                .minByOrNull { kotlin.math.abs(it.modified.toEpochMilli() - startedAt) }
-
-            if (candidate != null) {
-                file.sessionId = candidate.sessionId
-                file.baseName = candidate.tabTitle
-                if (file.workingDir == null && candidate.worktreeName != null && project.basePath != null) {
-                    file.workingDir = com.canopy.util.ClaudePathEncoder
-                        .worktreeAbsolutePath(project.basePath!!, candidate.worktreeName)
+        val listener: (String, ClaudeStatus?) -> Unit = { sid, status ->
+            if (sid == tempMonitoringId || sid == file.sessionId) {
+                sessionIdToLink(status?.reportedSessionId, file.sessionId)?.let { reported ->
+                    ApplicationManager.getApplication().invokeLater {
+                        if (!isDisposed.get()) {
+                            linkTo(reported, sessionService, statusService, persistence, tempMonitoringId, tempStatusFile, notifyFile)
+                        }
+                    }
                 }
-                persistence.add(candidate.sessionId)
-                com.canopy.services.SessionRuntimeService.getInstance(project)
-                    .rekey(file.sessionKey, candidate.sessionId)
-                com.canopy.services.rememberOpenTerminals(project, "sessionLinked")
-
-                statusService.stopMonitoring(tempMonitoringId)
-                statusService.startMonitoring(candidate.sessionId, tempStatusFile, notifyFile)
-
-                refreshTabTitle(force = true)
-                sessionService.removeChangeListener(linkListener)
             }
         }
-        sessionService.addChangeListener(linkListener)
-        Disposer.register(sessionDisposable, Disposable { sessionService.removeChangeListener(linkListener) })
+        statusService.addStatusListener(listener)
+        Disposer.register(sessionDisposable, Disposable { statusService.removeStatusListener(listener) })
+        statusService.getStatus(tempMonitoringId)?.let { listener(tempMonitoringId, it) }
+    }
+
+    private fun linkTo(
+        sessionId: String,
+        sessionService: ClaudeSessionService,
+        statusService: ClaudeStatusService,
+        persistence: OpenSessionsPersistence,
+        tempMonitoringId: String,
+        tempStatusFile: Path,
+        notifyFile: Path
+    ) {
+        if (file.sessionId == sessionId) return
+
+        val previous = file.sessionId
+        file.sessionId = sessionId
+        sessionService.getSessions().firstOrNull { it.sessionId == sessionId }?.let { session ->
+            file.baseName = session.tabTitle
+            if (file.workingDir == null && session.worktreeName != null && project.basePath != null) {
+                file.workingDir = com.canopy.util.ClaudePathEncoder
+                    .worktreeAbsolutePath(project.basePath!!, session.worktreeName)
+            }
+        }
+
+        previous?.let(persistence::remove)
+        persistence.add(sessionId)
+        com.canopy.services.SessionRuntimeService.getInstance(project).rekey(previous ?: file.sessionKey, sessionId)
+        com.canopy.services.rememberOpenTerminals(project, "sessionLinked")
+
+        // The env named the temp files at spawn, so the agent writes to them whatever it is called now.
+        statusService.stopMonitoring(tempMonitoringId)
+        previous?.let(statusService::stopMonitoring)
+        statusService.startMonitoring(sessionId, tempStatusFile, notifyFile)
+
+        refreshTabTitle(force = true)
+        sessionService.refresh()
     }
 
     private fun stopLoading() {
