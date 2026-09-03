@@ -62,6 +62,9 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
          */
         @JvmField var notifyWhenWaiting: Boolean = false
 
+        /** What opening a project does about the sessions that were running when it was last closed. */
+        @JvmField var restoreSessions: SessionRestore = SessionRestore.All
+
         /** Days of history the session list shows before folding the rest behind a toggle. */
         @JvmField var recentSessionDays: Int = 14
 

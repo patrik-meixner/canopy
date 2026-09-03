@@ -9,10 +9,12 @@ import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.RowLayout
 import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindSelected
+import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.rows
+import com.intellij.ui.dsl.builder.toNullableProperty
 
 class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
@@ -23,6 +25,15 @@ class CanopySettingsConfigurable : BoundConfigurable("Canopy") {
 
     override fun createPanel(): DialogPanel = panel {
         excludedWorktreesWhenOpened = state.excludeWorktreesFromIndex
+
+        group("Opening a project") {
+            row("Bring back") {
+                comboBox(
+                    SessionRestore.entries,
+                    com.intellij.ui.SimpleListCellRenderer.create("") { it.label }
+                ).bindItem(state::restoreSessions.toNullableProperty())
+            }.rowComment("Every session that was running comes back with its agent running, but only the most recent one gets a tab; the others are listed and answerable, one click from a tab of their own.")
+        }
 
         group("Session list") {
             row {

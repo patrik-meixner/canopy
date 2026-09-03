@@ -27,21 +27,24 @@ class RestoreOpenSessionsActivity : ProjectActivity {
         val savedIds = persistence.getAll()
         if (savedIds.isEmpty()) return
 
+        val mode = com.canopy.settings.CanopySettings.getInstance().state.restoreSessions
+        if (mode == com.canopy.settings.SessionRestore.None) return
+
         val sessions = ClaudeSessionService.getInstance(project).getSessions().associateBy { it.sessionId }
-        val restored = savedIds.mapNotNull(sessions::get)
-        val first = restored.firstOrNull() ?: return
-        val terminals = persistence.getTerminals().filter { it.ownerSessionId == first.sessionId }
+        val plan = restorePlan(savedIds.mapNotNull(sessions::get), mode)
+        val staged = plan.staged ?: return
+        val terminals = persistence.getTerminals().filter { it.ownerSessionId == staged.sessionId }
 
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
 
-            openClaudeSession(project, first)
+            openClaudeSession(project, staged)
             terminals.forEach { reopenTerminal(project, it) }
-            focusFirst(project, first)
+            focusFirst(project, staged)
             // The rest come back working rather than on screen: listed, answerable, and one click
             // from a tab, without a stack of them opening over the project you just wanted to see.
             // One a second, because each is a node process starting while the IDE is still indexing.
-            restored.drop(1).forEachIndexed { index, session -> restoreDetachedLater(project, session, index + 1) }
+            plan.detached.forEachIndexed { index, session -> restoreDetachedLater(project, session, index + 1) }
         }
     }
 
