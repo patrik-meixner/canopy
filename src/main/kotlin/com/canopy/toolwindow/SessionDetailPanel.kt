@@ -227,7 +227,7 @@ class SessionDetailPanel(
         val written = session?.sessionId
             ?.let { com.canopy.services.SessionFileIndex.getInstance(project).pathsFor(it) }
             .orEmpty()
-        val ownDirectories = ownDirectoriesOf(session)
+        val ownDirectories = ownDirectoriesOf(session?.workingDirectory, written) { java.nio.file.Files.isDirectory(java.nio.file.Path.of(it)) }
         val startedAt = session?.startedAt?.toEpochMilli()
         val isOwn: (String) -> Boolean = { path ->
             isSessionsOwnChange(path, written, ownDirectories, startedAt, ::lastModifiedMillis)
@@ -248,16 +248,6 @@ class SessionDetailPanel(
             unversioned = if (com.canopy.settings.CanopySettings.getInstance().state.showUnversionedInDetail) collected.flatMap { it.unversioned } else emptyList(),
             pushedCommits = collected.flatMap { it.pushedCommits }.sortedByDescending { it.commit.atMillis }
         )
-    }
-
-    /** The launch repository is deliberately absent: inside it the launch directory is the boundary. */
-    private fun ownDirectoriesOf(session: SessionDisplay?): List<String> {
-        if (session == null) return emptyList()
-        val launchDirectory = session.workingDirectory
-        val launchRoot = launchDirectory?.let { com.canopy.util.GitRootCache.rootOf(java.nio.file.Path.of(it)) }
-        val otherRoots = session.touchedRoots.keys.filter { it != launchRoot }
-
-        return listOfNotNull(launchDirectory) + otherRoots
     }
 
     private fun lastModifiedMillis(path: String): Long? =

@@ -62,4 +62,31 @@ class PathsInCommandTest {
 
         assertEquals(listOf("/Users/me/canopy", "/tmp/scratch/probe"), pathsInCommand(command))
     }
+
+    @Test
+    fun `a cd followed only by reads is not claimed by a write elsewhere in the command`() {
+        val command = "mkdir -p /tmp/scratch/jt && cd /Users/me/other && git rev-parse --show-toplevel && git worktree list"
+
+        assertEquals(listOf("/tmp/scratch/jt"), pathsInCommand(command))
+    }
+
+    @Test
+    fun `listing worktrees is reading them`() {
+        assertEquals(emptyList<String>(), pathsInCommand("for R in /Users/me/a /Users/me/b; do git -C \$R worktree list; done"))
+    }
+
+    @Test
+    fun `a write that names its own path does not claim the directory it was run from`() {
+        assertEquals(listOf("/tmp/scratch/out.txt"), pathsInCommand("cd /Users/me/repo && echo x > /tmp/scratch/out.txt"))
+    }
+
+    @Test
+    fun `committing through -C names the repository`() {
+        assertEquals(listOf("/Users/me/repo"), pathsInCommand("git -C /Users/me/repo add -A && git -C /Users/me/repo commit -m x"))
+    }
+
+    @Test
+    fun `a second cd ends the scope of the first`() {
+        assertEquals(listOf("/Users/me/b"), pathsInCommand("cd /Users/me/a && ls; cd /Users/me/b && sed -i '' s/x/y/ f.txt"))
+    }
 }

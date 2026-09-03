@@ -48,7 +48,9 @@ private fun pathFromInput(input: JsonObject?): String? {
 
 private val WRITING_VERB = Regex(
     """(^|[;&|(`]\s*|\s)(sudo\s+)?(sed\s+-\S*i|perl\s+-\S*i|awk\s+-i|tee|mv|cp|rm|rmdir|mkdir|touch|ln|install|patch|dd|chmod|chown|rsync|unzip|tar|""" +
-        """git\s+(add|commit|apply|am|checkout|restore|rm|mv|stash|reset|revert|merge|rebase|cherry-pick|clean|init|clone|worktree))\b"""
+        """open\([^)]*['"][wax]|""" +
+        """git(\s+-C\s+\S+)?\s+(add|commit|apply|am|checkout|restore|rm|mv|reset|revert|merge|rebase|cherry-pick|clean|init|clone|""" +
+        """stash(?!\s+(list|show))|worktree\s+(add|remove|move|prune|repair|lock|unlock)))\b"""
 )
 
 /** A redirection, but not `2>&1`, `1>&2` or a `->` inside a string. */
@@ -66,19 +68,26 @@ private val CHANGE_DIRECTORY = Regex("""(^|[;&|(`]\s*|\s)cd\s+["']?(/(?:Users|ho
  * whatever the agent grepped, found or listed - a session that ran one `find` across the disk then
  * claimed every repository it walked past.
  *
- * A `cd` to an absolute directory stands for the relative writes that follow it, which is every
- * heredoc and `sed -i file` an agent runs after changing directory.
+ * A `cd` stands for the relative writes that follow it, which is every heredoc and `sed -i file` an
+ * agent runs after changing directory. Only for those: a `cd` into a repository to read it, in a
+ * command that happened to write somewhere else by full path, claimed that repository too.
  */
 internal fun pathsInCommand(command: String?): List<String> {
     if (command.isNullOrBlank()) return emptyList()
 
-    val clauses = command.split(CLAUSE_BREAK)
-    val written = clauses.flatMap(::pathsWrittenBy)
-    if (written.isEmpty() && clauses.none(::isWriting)) return emptyList()
+    val touched = LinkedHashSet<String>()
+    var workingDirectory: String? = null
+    for (clause in command.split(CLAUSE_BREAK)) {
+        changeDirectoryIn(clause)?.let { workingDirectory = it }
+        val written = pathsWrittenBy(clause)
+        touched += written
+        if (written.isEmpty() && isWriting(clause)) workingDirectory?.let(touched::add)
+    }
 
-    val workedIn = CHANGE_DIRECTORY.findAll(command).map { it.groupValues[2] }
-    return (workedIn + written).distinct().toList()
+    return touched.toList()
 }
+
+private fun changeDirectoryIn(clause: String): String? = CHANGE_DIRECTORY.find(clause)?.groupValues?.get(2)
 
 private fun isWriting(clause: String): Boolean =
     WRITING_VERB.containsMatchIn(clause) || REDIRECTION.containsMatchIn(clause)
