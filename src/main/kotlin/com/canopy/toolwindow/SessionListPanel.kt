@@ -116,6 +116,7 @@ class SessionListPanel(
     @Volatile private var lastOrphanSweep = 0L
     private val spinner = javax.swing.Timer(SPINNER_FRAME_MS.toInt()) { repaintWorkingRows() }
     private val reloadAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.SWING_THREAD, this)
+    private val pendingReload = com.canopy.util.CoalescedRun()
     private var spinningRows: List<Int> = emptyList()
     private var spinningFoundAt = 0L
     private val changeListener: () -> Unit = { reloadData() }
@@ -746,10 +747,12 @@ class SessionListPanel(
     }
 
     private fun reloadData() {
-        if (reloadAlarm.isDisposed) return
+        if (reloadAlarm.isDisposed || !pendingReload.claim()) return
 
-        reloadAlarm.cancelAllRequests()
-        reloadAlarm.addRequest(::reloadNow, RELOAD_COALESCE_MS)
+        reloadAlarm.addRequest({
+            pendingReload.done()
+            reloadNow()
+        }, RELOAD_COALESCE_MS)
     }
 
     private fun reloadNow() {
