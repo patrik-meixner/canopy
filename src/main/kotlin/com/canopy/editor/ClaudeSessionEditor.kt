@@ -414,7 +414,7 @@ class ClaudeSessionEditor(
             FileEditorManagerListener.FILE_EDITOR_MANAGER, selectionListener
         )
 
-        if (running == null && !file.isShellSession) {
+        if (!file.isShellSession) {
             followReportedSession(sessionService, statusService, persistence, monitoringId, statusFile, notifyFile)
         }
     }
@@ -1430,7 +1430,7 @@ class ClaudeSessionEditor(
     }
 
     private fun refreshTabTitle(force: Boolean = false) {
-        val signature = "${file.statusGlyph(project)} ${file.computeTabTitle()}"
+        val signature = "${file.statusGlyph(project)}\u0000${file.computeTabTitle()}"
         if (!force && signature == lastTitle) return
         lastTitle = signature
         ApplicationManager.getApplication().invokeLater {

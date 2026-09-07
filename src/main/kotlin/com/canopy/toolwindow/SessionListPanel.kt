@@ -650,14 +650,15 @@ class SessionListPanel(
         selectedSessionId = linked
     }
 
-    private fun openDrafts(): List<SessionDisplay> {
+    private fun openDrafts(listed: Set<String>): List<SessionDisplay> {
         if (worktreeMode) return emptyList()
 
+        val statusService = com.canopy.services.ClaudeStatusService.getInstance(project)
         val open = canopyFiles()
             .filter { it.sessionId == null && !it.isShellSession }
-            .map { DraftSource(it.sessionKey, it.baseName) }
+            .map { DraftSource(it.sessionKey, it.baseName, statusService.getStatus(it.sessionKey)?.reportedSessionId) }
 
-        return draftRows(open, project.basePath.orEmpty(), System.currentTimeMillis())
+        return draftRows(open, listed, project.basePath.orEmpty(), System.currentTimeMillis())
     }
 
     private fun openTerminals(): List<TerminalSource> {
@@ -774,7 +775,7 @@ class SessionListPanel(
         } else {
             discovered.sortedByDescending { it.lastPromptAt ?: it.modified }
         }
-        allSessions = openDrafts() + sorted
+        allSessions = openDrafts(sorted.mapTo(HashSet()) { it.sessionId }) + sorted
         followLinkedDraft()
         applyFilter()
         if (worktreeMode) {
