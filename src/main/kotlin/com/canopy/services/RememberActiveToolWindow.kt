@@ -40,7 +40,6 @@ class RememberActiveToolWindow(private val project: Project) : ToolWindowManager
             }
             SidebarAction.Record -> {
                 settings.sidebarWasOpen = canopy.isVisible
-                LOG.info("Canopy: sidebar ${if (canopy.isVisible) "open" else "closed"} — remembered for the next start")
             }
         }
     }

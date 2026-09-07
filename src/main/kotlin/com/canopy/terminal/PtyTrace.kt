@@ -1,19 +1,27 @@
 package com.canopy.terminal
 
 import com.pty4j.PtyProcess
+import java.io.BufferedWriter
+import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 
-class PtyTrace private constructor(private val file: Path) {
+class PtyTrace(file: Path) : Closeable {
+
+    private val writer: BufferedWriter = Files.newBufferedWriter(file)
 
     fun output(text: String) = append("< ", text)
 
     fun input(text: String) = append("> ", text)
 
+    override fun close() {
+        runCatching { writer.close() }
+    }
+
     private fun append(direction: String, text: String) {
         runCatching {
-            Files.writeString(file, direction + visible(text) + "\n", StandardOpenOption.APPEND)
+            writer.write(direction + visible(text) + "\n")
+            writer.flush()
         }
     }
 
@@ -28,10 +36,7 @@ class PtyTrace private constructor(private val file: Path) {
 
             val file = Path.of(System.getProperty("java.io.tmpdir"), "canopy-pty-${process.pid()}.log")
 
-            return runCatching {
-                Files.writeString(file, "")
-                PtyTrace(file)
-            }.getOrNull()
+            return runCatching { PtyTrace(file) }.getOrNull()
         }
     }
 }

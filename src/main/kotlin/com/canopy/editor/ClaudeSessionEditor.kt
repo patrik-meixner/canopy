@@ -1284,7 +1284,7 @@ class ClaudeSessionEditor(
         previous?.let(persistence::remove)
         persistence.add(sessionId)
         com.canopy.services.SessionRuntimeService.getInstance(project).rekey(previous ?: file.sessionKey, sessionId)
-        com.canopy.services.rememberOpenTerminals(project, "sessionLinked")
+        com.canopy.services.rememberOpenTerminals(project)
 
         // The env named the temp files at spawn, so the agent writes to them whatever it is called now.
         statusService.stopMonitoring(tempMonitoringId)

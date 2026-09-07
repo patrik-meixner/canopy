@@ -29,7 +29,8 @@ class GlyphIcon(
 
     override fun paintIcon(component: Component?, graphics: Graphics, x: Int, y: Int) {
         val glyph = glyphOf()
-        component?.repaint(if (isSpinnerFrame(glyph)) SPINNER_FRAME_MS else IDLE_RECHECK_MS)
+        val delay = if (isSpinnerFrame(glyph)) SPINNER_FRAME_MS else IDLE_RECHECK_MS
+        component?.repaint(delay, x, y, size, size)
         if (glyph.isEmpty()) return
 
         val g = graphics.create() as Graphics2D

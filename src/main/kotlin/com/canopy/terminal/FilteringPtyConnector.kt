@@ -20,6 +20,11 @@ open class FilteringPtyConnector(
         private val UNSUPPORTED = unsupportedSequences(isSynchronizedOutputSupported())
     }
 
+    override fun close() {
+        trace?.close()
+        super.close()
+    }
+
     override fun write(bytes: ByteArray) {
         trace?.input(String(bytes, Charsets.UTF_8))
         super.write(bytes)

@@ -39,12 +39,10 @@ class ClaudeStatusService(private val project: Project) : Disposable {
 
     fun addStatusListener(listener: (String, ClaudeStatus?) -> Unit) {
         listeners.add(listener)
-        log.info("Canopy[${project.name}]: addStatusListener — listener count now ${listeners.size}")
     }
 
     fun removeStatusListener(listener: (String, ClaudeStatus?) -> Unit) {
         listeners.remove(listener)
-        log.info("Canopy[${project.name}]: removeStatusListener — listener count now ${listeners.size}")
     }
 
     fun getStatus(sessionId: String): ClaudeStatus? = currentStatus[sessionId]
@@ -273,7 +271,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
                     val status = parseStatus(json)
                     if (status != null && status != currentStatus[sessionId]) {
                         currentStatus[sessionId] = status
-                        log.info("Canopy[${project.name}]: poll — status changed for $sessionId, firing ${listeners.size} listener(s)")
                         listeners.forEach { it(sessionId, status) }
                     }
                 }

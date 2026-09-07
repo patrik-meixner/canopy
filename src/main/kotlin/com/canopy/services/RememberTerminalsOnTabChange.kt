@@ -11,14 +11,14 @@ class RememberTerminalsOnTabChange(private val project: Project) : FileEditorMan
     override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
         if (file !is ClaudeSessionVirtualFile) return
 
-        rememberOpenTerminals(project, "fileOpened")
+        rememberOpenTerminals(project)
     }
 
     override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
         if (file !is ClaudeSessionVirtualFile) return
         if (CanopyShutdown.isClosing()) return
 
-        rememberOpenTerminals(project, "fileClosed")
+        rememberOpenTerminals(project)
     }
 
     override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
@@ -28,5 +28,5 @@ class RememberTerminalsOnTabChange(private val project: Project) : FileEditorMan
         ActiveSessionTracker.getInstance(project).lastSessionKey = session.sessionKey
     }
 
-    override fun tabsChanged() = rememberOpenTerminals(project, "tabsChanged")
+    override fun tabsChanged() = rememberOpenTerminals(project)
 }
