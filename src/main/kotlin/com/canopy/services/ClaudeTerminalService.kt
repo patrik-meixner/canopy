@@ -114,6 +114,8 @@ class ClaudeTerminalService(private val project: Project) {
         val env = com.canopy.util.ProcessHelper.augmentedEnv()
         env["TERM"] = "xterm-256color"
         env["TERMINAL_EMULATOR"] = "JetBrains-JediTerm"
+        val utf8Locale = if (com.intellij.openapi.util.SystemInfo.isMac) "UTF-8" else "C.UTF-8"
+        env.putAll(com.canopy.util.localeEnv(env, utf8Locale))
         val settings = com.canopy.settings.CanopySettings.getInstance()
         val envOverrides = settings.environmentOverrides()
         env.putAll(envOverrides)
