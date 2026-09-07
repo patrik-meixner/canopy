@@ -53,7 +53,7 @@ class TurnCard(private val turn: ActivityTurn, private val onOpenFile: (String) 
         remainingFiles()?.let { add(it) }
     }
 
-    private fun prompt() = JTextArea(turn.prompt.ifBlank { "Before your first message" }).apply {
+    private fun prompt() = JTextArea(wrappable(turn.prompt.ifBlank { "Before your first message" }, PROMPT_LINES, PROMPT_CHARACTERS)).apply {
         isEditable = false
         isOpaque = false
         lineWrap = true
@@ -98,3 +98,5 @@ class TurnCard(private val turn: ActivityTurn, private val onOpenFile: (String) 
 }
 
 private const val NAMED_FILES = 6
+private const val PROMPT_LINES = 8
+private const val PROMPT_CHARACTERS = 1_200

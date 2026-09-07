@@ -14,6 +14,9 @@ import javax.swing.JTextArea
 import javax.swing.SwingConstants
 
 private const val DESCRIPTION_LINES = 2
+private const val DESCRIPTION_CHARACTERS = 300
+private const val SUBJECT_LINES = 3
+private const val SUBJECT_CHARACTERS = 300
 
 class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
 
@@ -63,7 +66,7 @@ class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
         add(meta())
     }
 
-    private fun subject() = JTextArea(task.subject).apply {
+    private fun subject() = JTextArea(wrappable(task.subject, SUBJECT_LINES, SUBJECT_CHARACTERS)).apply {
         isEditable = false
         isOpaque = false
         lineWrap = true
@@ -76,7 +79,7 @@ class TaskCard(private val task: PlannedTask) : JPanel(BorderLayout()) {
     }
 
     private fun description(): JTextArea? {
-        val text = task.description.lineSequence().filter { it.isNotBlank() }.take(DESCRIPTION_LINES).joinToString(" ")
+        val text = wrappable(task.description, DESCRIPTION_LINES, DESCRIPTION_CHARACTERS).replace("\n", " ")
         if (text.isBlank()) return null
 
         return JTextArea(text).apply {

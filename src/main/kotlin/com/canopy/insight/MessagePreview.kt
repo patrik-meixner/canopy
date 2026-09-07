@@ -50,7 +50,7 @@ object MessagePreview {
     }
 
     private fun textArea(text: String): Component {
-        val area = JTextArea(text).apply {
+        val area = JTextArea(wrappable(text, FULL_LINES, FULL_CHARACTERS)).apply {
             isEditable = false
             lineWrap = true
             wrapStyleWord = true
@@ -114,3 +114,6 @@ object ImagePreview {
         open = null
     }
 }
+
+private const val FULL_LINES = 400
+private const val FULL_CHARACTERS = 20_000

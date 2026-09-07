@@ -15,6 +15,7 @@ import javax.swing.JTextArea
 import javax.swing.SwingConstants
 
 private const val PREVIEW_LINES = 4
+private const val PREVIEW_CHARACTERS = 600
 
 class MessageCard(
     private val message: SessionMessage,
@@ -116,9 +117,4 @@ class MessageCard(
     }
 }
 
-internal fun previewOf(text: String): String {
-    val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-    val head = lines.take(PREVIEW_LINES).joinToString("\n")
-
-    return if (lines.size > PREVIEW_LINES) "$head\n…" else head
-}
+internal fun previewOf(text: String): String = wrappable(text, PREVIEW_LINES, PREVIEW_CHARACTERS)
