@@ -293,13 +293,22 @@ class ClaudeSessionEditor(
 
         val runtimes = com.canopy.services.SessionRuntimeService.getInstance(project)
         val running = runtimes.existing(runtimeKey)
+        val profiles = com.canopy.services.SessionProfiles.getInstance()
+        val settings = com.canopy.settings.CanopySettings.getInstance()
+        val profile = com.canopy.settings.profileToRun(
+            chosen = file.chosenProfile,
+            remembered = profiles.of(file.sessionId ?: file.sessionKey),
+            known = settings.profiles()
+        )
+        profiles.remember(file.sessionId ?: file.sessionKey, profile?.name)
+        val configDir = profile?.let(settings::configDirOf)
         val runtime = running ?: runtimes.create(runtimeKey, file) { parent, relay ->
             when {
                 file.isShellSession -> terminalService.createShellWidget(parent, workingDir = file.workingDir)
-                isFork -> terminalService.createForkWidget(file.forkFrom!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
-                file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
-                isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
-                else -> terminalService.createNewNamedSessionWidget(file.requestedName, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive)
+                isFork -> terminalService.createForkWidget(file.forkFrom!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive, configDir = configDir)
+                file.sessionId != null -> terminalService.createResumeWidget(file.sessionId!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive, configDir = configDir)
+                isNewWorktree -> terminalService.createNewWorktreeWidget(file.newWorktreeName!!, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive, configDir = configDir)
+                else -> terminalService.createNewNamedSessionWidget(file.requestedName, parent, workingDir = file.workingDir, statusFile = statusFile, notifyFile = notifyFile, onActiveChanged = relay::onActiveChanged, onUserInput = relay::onUserInput, onUnresponsive = relay::onUnresponsive, onResponsive = relay::onResponsive, configDir = configDir)
             }
         }
         runtime.view = view
@@ -1284,6 +1293,7 @@ class ClaudeSessionEditor(
         previous?.let(persistence::remove)
         persistence.add(sessionId)
         com.canopy.services.SessionRuntimeService.getInstance(project).rekey(previous ?: file.sessionKey, sessionId)
+        com.canopy.services.SessionProfiles.getInstance().rekey(previous ?: file.sessionKey, sessionId)
         com.canopy.services.rememberOpenTerminals(project)
 
         // The env named the temp files at spawn, so the agent writes to them whatever it is called now.

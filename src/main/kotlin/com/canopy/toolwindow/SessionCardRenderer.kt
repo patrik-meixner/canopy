@@ -122,9 +122,14 @@ class SessionCardRenderer(
     }
 }
 
-internal fun tooltipFor(session: SessionDisplay): String {
+internal fun tooltipFor(session: SessionDisplay, profileNote: String? = null): String {
     val place = session.worktreeName ?: session.projectPath
-    val lines = listOfNotNull(session.displayName.takeIf { it.isNotBlank() }, place.takeIf { it.isNotBlank() })
+    val account = profileNote?.let { "Account: $it" }
+    val lines = listOfNotNull(
+        session.displayName.takeIf { it.isNotBlank() },
+        place.takeIf { it.isNotBlank() },
+        account
+    )
 
     return if (lines.isEmpty()) "" else "<html>" + lines.joinToString("<br>") { escape(it) } + "</html>"
 }

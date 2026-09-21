@@ -6,7 +6,7 @@ import com.canopy.util.ClaudePathEncoder
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 
-fun openClaudeSession(project: Project, session: SessionDisplay) {
+fun openClaudeSession(project: Project, session: SessionDisplay, profile: String? = null) {
     val manager = FileEditorManager.getInstance(project)
     val existing = com.canopy.services.SessionRuntimeService.getInstance(project)
         .existing(session.sessionId)?.file
@@ -20,6 +20,7 @@ fun openClaudeSession(project: Project, session: SessionDisplay) {
     }
 
     val file = ClaudeSessionVirtualFile(session.tabTitle, session.sessionId).apply {
+        chosenProfile = profile
         if (session.worktreeName != null && project.basePath != null) {
             workingDir = ClaudePathEncoder.worktreeAbsolutePath(project.basePath!!, session.worktreeName)
             isWorktreeSession = true

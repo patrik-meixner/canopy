@@ -33,12 +33,13 @@ class ClaudeTerminalService(private val project: Project) {
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null,
-        onResponsive: (() -> Unit)? = null
+        onResponsive: (() -> Unit)? = null,
+        configDir: String? = null
     ): TerminalSession {
         return createWidget(
             arrayOf("claude", "--resume", sessionId),
             parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive        )
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive, configDir = configDir)
     }
 
     fun createForkWidget(
@@ -50,12 +51,13 @@ class ClaudeTerminalService(private val project: Project) {
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null,
-        onResponsive: (() -> Unit)? = null
+        onResponsive: (() -> Unit)? = null,
+        configDir: String? = null
     ): TerminalSession {
         return createWidget(
             arrayOf("claude", "--resume", forkFromSessionId, "--fork-session"),
             parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive        )
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive, configDir = configDir)
     }
 
     fun createNewWorktreeWidget(
@@ -67,12 +69,13 @@ class ClaudeTerminalService(private val project: Project) {
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null,
-        onResponsive: (() -> Unit)? = null
+        onResponsive: (() -> Unit)? = null,
+        configDir: String? = null
     ): TerminalSession {
         return createWidget(
             arrayOf("claude", "--worktree", worktreeName, "--name", worktreeName),
             parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive        )
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive, configDir = configDir)
     }
 
     fun createNewNamedSessionWidget(
@@ -84,12 +87,13 @@ class ClaudeTerminalService(private val project: Project) {
         onActiveChanged: ((Boolean) -> Unit)? = null,
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null,
-        onResponsive: (() -> Unit)? = null
+        onResponsive: (() -> Unit)? = null,
+        configDir: String? = null
     ): TerminalSession {
         val command = if (name.isNullOrBlank()) arrayOf("claude") else arrayOf("claude", "--name", name)
 
         return createWidget(command, parent, workingDir = workingDir, statusFile = statusFile, notifyFile = notifyFile,
-            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive)
+            onActiveChanged = onActiveChanged, onUserInput = onUserInput, onUnresponsive = onUnresponsive, onResponsive = onResponsive, configDir = configDir)
     }
 
     fun createShellWidget(parent: Disposable, workingDir: String? = null): TerminalSession {
@@ -109,7 +113,8 @@ class ClaudeTerminalService(private val project: Project) {
         onUserInput: (() -> Unit)? = null,
         onUnresponsive: (() -> Unit)? = null,
         onResponsive: (() -> Unit)? = null,
-        isShell: Boolean = false
+        isShell: Boolean = false,
+        configDir: String? = null
     ): TerminalSession {
         val env = com.canopy.util.ProcessHelper.augmentedEnv()
         env["TERM"] = "xterm-256color"
@@ -119,6 +124,7 @@ class ClaudeTerminalService(private val project: Project) {
         val settings = com.canopy.settings.CanopySettings.getInstance()
         val envOverrides = settings.environmentOverrides()
         env.putAll(envOverrides)
+        configDir?.let { env["CLAUDE_CONFIG_DIR"] = it }
         if (envOverrides.isNotEmpty()) {
             log.info("Canopy: createWidget — env overrides: $envOverrides")
         }

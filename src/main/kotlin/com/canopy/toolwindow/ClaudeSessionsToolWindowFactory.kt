@@ -33,7 +33,7 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
 
         val callbacks = SessionCallbacks(
             onSessionSelected = { session -> openClaudeSession(project, session) },
-            onNewSession = { name -> openNewSession(project, name) },
+            onNewSession = { name, profile -> openNewSession(project, name, profile) },
             onForkSession = { session -> forkSession(project, session) }
         )
 
@@ -112,7 +112,7 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
 
     private data class SessionCallbacks(
         val onSessionSelected: (SessionDisplay) -> Unit,
-        val onNewSession: (String) -> Unit,
+        val onNewSession: (String, String?) -> Unit,
         val onForkSession: (SessionDisplay) -> Unit
     )
 
@@ -122,9 +122,10 @@ class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
                 .filterIsInstance<ClaudeSessionVirtualFile>()
                 .any { it.sessionId == sessionId }
 
-    private fun openNewSession(project: Project, name: String) {
+    private fun openNewSession(project: Project, name: String, profile: String? = null) {
         val file = ClaudeSessionVirtualFile(name.ifBlank { com.canopy.editor.UNNAMED_SESSION_TITLE }).apply {
             requestedName = name.ifBlank { null }
+            chosenProfile = profile
         }
         FileEditorManager.getInstance(project).openFile(file, true)
     }

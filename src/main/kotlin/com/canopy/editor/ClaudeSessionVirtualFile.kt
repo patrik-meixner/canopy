@@ -42,6 +42,9 @@ class ClaudeSessionVirtualFile(
     var contextPercent: Double? = null
     var isUnresponsive: Boolean = false
 
+    /** Set when a row was opened with a profile picked by hand; otherwise the remembered one runs. */
+    var chosenProfile: String? = null
+
     init {
         isWritable = false
     }

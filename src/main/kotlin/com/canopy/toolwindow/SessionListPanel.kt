@@ -40,7 +40,7 @@ class SessionListPanel(
     private val sessionService: ClaudeSessionService,
     private val getStatus: (String) -> SessionStatus,
     private val onSessionSelected: (SessionDisplay) -> Unit,
-    private val onNewSession: (name: String) -> Unit,
+    private val onNewSession: (name: String, profile: String?) -> Unit,
     private val onForkSession: (SessionDisplay) -> Unit,
     private val worktreeMode: Boolean = false
 ) : Disposable {
@@ -69,7 +69,13 @@ class SessionListPanel(
             if (row < 0) return null
             if (closeHitArea(getCellRect(row, 0, true)).contains(event.point)) return "Stop this session"
 
-            return tooltipFor(tableModel.getItem(convertRowIndexToModel(row))).takeIf { it.isNotBlank() }
+            val session = tableModel.getItem(convertRowIndexToModel(row))
+            val note = profileNote(
+                com.canopy.services.SessionProfiles.getInstance().of(session.sessionId),
+                com.canopy.settings.CanopySettings.getInstance().profiles().firstOrNull()?.name
+            )
+
+            return tooltipFor(session, note).takeIf { it.isNotBlank() }
         }
 
         override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): Component {
@@ -282,12 +288,12 @@ class SessionListPanel(
                     val dialog = WorktreeNameDialog(project)
                     if (!dialog.showAndGet()) return
 
-                    dialog.enteredName?.takeIf { it.isNotEmpty() }?.let { onNewSession(it) }
+                    dialog.enteredName?.takeIf { it.isNotEmpty() }?.let { onNewSession(it, null) }
                 }
             }
         } else {
             object : AnAction("New Session", "Start a Claude session in this project", AllIcons.General.Add) {
-                override fun actionPerformed(e: AnActionEvent) = onNewSession("")
+                override fun actionPerformed(e: AnActionEvent) = onNewSession("", null)
             }
         }
         val refreshAction = object : AnAction("Refresh", "Refresh session list", AllIcons.Actions.Refresh) {
@@ -452,6 +458,22 @@ class SessionListPanel(
                     table
                 )
             })
+            add(
+                profileActionGroup(
+                    "New Session on Account",
+                    com.canopy.settings.CanopySettings.getInstance().profiles(),
+                    isEnabled = { !worktreeMode }
+                ) { profile -> onNewSession("", profile) }
+            )
+            add(
+                profileActionGroup(
+                    "Open with Account",
+                    com.canopy.settings.CanopySettings.getInstance().profiles(),
+                    isEnabled = { selectedSession()?.let { getStatus(it.sessionId) != SessionStatus.OPEN_IN_PLUGIN } == true }
+                ) { profile ->
+                    selectedSession()?.let { openClaudeSession(project, it, profile) }
+                }
+            )
             add(object : AnAction("Add to Stage", "Show this session beside the ones already open", AllIcons.General.Add) {
                 override fun actionPerformed(e: AnActionEvent) {
                     selectedSession()?.let { activate(it, isAdditive = true) }
@@ -936,7 +958,7 @@ class SessionListPanel(
     private fun startSessionInOrphan(orphan: OrphanWorktree) {
         orphanListModel.removeElement(orphan)
         updateOrphanVisibility()
-        onNewSession(orphan.name)
+        onNewSession(orphan.name, null)
     }
 
     private fun deleteOrphan(orphan: OrphanWorktree) {

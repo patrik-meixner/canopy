@@ -112,6 +112,16 @@ class CanopySettings : PersistentStateComponent<CanopySettings.State> {
         return env
     }
 
+    fun profiles(): List<ClaudeProfile> {
+        val home = java.io.File(System.getProperty("user.home"))
+        val entries = home.list()?.toList() ?: emptyList()
+
+        return discoverProfiles(entries)
+    }
+
+    fun configDirOf(profile: ClaudeProfile): String =
+        java.io.File(System.getProperty("user.home"), profile.directoryName).absolutePath
+
     companion object {
         fun getInstance(): CanopySettings =
             ApplicationManager.getApplication().getService(CanopySettings::class.java)
