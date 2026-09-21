@@ -28,10 +28,14 @@ fun sessionAttentionFor(
  * interrupt marker ends the turn, and a transcript standing still for long enough says the same.
  */
 private fun SessionAttention.isOutlivedBy(tail: TranscriptTail?, idleForMillis: Long): Boolean {
-    val isMidTurn = this == SessionAttention.Working || this == SessionAttention.NeedsPermission
+    val isMidTurn = this == SessionAttention.Working ||
+        this == SessionAttention.Compacting ||
+        this == SessionAttention.NeedsPermission
     if (isMidTurn && tail == TranscriptTail.Interrupted) return true
 
-    return this == SessionAttention.Working && idleForMillis > WORKING_GOES_STALE_MS
+    val spinsWhileItLasts = this == SessionAttention.Working || this == SessionAttention.Compacting
+
+    return spinsWhileItLasts && idleForMillis > WORKING_GOES_STALE_MS
 }
 
 /** A turn killed before its Stop hook would report working forever; long enough that a real one never trips it. */

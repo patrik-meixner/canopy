@@ -68,6 +68,32 @@ class SessionAttentionTest {
 
         assertEquals(SessionAttention.None, attention)
     }
+    @Test
+    fun `a compact the user interrupted stops spinning`() {
+        val attention = sessionAttentionFor("compact", isRunning = true, tail = TranscriptTail.Interrupted, idleForMillis = 1_000)
+
+        assertEquals(SessionAttention.WaitingForInput, attention)
+    }
+
+    @Test
+    fun `a compact that never reported finishing does not spin for ever`() {
+        val attention = sessionAttentionFor(
+            "compact",
+            isRunning = true,
+            tail = TranscriptTail.AssistantReply,
+            idleForMillis = LONG_AFTER_ANY_TOOL
+        )
+
+        assertEquals(SessionAttention.WaitingForInput, attention)
+    }
+
+    @Test
+    fun `a compact that is genuinely running still says so`() {
+        val attention = sessionAttentionFor("compact", isRunning = true, tail = TranscriptTail.AgentsTurn, idleForMillis = 1_000)
+
+        assertEquals(SessionAttention.Compacting, attention)
+    }
+
 }
 
 private const val LONG_AFTER_ANY_TOOL = 24L * 60 * 60 * 1000

@@ -10,5 +10,6 @@ fun sessionGlyph(attention: SessionAttention, presence: SessionPresence, nowMill
     attention != SessionAttention.None -> attention.glyph
     presence == SessionPresence.OpenElsewhere -> "↗"
     presence == SessionPresence.Available -> "○"
+    presence == SessionPresence.OpenHere -> "●"
     else -> null
 }

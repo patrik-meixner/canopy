@@ -2,7 +2,6 @@ package com.canopy.model
 
 import com.canopy.toolwindow.isSpinnerFrame
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,7 +35,8 @@ class SessionGlyphTest {
     }
 
     @Test
-    fun `a session open right here needs no mark saying so`() {
-        assertNull(sessionGlyph(SessionAttention.None, SessionPresence.OpenHere, 0))
+    fun `a live session is the same mark as an idle one, filled in`() {
+        assertEquals("\u25cf", sessionGlyph(SessionAttention.None, SessionPresence.OpenHere, 0))
+        assertEquals("\u25cb", sessionGlyph(SessionAttention.None, SessionPresence.Available, 0))
     }
 }
