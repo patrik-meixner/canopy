@@ -22,6 +22,7 @@ class SectionedChangesBrowser(
 ) : ChangesBrowserBase(project, false, false) {
 
     private var sections: Map<SessionChangeSection, List<Change>> = emptyMap()
+    private var notes: Map<Change, String> = emptyMap()
     private var unversioned: List<FilePath> = emptyList()
     private var pushedCommits: List<CommitWithChanges> = emptyList()
     private var fileQuery = ""
@@ -282,6 +283,7 @@ class SectionedChangesBrowser(
 
     fun setSections(changeSet: SessionChangeSet) {
         sections = changeSet.changes
+        notes = changeSet.notes
         unversioned = changeSet.unversioned
         pushedCommits = changeSet.pushedCommits
         viewer.rebuildTree(com.intellij.openapi.vcs.changes.ui.ChangesTree.ALWAYS_KEEP)
@@ -316,7 +318,18 @@ class SectionedChangesBrowser(
                 continue
             }
 
-            builder.insertChanges(changes, tag)
+            if (notes.isEmpty()) {
+                builder.insertChanges(changes, tag)
+                continue
+            }
+
+            changes.forEach { change ->
+                builder.insertChangeNode(
+                    change,
+                    tag,
+                    NotedChangeNode(myProject, change, noteDecorator)
+                )
+            }
         }
 
         val shownUnversioned = unversioned.filter { matchesFileQuery(it.path, fileQuery) }
@@ -346,6 +359,24 @@ class SectionedChangesBrowser(
         )
     }
 
+    private val noteDecorator = object : com.intellij.openapi.vcs.changes.ui.ChangeNodeDecorator {
+        override fun decorate(
+            change: Change,
+            component: com.intellij.ui.SimpleColoredComponent,
+            isShowFlatten: Boolean
+        ) {
+            val note = notes[change] ?: return
+
+            component.append("  $note", com.intellij.ui.SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        }
+
+        override fun preDecorate(
+            change: Change,
+            renderer: com.intellij.openapi.vcs.changes.ui.ChangesBrowserNodeRenderer,
+            isShowFlatten: Boolean
+        ) = Unit
+    }
+
     private fun tagNode(builder: TreeModelBuilder, section: SessionChangeSection): ChangesBrowserNode<*> {
         val node = com.intellij.openapi.vcs.changes.ui.TagChangesBrowserNode(
             object : ChangesBrowserNode.Tag {
@@ -363,3 +394,10 @@ class SectionedChangesBrowser(
 
 private const val PUSHED_FILE_BUDGET = 400
 private const val OPENABLE_PROBE = 20
+
+/** The platform's own change node, reachable only by subclassing it, so a note can ride along. */
+private class NotedChangeNode(
+    project: com.intellij.openapi.project.Project,
+    change: Change,
+    decorator: com.intellij.openapi.vcs.changes.ui.ChangeNodeDecorator
+) : com.intellij.openapi.vcs.changes.ui.ChangesBrowserChangeNode(project, change, decorator)

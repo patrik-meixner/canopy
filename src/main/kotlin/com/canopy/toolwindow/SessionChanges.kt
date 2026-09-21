@@ -20,7 +20,8 @@ data class SessionChangeSet(
     val unversioned: List<FilePath>,
     val pushedCommits: List<CommitWithChanges> = emptyList(),
     val isEstimated: Boolean = false,
-    val midGitOperation: Boolean = false
+    val midGitOperation: Boolean = false,
+    val notes: Map<Change, String> = emptyMap()
 ) {
     val isEmpty: Boolean get() = changes.isEmpty() && unversioned.isEmpty()
 
@@ -56,10 +57,13 @@ object SessionChanges {
     ): SessionChangeSet {
         if (isMidGitOperation(root)) return SessionChangeSet(emptyMap(), emptyList(), midGitOperation = true)
 
+
         val sharedTip = sharedWithRemote(root)
         val sessionStart = sessionStartPoint(root, since)
         val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
-        val (own, elsewhere) = diff(root, "HEAD", null).partition { isOwn(pathOfChange(it)) }
+        val uncommitted = noted(root, "HEAD", null)
+        val (own, elsewhere) = uncommitted.map { it.first }.partition { isOwn(pathOfChange(it)) }
+        val notes = uncommitted.mapNotNull { (change, note) -> note?.let { change to it } }.toMap()
 
         val unpushedFrom = unpushedStart(root, sharedTip, sessionStart)
         val committed = unpushedFrom?.let { diff(root, it, "HEAD") }.orEmpty()
@@ -70,6 +74,7 @@ object SessionChanges {
         val pushedCommits = pushedRange?.let { (from, to) -> SessionCommits.withChanges(root, repository, "$from..$to") }.orEmpty()
 
         return SessionChangeSet(
+            notes = notes,
             changes = mapOf(
                 SessionChangeSection.Uncommitted to own,
                 SessionChangeSection.Elsewhere to if (showElsewhere) elsewhere else emptyList(),
@@ -126,17 +131,21 @@ object SessionChanges {
         return git(root, "rev-parse", "--verify", "--quiet", "$oldest^")?.trim()?.ifEmpty { null } ?: oldest
     }
 
-    private fun diff(root: String, from: String, to: String?): List<Change> {
+    private fun diff(root: String, from: String, to: String?): List<Change> = noted(root, from, to).map { it.first }
+
+    /** Each change with what git says about it, for the rows whose diff will show nothing. */
+    private fun noted(root: String, from: String, to: String?): List<Pair<Change, String?>> {
         val range = if (to == null) arrayOf(from) else arrayOf("$from...$to")
-        val output = git(root, "diff", "--name-status", "-M", *range) ?: return emptyList()
+        val output = git(root, "diff", "--raw", "--numstat", "-M", *range) ?: return emptyList()
 
-        return parseNameStatus(output).map { (status, oldPath, newPath) ->
-            val filePath = localPath(root, newPath)
+        return parseGitDiffEntries(output).map { entry ->
+            val filePath = localPath(root, entry.newPath)
             val beforeRevision = if (to == null) "HEAD" else from
-            val before = if (status == 'A') null else GitContentRevision(root, oldPath, beforeRevision, filePath)
-            val after = if (status == 'D') null else afterRevision(root, newPath, to, filePath)
+            val before = if (entry.status == 'A') null
+            else GitContentRevision(root, entry.oldPath, beforeRevision, filePath)
+            val after = if (entry.status == 'D') null else afterRevision(root, entry.newPath, to, filePath)
 
-            Change(before, after)
+            Change(before, after) to changeNote(entry)
         }
     }
 
@@ -165,16 +174,6 @@ object SessionChanges {
 
     private fun localPath(root: String, relative: String): FilePath =
         LocalFilePath(Path.of(root, relative).toString(), false)
-
-    private fun parseNameStatus(output: String): List<Triple<Char, String, String>> =
-        output.lines().filter { it.isNotBlank() }.mapNotNull { line ->
-            val parts = line.split('\t')
-            val code = parts[0].firstOrNull() ?: return@mapNotNull null
-            when (code) {
-                'R', 'C' -> if (parts.size >= 3) Triple(code, parts[1], parts[2]) else null
-                else -> if (parts.size >= 2) Triple(code, parts[1], parts[1]) else null
-            }
-        }
 
     private fun git(root: String, vararg args: String): String? = try {
         val result = ProcessHelper.execWithTimeout(
