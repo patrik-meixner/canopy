@@ -678,7 +678,10 @@ class SessionListPanel(
         val statusService = com.canopy.services.ClaudeStatusService.getInstance(project)
         val open = canopyFiles()
             .filter { it.sessionId == null && !it.isShellSession }
-            .map { DraftSource(it.sessionKey, it.baseName, statusService.getStatus(it.sessionKey)?.reportedSessionId) }
+            .map { file ->
+                val monitoringId = com.canopy.editor.monitoringIdOf(file.sessionId, file.sessionKey)
+                DraftSource(file.sessionKey, file.baseName, statusService.getStatus(monitoringId)?.reportedSessionId)
+            }
 
         return draftRows(open, listed, project.basePath.orEmpty(), System.currentTimeMillis())
     }

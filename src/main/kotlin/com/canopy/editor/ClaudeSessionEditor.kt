@@ -266,7 +266,7 @@ class ClaudeSessionEditor(
 
         val isFork = file.forkFrom != null
         val isNewWorktree = file.newWorktreeName != null
-        val monitoringId = file.sessionId ?: "new-${System.nanoTime()}"
+        val monitoringId = monitoringIdOf(file.sessionId, file.sessionKey)
         val runtimeKey = file.sessionId ?: file.sessionKey
         val statusFile = statusService.createStatusFilePath(monitoringId)
         val notifyFile = statusService.createNotifyFilePath(monitoringId)
