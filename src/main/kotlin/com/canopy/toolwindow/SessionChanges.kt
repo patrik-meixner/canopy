@@ -4,7 +4,6 @@ import com.canopy.util.ProcessHelper
 import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.LocalFilePath
 import com.intellij.openapi.vcs.changes.ContentRevision
-import com.intellij.openapi.vcs.changes.CurrentContentRevision
 import com.intellij.openapi.vcs.changes.Change
 import java.nio.file.Path
 
@@ -131,7 +130,8 @@ object SessionChanges {
     }
 
     private fun afterRevision(root: String, relativePath: String, to: String?, filePath: FilePath): ContentRevision =
-        if (to == null) CurrentContentRevision(filePath) else GitContentRevision(root, relativePath, to, filePath)
+        if (to == null) WorkingCopyRevision(root, relativePath, "HEAD", filePath)
+        else GitContentRevision(root, relativePath, to, filePath)
 
     private fun untracked(root: String): List<FilePath> {
         val output = git(root, "ls-files", "--others", "--exclude-standard") ?: return emptyList()

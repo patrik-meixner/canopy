@@ -28,16 +28,18 @@ class GitContentRevision(
         null
     }
 
-    private fun committed(): String? = try {
-        val result = ProcessHelper.execWithTimeout(
-            command = arrayOf("git", "-C", root, "show", "$revision:$relativePath"),
-            timeoutMs = 20_000,
-            extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
-        )
-        if (result.exitCode == 0) result.output else null
-    } catch (_: Exception) {
-        null
-    }
+    private fun committed(): String? = gitBlob(root, "$revision:$relativePath")
+}
+
+internal fun gitBlob(root: String, revisionAndPath: String): String? = try {
+    val result = ProcessHelper.execWithTimeout(
+        command = arrayOf("git", "-C", root, "show", revisionAndPath),
+        timeoutMs = 20_000,
+        extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
+    )
+    if (result.exitCode == 0) result.output else null
+} catch (_: Exception) {
+    null
 }
 
 private class TextRevisionNumber(private val revision: String) : VcsRevisionNumber {
