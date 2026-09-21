@@ -66,16 +66,16 @@ class MessagesTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
             rebuild()
         }
 
-        cards.setCards(
-            shown.map { message ->
-                MessageCard(
-                    message,
-                    onOpen = { card, event -> open(card, event, message) },
-                    onJump = { jumpTo(message) }
-                )
-            },
-            shown.map { "${it.ordinal}:${it.text.length}" }
-        )
+        val messageByKey = shown.associateBy(::messageCardKey)
+
+        cards.setCards(shown.map(::messageCardKey)) { key ->
+            val message = messageByKey.getValue(key)
+            MessageCard(
+                message,
+                onOpen = { card, event -> open(card, event, message) },
+                onJump = { jumpTo(message) }
+            )
+        }
     }
 
     private fun open(card: MessageCard, event: java.awt.event.MouseEvent, message: SessionMessage) {

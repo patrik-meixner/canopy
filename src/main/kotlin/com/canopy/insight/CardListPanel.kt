@@ -31,6 +31,8 @@ class CardListPanel(private val emptyState: EmptyState) : JPanel(CardLayout()) {
     }
 
     private var shown = 0
+    private val held = LinkedHashMap<String, JComponent>()
+    private var measuredAtWidth = 0
     private var keys: List<String>? = null
     private var glide: Timer? = null
     private var more: MoreRow? = null
@@ -41,6 +43,17 @@ class CardListPanel(private val emptyState: EmptyState) : JPanel(CardLayout()) {
         background = InsightUi.panelBackground()
         add(scroll, CARDS)
         add(emptyState, EMPTY)
+
+        // A card's height cap is measured when it is built, and a kept card would stay capped at the
+        // height its text needed at the old width.
+        scroll.viewport.addComponentListener(object : java.awt.event.ComponentAdapter() {
+            override fun componentResized(event: java.awt.event.ComponentEvent) {
+                if (scroll.viewport.width == measuredAtWidth) return
+
+                measuredAtWidth = scroll.viewport.width
+                held.values.forEach { it.alignedToWidth() }
+            }
+        })
 
         scroll.verticalScrollBar.model.addChangeListener { if (followingNewest) jumpToNewest() }
         scroll.addMouseWheelListener { followingNewest = false }
@@ -58,16 +71,20 @@ class CardListPanel(private val emptyState: EmptyState) : JPanel(CardLayout()) {
         row.show(remaining, step)
     }
 
-    fun setCards(cards: List<JComponent>) = setCards(cards, cards.indices.map(Int::toString))
-
-    fun setCards(cards: List<JComponent>, cardKeys: List<String>) {
-        if (cardKeys == keys && cards.size == shown) return
+    /**
+     * The card for a key is built once and kept. Rebuilding every card on every refresh was what
+     * made a long session stall: a card lays out its own wrapped text, and the agent writes its
+     * transcript faster than that costs.
+     */
+    fun setCards(cardKeys: List<String>, build: (String) -> JComponent) {
+        if (cardKeys == keys) return
 
         val first = keys == null
         keys = cardKeys
-        showCard(if (cards.isEmpty()) EMPTY else CARDS)
-        if (cards.isEmpty()) {
+        showCard(if (cardKeys.isEmpty()) EMPTY else CARDS)
+        if (cardKeys.isEmpty()) {
             shown = 0
+            held.clear()
             stack.removeAll()
             return
         }
@@ -75,12 +92,16 @@ class CardListPanel(private val emptyState: EmptyState) : JPanel(CardLayout()) {
         val bar = scroll.verticalScrollBar
         val keptValue = bar.value
         val wasAtBottom = bar.value + bar.visibleAmount >= bar.maximum - JBUI.scale(BOTTOM_SLACK)
-        val grew = cards.size > shown
+        val grew = cardKeys.size > shown
 
-        shown = cards.size
+        val cards = claimCards(cardKeys, held) { key -> build(key).alignedToWidth() }
+        held.clear()
+        cardKeys.forEachIndexed { index, key -> held[key] = cards[index] }
+
+        shown = cardKeys.size
         stack.removeAll()
         if (moreAtTop) more?.let { stack.add(it.alignedToWidth()) }
-        cards.forEach { stack.add(it.alignedToWidth()) }
+        cards.forEach(stack::add)
         if (!moreAtTop) more?.let { stack.add(it.alignedToWidth()) }
         stack.add(Box.createVerticalGlue())
         stack.revalidate()

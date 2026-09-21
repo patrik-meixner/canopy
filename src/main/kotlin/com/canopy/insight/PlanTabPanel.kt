@@ -34,7 +34,9 @@ class PlanTabPanel(project: Project, parent: Disposable) : InsightTabPanel(proje
 
     override fun render(insight: SessionInsight) {
         summary.text = summaryOf(insight.tasks)
-        cards.setCards(insight.tasks.map(::TaskCard), planCardKeys(insight.tasks))
+        val taskByKey = planCardKeys(insight.tasks).zip(insight.tasks).toMap()
+
+        cards.setCards(planCardKeys(insight.tasks)) { key -> TaskCard(taskByKey.getValue(key)) }
     }
 }
 

@@ -46,7 +46,9 @@ class ActivityTabPanel(project: Project, parent: Disposable) : InsightTabPanel(p
             limit += TURN_PAGE
             rebuild()
         }
-        cards.setCards(page.shown.map { TurnCard(it, ::openFile) }, page.shown.map(::turnCardKey))
+        val turnByKey = page.shown.associateBy(::turnCardKey)
+
+        cards.setCards(page.shown.map(::turnCardKey)) { key -> TurnCard(turnByKey.getValue(key), ::openFile) }
     }
 
     private fun toolbar(): javax.swing.JComponent {
