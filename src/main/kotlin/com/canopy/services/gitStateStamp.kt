@@ -14,19 +14,9 @@ private val GIT_STATE_FILES = listOf("HEAD", "index", "FETCH_HEAD")
  * Three stat calls per repository ask git's own files instead.
  */
 fun gitStateStamp(root: String): Long {
-    val git = Path.of(root, ".git")
-    val directory = if (Files.isDirectory(git)) git else worktreeGitDirectory(git) ?: return 0L
+    val directory = com.canopy.util.gitDirectoryOf(root) ?: return 0L
 
     return GIT_STATE_FILES.maxOf { name -> lastModified(directory.resolve(name)) }
-}
-
-private fun worktreeGitDirectory(git: Path): Path? {
-    if (!Files.isRegularFile(git)) return null
-
-    val pointer = runCatching { Files.readString(git) }.getOrNull() ?: return null
-    val path = pointer.substringAfter("gitdir:", "").trim().ifEmpty { return null }
-
-    return Path.of(path).takeIf { Files.isDirectory(it) }
 }
 
 private fun lastModified(path: Path): Long =

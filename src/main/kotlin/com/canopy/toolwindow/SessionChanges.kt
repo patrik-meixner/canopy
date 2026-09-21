@@ -19,7 +19,8 @@ data class SessionChangeSet(
     val changes: Map<SessionChangeSection, List<Change>>,
     val unversioned: List<FilePath>,
     val pushedCommits: List<CommitWithChanges> = emptyList(),
-    val isEstimated: Boolean = false
+    val isEstimated: Boolean = false,
+    val midGitOperation: Boolean = false
 ) {
     val isEmpty: Boolean get() = changes.isEmpty() && unversioned.isEmpty()
 
@@ -53,6 +54,8 @@ object SessionChanges {
         showElsewhere: Boolean = true,
         ownCommits: Set<String>? = null
     ): SessionChangeSet {
+        if (isMidGitOperation(root)) return SessionChangeSet(emptyMap(), emptyList(), midGitOperation = true)
+
         val sharedTip = sharedWithRemote(root)
         val sessionStart = sessionStartPoint(root, since)
         val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
@@ -106,6 +109,14 @@ object SessionChanges {
         git(root, "merge-base", "--is-ancestor", ancestor, descendant) != null
 
     internal fun commitRangeStart(sharedTip: String?, base: String?): String? = sharedTip ?: base
+
+    private fun isMidGitOperation(root: String): Boolean {
+        val directory = com.canopy.util.gitDirectoryOf(root) ?: return false
+        val entries = runCatching { java.nio.file.Files.list(directory).use { it.map { path -> path.fileName.toString() }.toList() } }
+            .getOrNull()?.toSet() ?: return false
+
+        return com.canopy.util.isTransientGitState(entries)
+    }
 
     private fun sessionStartPoint(root: String, since: java.time.Instant?): String? {
         if (since == null) return null

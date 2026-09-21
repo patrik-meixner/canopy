@@ -1,3 +1,3 @@
 package com.canopy.toolwindow
 
-enum class ReviewState { NoSession, Collecting, NothingOutstanding, Changes }
+enum class ReviewState { NoSession, Collecting, NothingOutstanding, MidGitOperation, Changes }

@@ -32,6 +32,12 @@ class SessionDetailPanel(
         "Nothing outstanding",
         "This session has left no uncommitted, unpushed or untracked work behind."
     )
+    private val midGitOperation = com.canopy.insight.EmptyState(
+        com.intellij.icons.AllIcons.General.BalloonInformation,
+        "A git operation is in progress",
+        "A merge, rebase, cherry-pick or revert fills the working tree with changes this session " +
+            "did not make. Finish or abort it and this comes back."
+    )
     private val browser = SectionedChangesBrowser(
         project,
         this,
@@ -96,6 +102,7 @@ class SessionDetailPanel(
         add(placeholder, ReviewState.NoSession.name)
         add(JPanel().apply { isOpaque = false }, ReviewState.Collecting.name)
         add(nothingOutstanding, ReviewState.NothingOutstanding.name)
+        add(midGitOperation, ReviewState.MidGitOperation.name)
         add(changesWithSearch, ReviewState.Changes.name)
     }
 
@@ -413,7 +420,13 @@ class SessionDetailPanel(
             browser.setSections(changeSet)
         }
 
-        showState(if (changeSet.isEmpty) ReviewState.NothingOutstanding else ReviewState.Changes)
+        showState(
+            when {
+                changeSet.midGitOperation -> ReviewState.MidGitOperation
+                changeSet.isEmpty -> ReviewState.NothingOutstanding
+                else -> ReviewState.Changes
+            }
+        )
     }
 
     private fun updateHeader(changeSet: SessionChangeSet) {
