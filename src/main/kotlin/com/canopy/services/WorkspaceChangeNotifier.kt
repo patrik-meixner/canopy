@@ -1,6 +1,7 @@
 package com.canopy.services
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -17,6 +18,7 @@ class WorkspaceChangeNotifier(private val project: Project) : Disposable {
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
     private val gitAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
     private var gitStamps: Map<String, Long> = emptyMap()
+    private val polling = java.util.concurrent.atomic.AtomicBoolean(false)
 
     init {
         project.messageBus.connect(this).subscribe(
@@ -27,28 +29,36 @@ class WorkspaceChangeNotifier(private val project: Project) : Disposable {
                 }
             }
         )
+        com.canopy.util.onIdeActivated(this, ::startPolling)
     }
 
     fun addListener(parent: Disposable, listener: () -> Unit) {
-        val wasEmpty = listeners.isEmpty()
         listeners.add(listener)
         Disposer.register(parent, Disposable { listeners.remove(listener) })
 
-        if (wasEmpty) pollGitState()
+        startPolling()
+    }
+
+    private fun shouldPoll(): Boolean =
+        listeners.isNotEmpty() && ApplicationManager.getApplication().isActive && !gitAlarm.isDisposed
+
+    private fun startPolling() {
+        if (!shouldPoll() || !polling.compareAndSet(false, true)) return
+
+        gitAlarm.addRequest(::pollGitState, GIT_POLL_MS)
     }
 
     private fun pollGitState() {
-        if (gitAlarm.isDisposed) return
+        if (!shouldPoll()) {
+            polling.set(false)
+            return startPolling()
+        }
 
-        gitAlarm.addRequest({
-            if (listeners.isNotEmpty()) {
-                val stamps = RepoScopeService.getInstance(project).cachedScopes()
-                    .associate { it.root to gitStateStamp(it.root) }
-                if (gitStamps.isNotEmpty() && stamps != gitStamps) schedule()
-                gitStamps = stamps
-            }
-            pollGitState()
-        }, GIT_POLL_MS)
+        val stamps = RepoScopeService.getInstance(project).cachedScopes()
+            .associate { it.root to gitStateStamp(it.root) }
+        if (gitStamps.isNotEmpty() && stamps != gitStamps) schedule()
+        gitStamps = stamps
+        gitAlarm.addRequest(::pollGitState, GIT_POLL_MS)
     }
 
     private fun schedule() {

@@ -30,6 +30,31 @@ class ChangesWorkingTreeTest {
     }
 
     @Test
+    fun `a submodule's or worktree's git bookkeeping is not either`() {
+        assertFalse(changes("/ws/.git/modules/one-frontend/objects/ab/cdef"))
+        assertFalse(changes("/ws/.git/modules/one-frontend/logs/HEAD"))
+        assertFalse(changes("/ws/.git/worktrees/feature/logs/HEAD"))
+        assertFalse(changes("/ws/canopy/.git/logs/refs/heads/main"))
+        assertTrue(changes("/ws/.git/modules/one-frontend/HEAD"))
+    }
+
+    @Test
+    fun `a lock git holds for a moment is not a change`() {
+        assertFalse(changes("/ws/canopy/.git/index.lock"))
+        assertFalse(changes("/ws/.git/modules/dmm/index.lock"))
+    }
+
+    @Test
+    fun `the nx cache is build output`() {
+        assertFalse(changes("/ws/one-frontend/.nx/cache/run.json"))
+    }
+
+    @Test
+    fun `a source directory merely named like git bookkeeping is still source`() {
+        assertTrue(changes("/ws/canopy/src/objects/Thing.kt"))
+    }
+
+    @Test
     fun `a directory merely named build inside a source path is still a build directory`() {
         assertFalse(changes("/ws/canopy/build/tmp/x"))
     }

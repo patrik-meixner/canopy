@@ -4,8 +4,10 @@ import java.nio.file.Path
 
 private val BUILD_OUTPUT = listOf(
     "/build/", "/out/", "/dist/", "/target/", "/node_modules/",
-    "/.gradle/", "/.kotlin/", "/.idea/", "/.git/objects/", "/.git/logs/"
+    "/.gradle/", "/.kotlin/", "/.idea/", "/.nx/"
 )
+
+private val GIT_BOOKKEEPING = Regex("""/\.git/(?:[^/]+/)*(?:objects|logs)(?:/|$)""")
 
 private val CLAUDE_HOME = Path.of(System.getProperty("user.home"), ".claude").toString() + "/"
 
@@ -18,4 +20,7 @@ private val CLAUDE_HOME = Path.of(System.getProperty("user.home"), ".claude").to
  * reports it on every return to the window, which is the moment the terminal is trying to redraw.
  */
 fun changesWorkingTree(path: String, claudeHome: String = CLAUDE_HOME): Boolean =
-    !path.startsWith(claudeHome) && BUILD_OUTPUT.none { it in path }
+    !path.startsWith(claudeHome) &&
+        !path.endsWith("/index.lock") &&
+        BUILD_OUTPUT.none { it in path } &&
+        !GIT_BOOKKEEPING.containsMatchIn(path)
