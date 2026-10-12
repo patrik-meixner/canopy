@@ -531,13 +531,7 @@ class ClaudeSessionEditor(
             com.canopy.util.CanopyExecutor.submit {
                 try {
                     val branch = execGit(gitDir, "branch", "--show-current").trim()
-                    val status = execGit(gitDir, "status", "--porcelain").trim()
-                    val changedFiles = if (status.isEmpty()) emptyList() else status.lines()
-                        .filter { it.isNotBlank() }
-                        .mapNotNull { line ->
-                            val path = line.drop(3).split(" -> ").last().trim()
-                            if (path.isNotEmpty()) java.nio.file.Path.of(gitDir, path).toAbsolutePath().toString() else null
-                        }
+                    val changedFiles = changedFilesIn(gitDir)
                     val changed = changedFiles.size
 
                     val writes = writesSoFar()
@@ -546,7 +540,7 @@ class ClaudeSessionEditor(
                         changedFiles.count { it in sessionFiles }
                     } else 0
 
-                    val pureFiles = ownedChangedFiles(gitDir, writes)
+                    val pureFiles = ownedChangedFiles(gitDir, changedFiles.toSet(), writes)
 
                     ApplicationManager.getApplication().invokeLater {
                         branchName.text = branch
@@ -586,7 +580,7 @@ class ClaudeSessionEditor(
             val gitDir = resolveGitDir() ?: return@addActionListener
             ApplicationManager.getApplication().executeOnPooledThread {
                 try {
-                    val pureFiles = ownedChangedFiles(gitDir, writesSoFar())
+                    val pureFiles = ownedChangedFiles(gitDir, changedFilesIn(gitDir).toSet(), writesSoFar())
                     if (pureFiles.isEmpty()) return@executeOnPooledThread
 
                     for (f in pureFiles) {
@@ -1062,6 +1056,7 @@ class ClaudeSessionEditor(
 
     private val transcriptJson = com.google.gson.Gson()
     private val writesTail = com.canopy.util.JsonlTailReader()
+    private val contents = FileContentCache()
     private val sessionWrites = mutableListOf<com.canopy.session.FileWrite>()
     private var writesFrom: java.nio.file.Path? = null
 
@@ -1086,25 +1081,35 @@ class ClaudeSessionEditor(
         return sessionWrites.toList()
     }
 
-    private fun ownedChangedFiles(gitDir: String, writes: List<com.canopy.session.FileWrite>): List<String> {
-        if (writes.isEmpty()) return emptyList()
-
+    private fun changedFilesIn(gitDir: String): List<String> {
         val root = java.nio.file.Path.of(gitDir)
-        val changed = execGit(gitDir, "status", "--porcelain")
+
+        return execGit(gitDir, "status", "--porcelain")
             .lineSequence()
             .filter { it.isNotBlank() }
             .map { it.drop(3).substringAfterLast(" -> ").trim() }
             .filter { it.isNotEmpty() }
-            .mapTo(HashSet()) { root.resolve(it).toAbsolutePath().toString() }
+            .map { root.resolve(it).toAbsolutePath().toString() }
+            .toList()
+    }
+
+    private fun ownedChangedFiles(gitDir: String, changed: Set<String>, writes: List<com.canopy.session.FileWrite>): List<String> {
+        if (writes.isEmpty()) return emptyList()
+
+        val root = java.nio.file.Path.of(gitDir)
+        val head by lazy { execGit(gitDir, "rev-parse", "HEAD").trim() }
+        contents.retainOnly(changed)
 
         return com.canopy.session.ownedFiles(
             changed = changed,
             writes = writes,
             headOf = { path ->
-                val relative = root.relativize(java.nio.file.Path.of(path)).toString()
-                execGitWithExitCode(gitDir, "show", "HEAD:$relative").let { if (it.exitCode == 0) it.output else "" }
+                contents.atHead(head, path) {
+                    val relative = root.relativize(java.nio.file.Path.of(path)).toString()
+                    execGitWithExitCode(gitDir, "show", "$head:$relative").let { if (it.exitCode == 0) it.output else "" }
+                }
             },
-            currentOf = { path -> runCatching { java.nio.file.Files.readString(java.nio.file.Path.of(path)) }.getOrNull() },
+            currentOf = contents::onDisk,
         )
     }
 
