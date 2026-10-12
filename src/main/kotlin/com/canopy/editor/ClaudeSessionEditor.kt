@@ -505,6 +505,7 @@ class ClaudeSessionEditor(
     }
 
     private fun createGitToolbar(resolveGitDir: () -> String?): JComponent {
+        val bar = JPanel(BorderLayout())
         val branchLabel = JBLabel(AllIcons.Vcs.Branch).apply {
             border = JBUI.Borders.empty(0, 4)
         }
@@ -524,7 +525,7 @@ class ClaudeSessionEditor(
         }
 
         val gate = com.canopy.util.RefreshGate(TOOLBAR_REFRESH_FLOOR_MS)
-        fun refresh(isForced: Boolean = false) {
+        fun refreshNow(isForced: Boolean) {
             val gitDir = resolveGitDir() ?: return
             if (!java.io.File(gitDir, ".git").exists()) return
             if (!gate.tryStart(isForced)) return
@@ -563,6 +564,9 @@ class ClaudeSessionEditor(
                 }
             }
         }
+
+        val seen = refreshWhileSeen(bar, ::refreshNow)
+        fun refresh(isForced: Boolean = false) = seen.request(isForced)
 
         refresh(isForced = true)
 
@@ -617,13 +621,13 @@ class ClaudeSessionEditor(
             add(commitButton)
         }
 
-        val bar = JPanel(BorderLayout())
         bar.add(leftPanel, BorderLayout.WEST)
         return bar
     }
 
     private fun createWorktreeToolbar(): JComponent {
         val projectPath = project.basePath
+        val bar = JPanel(BorderLayout())
 
         val branchLabel = JBLabel(ClaudeSessionIconProvider.TREE_ICON).apply {
             border = JBUI.Borders.empty(0, 4)
@@ -726,7 +730,7 @@ class ClaudeSessionEditor(
         updateOpenButtons()
 
         val gate = com.canopy.util.RefreshGate(TOOLBAR_REFRESH_FLOOR_MS)
-        fun refreshBranchStatus(isForced: Boolean = false) {
+        fun refreshBranchStatusNow(isForced: Boolean) {
             ApplicationManager.getApplication().invokeLater { updateOpenButtons() }
             val worktreePath = file.workingDir
             if (worktreePath == null || projectPath == null) return
@@ -818,6 +822,9 @@ class ClaudeSessionEditor(
                 }
             }
         }
+
+        val seen = refreshWhileSeen(bar, ::refreshBranchStatusNow)
+        fun refreshBranchStatus(isForced: Boolean = false) = seen.request(isForced)
 
         commitButton.addActionListener {
             commitButton.isEnabled = false
@@ -954,10 +961,23 @@ class ClaudeSessionEditor(
             add(revealButton)
         }
 
-        val bar = JPanel(BorderLayout())
         bar.add(leftPanel, BorderLayout.WEST)
         bar.add(rightPanel, BorderLayout.EAST)
         return bar
+    }
+
+    private fun refreshWhileSeen(bar: JComponent, refresh: (isForced: Boolean) -> Unit): com.canopy.util.DeferredRefresh {
+        val seen = com.canopy.util.DeferredRefresh(
+            isSeen = { ApplicationManager.getApplication().isActive && bar.isShowing },
+            catchUpForced = true,
+            run = refresh
+        )
+        bar.addHierarchyListener { event ->
+            if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) seen.catchUp()
+        }
+        com.canopy.util.onIdeActivated(sessionDisposable, seen::catchUp)
+
+        return seen
     }
 
     private fun wireToolbarRefresh(refresh: (isForced: Boolean) -> Unit) {

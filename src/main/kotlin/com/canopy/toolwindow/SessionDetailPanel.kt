@@ -63,7 +63,7 @@ class SessionDetailPanel(
     @Volatile private var shownSessionId: String? = null
     @Volatile private var shownSignature: Long? = null
     @Volatile private var lastSweptAt = 0L
-    private val refresher = com.canopy.util.DeferredRefresh(::isSeen, ::sweep)
+    private val refresher = com.canopy.util.DeferredRefresh(::isSeen, run = ::sweep)
     private val sweptRoots = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Map<String, SweptRoot>>(REMEMBERED, 0.75f, true) {
             override fun removeEldestEntry(eldest: Map.Entry<String, Map<String, SweptRoot>>) = size > REMEMBERED

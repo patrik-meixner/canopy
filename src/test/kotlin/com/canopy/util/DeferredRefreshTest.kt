@@ -54,4 +54,16 @@ class DeferredRefreshTest {
 
         assertEquals(listOf(false), runs)
     }
+
+    @Test
+    fun `a catch-up can be told to skip the floor`() {
+        val forced = mutableListOf<Boolean>()
+        val refresh = DeferredRefresh({ seen }, catchUpForced = true) { forced += it }
+        seen = false
+        refresh.request()
+        seen = true
+        refresh.catchUp()
+
+        assertEquals(listOf(true), forced)
+    }
 }

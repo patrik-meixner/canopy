@@ -2,7 +2,11 @@ package com.canopy.util
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-class DeferredRefresh(private val isSeen: () -> Boolean, private val run: (isForced: Boolean) -> Unit) {
+class DeferredRefresh(
+    private val isSeen: () -> Boolean,
+    private val catchUpForced: Boolean = false,
+    private val run: (isForced: Boolean) -> Unit
+) {
 
     private val stale = AtomicBoolean(false)
 
@@ -16,6 +20,6 @@ class DeferredRefresh(private val isSeen: () -> Boolean, private val run: (isFor
     fun catchUp() {
         if (!isSeen() || !stale.compareAndSet(true, false)) return
 
-        run(false)
+        run(catchUpForced)
     }
 }

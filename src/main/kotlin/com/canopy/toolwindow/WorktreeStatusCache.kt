@@ -30,10 +30,16 @@ class WorktreeStatusCache(
     @Volatile private var targets: List<String> = emptyList()
     @Volatile private var visible = false
     @Volatile private var lastSweepAt = 0L
+    private val refresher = com.canopy.util.DeferredRefresh(
+        isSeen = { visible && ApplicationManager.getApplication().isActive },
+        catchUpForced = true,
+        run = ::sweepUnlessRecent
+    )
 
     init {
         Disposer.register(parent, this)
         alarm.addRequest(::tick, PERIODIC_MS)
+        com.canopy.util.onIdeActivated(this, refresher::catchUp)
     }
 
     fun get(worktreeName: String): WorktreeStatus? = cache[worktreeName]
@@ -53,8 +59,9 @@ class WorktreeStatusCache(
         }
     }
 
-    fun requestRefresh(force: Boolean = false) {
-        if (!visible) return
+    fun requestRefresh(force: Boolean = false) = refresher.request(force)
+
+    private fun sweepUnlessRecent(force: Boolean) {
         val names = targets
         if (names.isEmpty()) return
         val now = System.currentTimeMillis()
