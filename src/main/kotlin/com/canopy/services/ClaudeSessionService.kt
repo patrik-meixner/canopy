@@ -340,6 +340,7 @@ class ClaudeSessionService(private val project: Project) : Disposable {
     }
 
     private fun refreshExternalSessions(): Boolean {
+        if (!ApplicationManager.getApplication().isActive) return false
         val now = System.currentTimeMillis()
         if (now - lastExternalSweep < EXTERNAL_SWEEP_MIN_MS) return false
         lastExternalSweep = now

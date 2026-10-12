@@ -9,76 +9,78 @@ object ClaudeProcessDetector {
 
     private val SPARE_PROCESS = Regex("""\bclaude\b.*\b(daemon|bg-pty-host|bg-spare)\b""")
     private val WHITESPACE = Regex("\\s+")
-    private const val EXCLUDED_PIDS_TTL_MS = 10_000L
+    private const val PROCESS_LISTING_TTL_MS = 60_000L
 
-    @Volatile private var excludedPids: Set<Int>? = null
-    @Volatile private var excludedPidsAt = 0L
+    @Volatile private var listing: ProcessListing? = null
+    private val sessionFiles = java.util.concurrent.ConcurrentHashMap<Path, SessionFile>()
 
     private val gson = Gson()
+
     fun detectExternalSessions(projectPath: String?, sessions: List<com.canopy.model.SessionDisplay> = emptyList()): Set<String> {
         if (projectPath == null) return emptySet()
         return try {
-            val excludedPids = getSelfExcludedPids()
             val sessionsDir = Path.of(System.getProperty("user.home"), ".claude", "sessions")
             if (!Files.isDirectory(sessionsDir)) return emptySet()
 
-            val result = mutableSetOf<String>()
-            Files.list(sessionsDir).use { stream ->
-                stream.filter { it.toString().endsWith(".json") }
-                    .forEach { path ->
-                        try {
-                            val obj = gson.fromJson(Files.readString(path), JsonObject::class.java)
-                            val pid = obj.get("pid")?.asInt ?: return@forEach
-                            val sessionId = obj.get("sessionId")?.asString ?: return@forEach
-                            val cwd = obj.get("cwd")?.asString ?: return@forEach
+            val paths = Files.list(sessionsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.toList() }
+            sessionFiles.keys.retainAll(paths.toSet())
+            // Claude Code's daemon writes session files for its own spare processes (kind="bg"); those are never a user's terminal.
+            val candidates = paths.mapNotNull(::sessionFileAt)
+                .filter { it.kind != "bg" && it.cwd == projectPath && isProcessAlive(it.pid) }
+            if (candidates.isEmpty()) return emptySet()
 
-                            // Claude Code's daemon/background architecture writes session
-                            // files for its own spare processes (kind="bg"). Those are never
-                            // a user's external terminal, so don't count them.
-                            if (obj.get("kind")?.asString == "bg") return@forEach
-
-                            if (cwd != projectPath || pid in excludedPids || !isProcessAlive(pid)) return@forEach
-
-                            result.add(sessionId)
-
-                            val name = obj.get("name")?.asString
-                            if (name != null) {
-                                sessions.filter { it.name == name || it.tabTitle == name }
-                                    .forEach { result.add(it.sessionId) }
-                            }
-                        } catch (_: Exception) {}
-                    }
+            val excludedPids = listingKnowing(candidates.mapTo(HashSet()) { it.pid }).excluded
+            candidates.filter { it.pid !in excludedPids }.flatMapTo(HashSet()) { file ->
+                listOf(file.sessionId) + sessions.filter { file.name != null && (it.name == file.name || it.tabTitle == file.name) }
+                    .map { it.sessionId }
             }
-            result
         } catch (_: Exception) {
             emptySet()
         }
     }
 
-    private fun getSelfExcludedPids(): Set<Int> {
-        val now = System.currentTimeMillis()
-        excludedPids?.takeIf { now - excludedPidsAt < EXCLUDED_PIDS_TTL_MS }?.let { return it }
+    private fun sessionFileAt(path: Path): SessionFile? {
+        val modified = runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrNull() ?: return null
+        val size = runCatching { Files.size(path) }.getOrNull() ?: return null
+        sessionFiles[path]?.takeIf { it.modified == modified && it.size == size }?.let { return it }
 
-        return readExcludedPids().also {
-            excludedPids = it
-            excludedPidsAt = now
-        }
+        return runCatching {
+            val obj = gson.fromJson(Files.readString(path), JsonObject::class.java)
+            SessionFile(
+                modified = modified,
+                size = size,
+                pid = obj.get("pid")?.asInt ?: return null,
+                sessionId = obj.get("sessionId")?.asString ?: return null,
+                cwd = obj.get("cwd")?.asString ?: return null,
+                kind = obj.get("kind")?.asString,
+                name = obj.get("name")?.asString
+            )
+        }.getOrNull()?.also { sessionFiles[path] = it }
     }
 
-    private fun readExcludedPids(): Set<Int> {
-        return try {
-            val res = ProcessHelper.execWithTimeout(
+    private fun listingKnowing(pids: Set<Int>): ProcessListing {
+        val now = System.currentTimeMillis()
+        listing?.takeIf { now - it.takenAt < PROCESS_LISTING_TTL_MS && it.listed.containsAll(pids) }?.let { return it }
+
+        return readListing(now).also { listing = it }
+    }
+
+    private fun readListing(now: Long): ProcessListing {
+        val lines = try {
+            ProcessHelper.execWithTimeout(
                 command = arrayOf("ps", "-A", "-o", "pid,args", "-ww"),
                 timeoutMs = 10_000
-            )
-            res.output.lines()
-                .map { it.trim() }
-                .filter { line -> line.contains("canopy-settings") || SPARE_PROCESS.containsMatchIn(line) }
-                .mapNotNull { it.split(WHITESPACE, limit = 2).firstOrNull()?.toIntOrNull() }
-                .toSet()
+            ).output.lines().map { it.trim() }
         } catch (_: Exception) {
-            emptySet()
+            emptyList()
         }
+        val pidOf = { line: String -> line.split(WHITESPACE, limit = 2).firstOrNull()?.toIntOrNull() }
+
+        return ProcessListing(
+            listed = lines.mapNotNullTo(HashSet(), pidOf),
+            excluded = lines.filter { it.contains("canopy-settings") || SPARE_PROCESS.containsMatchIn(it) }.mapNotNullTo(HashSet(), pidOf),
+            takenAt = now
+        )
     }
 
     private fun isProcessAlive(pid: Int): Boolean {
@@ -88,4 +90,16 @@ object ClaudeProcessDetector {
             false
         }
     }
+
+    private class ProcessListing(val listed: Set<Int>, val excluded: Set<Int>, val takenAt: Long)
+
+    private class SessionFile(
+        val modified: Long,
+        val size: Long,
+        val pid: Int,
+        val sessionId: String,
+        val cwd: String,
+        val kind: String?,
+        val name: String?
+    )
 }
