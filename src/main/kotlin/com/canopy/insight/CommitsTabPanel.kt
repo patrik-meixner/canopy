@@ -46,6 +46,9 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
             "What this session committed, in every repository it wrote to, with the files behind each one."
         )
     )
+    private val reloader = com.canopy.util.DeferredRefresh(
+        isSeen = { ApplicationManager.getApplication().isActive && isShowing }
+    ) { _ -> if (loadedRoots.isNotEmpty()) reload(loadedRoots) }
     private val more = MoreRow {
         limit += COMMIT_PAGE
         showPage()
@@ -64,8 +67,10 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         com.intellij.openapi.util.Disposer.register(parent, preview)
         files.setShowDiffActionPreview(preview)
 
-        com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(parent) {
-            if (isShowing && loadedRoots.isNotEmpty()) reload(loadedRoots)
+        com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(parent) { reloader.request() }
+        com.canopy.util.onIdeActivated(parent, reloader::catchUp)
+        addHierarchyListener { event ->
+            if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) reloader.catchUp()
         }
 
         split.firstComponent = JPanelWithMore(ScrollPaneFactory.createScrollPane(commits, true), more)
@@ -115,7 +120,7 @@ class CommitsTabPanel(project: Project, parent: Disposable) : InsightTabPanel(pr
         loadedRoots = roots
 
         known[session]?.let { show(it) }
-        reload(roots)
+        reloader.request()
     }
 
     private fun show(commits: List<CommitEntry>) {

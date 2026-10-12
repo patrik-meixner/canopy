@@ -41,7 +41,7 @@ class SessionDetailPanel(
     private val browser = SectionedChangesBrowser(
         project,
         this,
-        onRefreshRequested = { refresh(force = true) },
+        onRefreshRequested = { refresher.request(isForced = true) },
         onCommitRequested = ::commitEverything,
         onPushRequested = ::pushEverything,
         onOverlapsRequested = ::showOverlaps,
@@ -62,13 +62,10 @@ class SessionDetailPanel(
 
     @Volatile private var shownSessionId: String? = null
     @Volatile private var shownSignature: Long? = null
-    @Volatile private var lastRevalidatedAt = 0L
-    @Volatile private var pendingWhileHidden = false
+    @Volatile private var lastSweptAt = 0L
+    private val refresher = com.canopy.util.DeferredRefresh(::isSeen) { _ -> sweep() }
+    private val floorAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.SWING_THREAD, this)
 
-    /**
-     * [JBLoadingPanel] delegates `add` to an inner panel but inherits `removeAll`, so swapping its
-     * children directly tears out the loading layer itself. One card stack added once avoids that.
-     */
     /**
      * The tree says which files are in which state; the header says whether anything needs doing,
      * and which session is being reviewed, without expanding four sections to find out.
@@ -97,6 +94,10 @@ class SessionDetailPanel(
         add(browser, BorderLayout.CENTER)
     }
 
+    /**
+     * [JBLoadingPanel] delegates `add` to an inner panel but inherits `removeAll`, so swapping its
+     * children directly tears out the loading layer itself. One card stack added once avoids that.
+     */
     private val cards = JPanel(java.awt.CardLayout()).apply {
         isOpaque = false
         add(placeholder, ReviewState.NoSession.name)
@@ -116,9 +117,16 @@ class SessionDetailPanel(
         add(loadingPanel, BorderLayout.CENTER)
         add(commitPanel, BorderLayout.SOUTH)
 
-        com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(this) {
-            if (isShowing) refresh(force = true)
-        }
+        com.canopy.services.WorkspaceChangeNotifier.getInstance(project).addListener(this) { refresher.request() }
+        com.canopy.util.onIdeActivated(this, ::catchUpAfterFloor)
+        project.messageBus.connect(this).subscribe(
+            com.intellij.openapi.wm.ex.ToolWindowManagerListener.TOPIC,
+            object : com.intellij.openapi.wm.ex.ToolWindowManagerListener {
+                override fun toolWindowShown(toolWindow: com.intellij.openapi.wm.ToolWindow) {
+                    if (toolWindow.id == SessionWindow.ID) catchUpAfterFloor()
+                }
+            }
+        )
 
         addHierarchyListener { event ->
             if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) {
@@ -128,8 +136,22 @@ class SessionDetailPanel(
 
             if (shownSessionId == null) showSession(selectedSessionId())
 
-            refresh(force = pendingWhileHidden)
+            catchUpAfterFloor()
         }
+    }
+
+    private fun isSeen(): Boolean {
+        if (!ApplicationManager.getApplication().isActive || !isShowing) return false
+        val window = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow(SessionWindow.ID) ?: return false
+
+        return window.isVisible && window.contentManager.selectedContent?.component === this
+    }
+
+    private fun catchUpAfterFloor() {
+        val floor = com.canopy.settings.CanopySettings.getInstance().state.detailRevalidateSeconds * 1000L
+        val wait = floor - (System.currentTimeMillis() - lastSweptAt)
+        floorAlarm.cancelAllRequests()
+        floorAlarm.addRequest(refresher::catchUp, wait.coerceAtLeast(0))
     }
 
     private fun selectedSessionId(): String? = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
@@ -147,26 +169,12 @@ class SessionDetailPanel(
         val cached = cache[sessionId]
         if (cached != null) render(cached)
 
-        refresh(force = true)
+        refresher.request()
     }
 
-    private fun hidden(): Boolean {
-        if (isShowing) return false
-
-        pendingWhileHidden = true
-
-        return true
-    }
-
-    fun refresh(force: Boolean) {
+    private fun sweep() {
         val sessionId = shownSessionId ?: return
-        if (hidden()) return
-
-        pendingWhileHidden = false
-        val now = System.currentTimeMillis()
-        if (!force && now - lastRevalidatedAt < com.canopy.settings.CanopySettings.getInstance().state.detailRevalidateSeconds * 1000L) return
-
-        lastRevalidatedAt = now
+        lastSweptAt = System.currentTimeMillis()
         val request = generation.incrementAndGet()
         val hasContent = cache[sessionId] != null
 
@@ -279,7 +287,7 @@ class SessionDetailPanel(
             onDone = { (outcomes, pushed) ->
                 reportCommit(outcomes)
                 if (pushed.isNotEmpty()) reportPush(pushed)
-                refresh(force = true)
+                refresher.request()
             }
         )
     }
@@ -321,7 +329,7 @@ class SessionDetailPanel(
             },
             onDone = {
                 reportPush(it)
-                refresh(force = true)
+                refresher.request()
             }
         )
     }
