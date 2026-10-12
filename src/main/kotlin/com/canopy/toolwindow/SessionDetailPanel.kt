@@ -63,7 +63,12 @@ class SessionDetailPanel(
     @Volatile private var shownSessionId: String? = null
     @Volatile private var shownSignature: Long? = null
     @Volatile private var lastSweptAt = 0L
-    private val refresher = com.canopy.util.DeferredRefresh(::isSeen) { _ -> sweep() }
+    private val refresher = com.canopy.util.DeferredRefresh(::isSeen, ::sweep)
+    private val sweptRoots = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Map<String, SweptRoot>>(REMEMBERED, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, Map<String, SweptRoot>>) = size > REMEMBERED
+        }
+    )
     private val floorAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.SWING_THREAD, this)
 
     /**
@@ -172,7 +177,7 @@ class SessionDetailPanel(
         refresher.request()
     }
 
-    private fun sweep() {
+    private fun sweep(isForced: Boolean) {
         val sessionId = shownSessionId ?: return
         lastSweptAt = System.currentTimeMillis()
         val request = generation.incrementAndGet()
@@ -183,7 +188,7 @@ class SessionDetailPanel(
 
         CanopyExecutor.submit {
             val changeSet = try {
-                collectChanges(resolveSession(sessionId))
+                collectChanges(sessionId, resolveSession(sessionId), isForced)
             } catch (e: Exception) {
                 log.warn("Failed to collect changes for session $sessionId", e)
                 EMPTY_CHANGES
@@ -198,28 +203,37 @@ class SessionDetailPanel(
         }
     }
 
-    private fun collectChanges(session: SessionDisplay?): SessionChangeSet {
-        val ledger = session?.sessionId?.let(com.canopy.session.SessionLedger::read)
+    private fun collectChanges(sessionId: String, session: SessionDisplay?, isForced: Boolean): SessionChangeSet {
+        val ledger = com.canopy.session.SessionLedger.read(sessionId)
         val launchRoot = session?.workingDirectory?.let { com.canopy.util.GitRootCache.rootOf(java.nio.file.Path.of(it)) }
         val scope = if (ledger == null) {
             changeScopeFor(session, workspaceRoots())
         } else {
-            ChangeScope(ledger.roots + setOfNotNull(launchRoot), session.startedAt)
+            ChangeScope(ledger.roots + setOfNotNull(launchRoot), session?.startedAt)
         }
         val isOwn = ledger?.let { evidence -> { path: String -> evidence.owns(path) } } ?: estimatedOwnership(session)
-        val collected = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
-            .invokeAll(scope.roots.map { root ->
-                java.util.concurrent.Callable {
-                    SessionChanges.collect(
-                        root,
-                        scope.since,
-                        isOwn,
-                        showElsewhere = launchRoot == null || root == launchRoot,
-                        ownCommits = ledger?.commits
-                    )
-                }
+        val written = ledger?.written ?: com.canopy.services.SessionFileIndex.getInstance(project).pathsFor(sessionId)
+        val ledgerFile = com.canopy.session.SessionLedger.fileOf(sessionId)
+        val fingerprints = scope.roots.associateWith { RootFingerprint.of(it, ledgerFile, written) }
+        val previous = sweptRoots[sessionId].orEmpty()
+        val executor = com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService()
+        val running = rootsToSweep(fingerprints, previous.mapValues { it.value.fingerprint }, isForced).associateWith { root ->
+            executor.submit(java.util.concurrent.Callable {
+                SessionChanges.collect(
+                    root,
+                    scope.since,
+                    isOwn,
+                    showElsewhere = launchRoot == null || root == launchRoot,
+                    ownCommits = ledger?.commits
+                )
             })
-            .map { it.get() }
+        }
+        val fresh = running.mapValues { it.value.get() }
+        val swept = fingerprints.mapValues { (root, fingerprint) ->
+            SweptRoot(fingerprint, fresh[root] ?: previous.getValue(root).changes)
+        }
+        sweptRoots[sessionId] = swept
+        val collected = swept.values.map { it.changes }
 
         return SessionChangeSet(
             changes = SessionChangeSection.entries.associateWith { section ->
@@ -482,6 +496,8 @@ class SessionDetailPanel(
     }
 
     override fun dispose() = Unit
+
+    private class SweptRoot(val fingerprint: RootFingerprint, val changes: SessionChangeSet)
 
     private companion object {
         const val REMEMBERED = 8
