@@ -8,16 +8,16 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
 private const val WORKTREE_MARKER = "/worktrees/"
-private const val SEARCH_DEPTH = 4
+internal const val WORKTREE_SEARCH_DEPTH = 4
 
-private val NEVER_DESCENDED = setOf("node_modules", "vendor", ".git", "build", "dist", "target", ".gradle", ".idea")
+internal val NEVER_DESCENDED = setOf("node_modules", "vendor", ".git", "build", "dist", "target", ".gradle", ".idea")
 
 fun worktreeExcludeUrls(root: String): List<String> {
     val base = Path.of(root)
     if (!Files.isDirectory(base)) return emptyList()
 
     val found = ArrayList<String>()
-    Files.walkFileTree(base, emptySet(), SEARCH_DEPTH, object : SimpleFileVisitor<Path>() {
+    Files.walkFileTree(base, emptySet(), WORKTREE_SEARCH_DEPTH, object : SimpleFileVisitor<Path>() {
         override fun preVisitDirectory(directory: Path, attributes: BasicFileAttributes): FileVisitResult {
             if (directory != base && directory.fileName.toString() in NEVER_DESCENDED) return FileVisitResult.SKIP_SUBTREE
             if (!isWorktreeCheckout(directory)) return FileVisitResult.CONTINUE
