@@ -22,8 +22,10 @@ object SessionCommits {
     private const val LIMIT = 200
 
     fun list(root: String, repository: String, since: Instant?): List<CommitEntry> {
-        val args = mutableListOf("log", "--format=$FORMAT", "--max-count=$LIMIT", "--no-merges")
-        since?.let { args.add("--since=$it") }
+        val ownCommits = BranchCommits.of(root) ?: return emptyList()
+        val args = listOf("log", "--format=$FORMAT", "--max-count=$LIMIT", "--no-merges") +
+            listOfNotNull(since?.let { "--since=$it" }) +
+            ownCommits.revisions
         val output = git(root, *args.toTypedArray()) ?: return emptyList()
 
         return parseCommits(output, root, repository)

@@ -57,14 +57,15 @@ object SessionChanges {
     ): SessionChangeSet {
         if (isMidGitOperation(root)) return SessionChangeSet(emptyMap(), emptyList(), midGitOperation = true)
 
+        val branchCommits = BranchCommits.of(root)
         val sharedTip = sharedWithRemote(root)
-        val sessionStart = sessionStartPoint(root, since)
+        val sessionStart = branchCommits?.let { sessionStartPoint(root, since, it) }
         val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
         val uncommitted = noted(root, "HEAD", null)
         val (own, elsewhere) = uncommitted.map { it.first }.partition { isOwn(pathOfChange(it)) }
         val notes = uncommitted.mapNotNull { (change, note) -> note?.let { change to it } }.toMap()
 
-        val unpushedFrom = unpushedStart(root, sharedTip, sessionStart)
+        val unpushedFrom = unpushedStart(root, sharedTip, branchCommits?.base, sessionStart)
         val committed = unpushedFrom?.let { diff(root, it, "HEAD") }.orEmpty()
         val unpushedCommits = if (ownCommits == null || unpushedFrom == null) emptyList() else SessionCommits.withChanges(root, repository, "$unpushedFrom..HEAD")
 
@@ -77,15 +78,15 @@ object SessionChanges {
             changes = mapOf(
                 SessionChangeSection.Uncommitted to own,
                 SessionChangeSection.Elsewhere to if (showElsewhere) elsewhere else emptyList(),
-                SessionChangeSection.Committed to touchedByOwnCommits(committed, unpushedCommits, ownCommits),
-                SessionChangeSection.Pushed to touchedByOwnCommits(pushed, pushedCommits, ownCommits)
+                SessionChangeSection.Committed to touchedByBranchCommits(committed, unpushedCommits, ownCommits),
+                SessionChangeSection.Pushed to touchedByBranchCommits(pushed, pushedCommits, ownCommits)
             ).filterValues { it.isNotEmpty() },
             unversioned = untracked(root).filter { isOwn(it.path) },
             pushedCommits = pushedCommits.filter { ownCommits == null || it.commit.sha in ownCommits }
         )
     }
 
-    private fun touchedByOwnCommits(
+    private fun touchedByBranchCommits(
         changes: List<Change>,
         commits: List<CommitWithChanges>,
         ownCommits: Set<String>?
@@ -102,9 +103,9 @@ object SessionChanges {
         return git(root, "merge-base", "HEAD", upstream)?.trim()?.ifEmpty { null }
     }
 
-    private fun unpushedStart(root: String, sharedTip: String?, sessionStart: String?): String? {
+    private fun unpushedStart(root: String, sharedTip: String?, base: String?, sessionStart: String?): String? {
         if (sessionStart == null) return null
-        val from = commitRangeStart(sharedTip, detectBase(root)) ?: return null
+        val from = commitRangeStart(sharedTip, base) ?: return null
 
         return if (isAncestor(root, from, sessionStart)) sessionStart else from
     }
@@ -122,9 +123,9 @@ object SessionChanges {
         return com.canopy.util.isTransientGitState(entries)
     }
 
-    private fun sessionStartPoint(root: String, since: java.time.Instant?): String? {
+    private fun sessionStartPoint(root: String, since: java.time.Instant?, branchCommits: BranchCommits): String? {
         if (since == null) return null
-        val log = git(root, "log", "--format=%H %at", "-n", "$SESSION_COMMIT_LIMIT", "HEAD") ?: return null
+        val log = git(root, "log", "--format=%H %at", "-n", "$SESSION_COMMIT_LIMIT", *branchCommits.revisions.toTypedArray()) ?: return null
         val oldest = oldestCommitOfSession(parseAuthoredCommits(log), since.epochSecond) ?: return null
 
         return git(root, "rev-parse", "--verify", "--quiet", "$oldest^")?.trim()?.ifEmpty { null } ?: oldest
@@ -162,14 +163,6 @@ object SessionChanges {
 
     private fun upstreamOf(root: String): String? =
         git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")?.trim()?.ifEmpty { null }
-
-    private fun detectBase(root: String): String? {
-        for (branch in listOf("main", "master")) {
-            if (git(root, "rev-parse", "--verify", "--quiet", "refs/heads/$branch") != null) return branch
-        }
-
-        return git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")?.trim()?.ifEmpty { null }
-    }
 
     private fun localPath(root: String, relative: String): FilePath =
         LocalFilePath(Path.of(root, relative).toString(), false)
