@@ -69,6 +69,7 @@ class SessionDetailPanel(
             override fun removeEldestEntry(eldest: Map.Entry<String, Map<String, SweptRoot>>) = size > REMEMBERED
         }
     )
+    @Volatile private var inFlight: Collection<java.util.concurrent.Future<*>> = emptyList()
     private val floorAlarm = com.intellij.util.Alarm(com.intellij.util.Alarm.ThreadToUse.SWING_THREAD, this)
 
     /**
@@ -170,6 +171,7 @@ class SessionDetailPanel(
 
         shownSessionId = sessionId
         shownSignature = null
+        inFlight.forEach { it.cancel(true) }
 
         val cached = cache[sessionId]
         if (cached != null) render(cached)
@@ -189,6 +191,8 @@ class SessionDetailPanel(
         CanopyExecutor.submit {
             val changeSet = try {
                 collectChanges(sessionId, resolveSession(sessionId), isForced)
+            } catch (_: java.util.concurrent.CancellationException) {
+                return@submit
             } catch (e: Exception) {
                 log.warn("Failed to collect changes for session $sessionId", e)
                 EMPTY_CHANGES
@@ -228,6 +232,7 @@ class SessionDetailPanel(
                 )
             })
         }
+        inFlight = running.values
         val fresh = running.mapValues { it.value.get() }
         val swept = fingerprints.mapValues { (root, fingerprint) ->
             SweptRoot(fingerprint, fresh[root] ?: previous.getValue(root).changes)

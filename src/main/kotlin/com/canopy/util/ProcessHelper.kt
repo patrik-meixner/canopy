@@ -52,7 +52,13 @@ object ProcessHelper {
             }
         }, "Canopy-proc-reader").apply { isDaemon = true; start() }
 
-        val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        val finished = try {
+            process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (interrupted: InterruptedException) {
+            process.destroyForcibly()
+            Thread.currentThread().interrupt()
+            throw interrupted
+        }
         if (!finished) {
             log.warn("Canopy: command timed out after ${timeoutMs}ms: ${command.joinToString(" ")}")
             process.destroyForcibly()

@@ -57,7 +57,6 @@ object SessionChanges {
     ): SessionChangeSet {
         if (isMidGitOperation(root)) return SessionChangeSet(emptyMap(), emptyList(), midGitOperation = true)
 
-
         val sharedTip = sharedWithRemote(root)
         val sessionStart = sessionStartPoint(root, since)
         val repository = java.nio.file.Path.of(root).fileName?.toString() ?: root
@@ -175,7 +174,7 @@ object SessionChanges {
     private fun localPath(root: String, relative: String): FilePath =
         LocalFilePath(Path.of(root, relative).toString(), false)
 
-    private fun git(root: String, vararg args: String): String? = try {
+    private fun git(root: String, vararg args: String): String? = if (Thread.currentThread().isInterrupted) null else try {
         val result = ProcessHelper.execWithTimeout(
             command = arrayOf("git", "-C", root, *args),
             timeoutMs = GIT_TIMEOUT_MS,
