@@ -66,7 +66,7 @@ object RepoScopeDiscovery {
     private fun git(workingDir: String, vararg args: String): String? {
         return try {
             val result = ProcessHelper.execWithTimeout(
-                command = arrayOf("git", "-C", workingDir, *args),
+                command = com.canopy.util.gitCommand(workingDir, *args),
                 timeoutMs = GIT_TIMEOUT_MS,
                 extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
             )

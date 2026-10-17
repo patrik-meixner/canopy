@@ -44,7 +44,7 @@ object WorktreeChanges {
 
     private fun git(dir: String, vararg args: String): ProcessHelper.ExecResult =
         ProcessHelper.execWithTimeout(
-            command = arrayOf("git", "-C", dir, *args),
+            command = com.canopy.util.gitCommand(dir, *args),
             timeoutMs = 15_000,
             extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
         )

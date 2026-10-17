@@ -33,7 +33,7 @@ class GitContentRevision(
 
 internal fun gitBlob(root: String, revisionAndPath: String): String? = try {
     val result = ProcessHelper.execWithTimeout(
-        command = arrayOf("git", "-C", root, "show", revisionAndPath),
+        command = com.canopy.util.gitCommand(root, "show", revisionAndPath),
         timeoutMs = 20_000,
         extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
     )

@@ -66,7 +66,7 @@ object WorktreeInspector {
     fun list(projectDir: String): List<WorktreeEntry> {
         return try {
             val res = ProcessHelper.execWithTimeout(
-                command = arrayOf("git", "-C", projectDir, "worktree", "list", "--porcelain"),
+                command = com.canopy.util.gitCommand(projectDir, "worktree", "list", "--porcelain"),
                 timeoutMs = 15_000,
                 extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
             )
@@ -98,7 +98,7 @@ object WorktreeInspector {
     fun prune(projectDir: String): Pair<Boolean, String> {
         return try {
             val res = ProcessHelper.execWithTimeout(
-                command = arrayOf("git", "-C", projectDir, "worktree", "prune"),
+                command = com.canopy.util.gitCommand(projectDir, "worktree", "prune"),
                 timeoutMs = 15_000,
                 extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
             )
@@ -181,9 +181,9 @@ object WorktreeInspector {
     fun remove(projectDir: String, worktreePath: String, force: Boolean): Pair<Boolean, String> {
         return try {
             val cmd = if (force) {
-                arrayOf("git", "-C", projectDir, "worktree", "remove", "--force", worktreePath)
+                com.canopy.util.gitCommand(projectDir, "worktree", "remove", "--force", worktreePath)
             } else {
-                arrayOf("git", "-C", projectDir, "worktree", "remove", worktreePath)
+                com.canopy.util.gitCommand(projectDir, "worktree", "remove", worktreePath)
             }
             val res = ProcessHelper.execWithTimeout(
                 command = cmd,
@@ -199,7 +199,7 @@ object WorktreeInspector {
     fun deleteBranchIfMerged(projectDir: String, branch: String): Pair<Boolean, String> {
         return try {
             val res = ProcessHelper.execWithTimeout(
-                command = arrayOf("git", "-C", projectDir, "branch", "-d", branch),
+                command = com.canopy.util.gitCommand(projectDir, "branch", "-d", branch),
                 timeoutMs = 15_000,
                 extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
             )
@@ -383,7 +383,7 @@ object WorktreeInspector {
 
     private fun runGit(projectDir: String, vararg args: String): Pair<Int, String> {
         val res = ProcessHelper.execWithTimeout(
-            command = arrayOf("git", "-C", projectDir, *args),
+            command = com.canopy.util.gitCommand(projectDir, *args),
             timeoutMs = 15_000,
             extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
         )

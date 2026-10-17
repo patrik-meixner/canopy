@@ -35,7 +35,7 @@ data class BranchCommits(val base: String?, val revisions: List<String>) {
 
         private fun git(root: String, vararg args: String): String? = try {
             val result = ProcessHelper.execWithTimeout(
-                arrayOf("git", "-C", root, *args),
+                com.canopy.util.gitCommand(root, *args),
                 GIT_TIMEOUT_MS,
                 extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
             )

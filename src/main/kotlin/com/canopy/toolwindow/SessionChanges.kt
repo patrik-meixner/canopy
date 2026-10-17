@@ -169,7 +169,7 @@ object SessionChanges {
 
     private fun git(root: String, vararg args: String): String? = if (Thread.currentThread().isInterrupted) null else try {
         val result = ProcessHelper.execWithTimeout(
-            command = arrayOf("git", "-C", root, *args),
+            command = com.canopy.util.gitCommand(root, *args),
             timeoutMs = GIT_TIMEOUT_MS,
             extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
         )

@@ -21,6 +21,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     private val log = com.intellij.openapi.diagnostic.Logger.getInstance(ClaudeStatusService::class.java)
     private val gson = Gson()
     private val pollAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    private val pollScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
     private val seenModifications = java.util.concurrent.ConcurrentHashMap<Path, String>()
     private val monitoredSessions = ConcurrentHashMap<String, Path>()
     private val notifyFiles = ConcurrentHashMap<String, Path>()
@@ -226,7 +227,7 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     fun startMonitoring(sessionId: String, statusFile: Path, notifyFile: Path) {
         monitoredSessions[sessionId] = statusFile
         notifyFiles[sessionId] = notifyFile
-        if (monitoredSessions.size == 1) schedulePoll()
+        schedulePoll()
     }
 
     fun stopMonitoring(sessionId: String) {
@@ -243,7 +244,10 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     }
 
     private fun schedulePoll() {
-        if (pollAlarm.isDisposed || monitoredSessions.isEmpty()) return
+        if (pollAlarm.isDisposed) return
+        if (!shouldSchedulePoll(isLoopRunning = pollScheduled.get(), monitoredCount = monitoredSessions.size)) return
+        if (!pollScheduled.compareAndSet(false, true)) return
+
         pollAlarm.addRequest(::poll, 500)
     }
 
@@ -264,6 +268,15 @@ class ClaudeStatusService(private val project: Project) : Disposable {
     }
 
     private fun poll() {
+        pollScheduled.set(false)
+        try {
+            pollOnce()
+        } finally {
+            schedulePoll()
+        }
+    }
+
+    private fun pollOnce() {
         for ((sessionId, statusFile) in monitoredSessions) {
             try {
                 if (changedSince(statusFile)) {
@@ -292,7 +305,6 @@ class ClaudeStatusService(private val project: Project) : Disposable {
                 }
             } catch (_: Exception) {}
         }
-        schedulePoll()
     }
 
     private fun parseStatus(json: String): ClaudeStatus? {

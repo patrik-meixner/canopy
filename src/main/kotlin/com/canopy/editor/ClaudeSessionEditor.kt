@@ -1045,7 +1045,7 @@ class ClaudeSessionEditor(
 
     private fun execGitWithExitCode(workDir: String, vararg args: String): GitResult {
         val res = com.canopy.util.ProcessHelper.execWithTimeout(
-            command = arrayOf("git", "-C", workDir, *args),
+            command = com.canopy.util.gitCommand(workDir, *args),
             timeoutMs = GIT_TIMEOUT_MS,
             extraEnv = mapOf("GIT_OPTIONAL_LOCKS" to "0")
         )
@@ -1292,6 +1292,7 @@ class ClaudeSessionEditor(
         statusService.addStatusListener(listener)
         Disposer.register(sessionDisposable, Disposable { statusService.removeStatusListener(listener) })
         statusService.getStatus(tempMonitoringId)?.let { listener(tempMonitoringId, it) }
+        log.info("Canopy: following reported session for $tempMonitoringId at $tempStatusFile")
     }
 
     private fun linkTo(
@@ -1306,6 +1307,7 @@ class ClaudeSessionEditor(
         if (file.sessionId == sessionId) return
 
         val previous = file.sessionId
+        log.info("Canopy: linkTo — tab ${file.sessionKey} (was $previous) adopts $sessionId")
         file.sessionId = sessionId
         sessionService.getSessions().firstOrNull { it.sessionId == sessionId }?.let { session ->
             file.baseName = session.tabTitle

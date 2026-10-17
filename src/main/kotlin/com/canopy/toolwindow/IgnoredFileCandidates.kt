@@ -8,7 +8,7 @@ object IgnoredFileCandidates {
 
     fun detect(root: String): List<String> {
         val result = ProcessHelper.execWithTimeout(
-            arrayOf("git", "-C", root, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"),
+            com.canopy.util.gitCommand(root, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"),
             TIMEOUT_MS
         )
         if (result.exitCode != 0) return emptyList()

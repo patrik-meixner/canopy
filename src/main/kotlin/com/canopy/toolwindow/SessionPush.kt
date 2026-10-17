@@ -19,7 +19,7 @@ object SessionPush {
     }
 
     private fun git(root: String, vararg args: String): Pair<Boolean, String> = try {
-        val result = ProcessHelper.execWithTimeout(arrayOf("git", "-C", root, *args), GIT_TIMEOUT_MS)
+        val result = ProcessHelper.execWithTimeout(com.canopy.util.gitCommand(root, *args), GIT_TIMEOUT_MS)
         (result.exitCode == 0) to result.output
     } catch (e: Exception) {
         false to (e.message ?: e.toString())
