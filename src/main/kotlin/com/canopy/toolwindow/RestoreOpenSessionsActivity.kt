@@ -18,6 +18,8 @@ private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(RestoreOpen
 class RestoreOpenSessionsActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
+        com.canopy.terminal.warmUpPty()
+
         val persistence = OpenSessionsPersistence.getInstance(project)
         showCanopy(project, com.canopy.settings.CanopySettings.getInstance().state.sidebarWasOpen)
 
